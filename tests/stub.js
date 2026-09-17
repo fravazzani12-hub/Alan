@@ -4,16 +4,20 @@
 //   app.T(expr) → valuta un'espressione dentro la closure di app.js (funzioni private: features, context, mergeRemote…)
 //   app.S       → stato (S.events, S.settings, S.openCry)
 //   app.txt(sel)→ testo (senza tag) dell'elemento stub
+//   boot({ext:['timer']}) carica anche js/timer.js dopo app.js (estensioni registrate su window.AlanExt)
 'use strict';
 const fs=require('fs');
-function mk(){return {classList:{add(){},remove(){},toggle(){},contains(){return false}},querySelectorAll:()=>[],style:{},_h:'',set innerHTML(v){this._h=v},get innerHTML(){return this._h},textContent:'',value:'',scrollTop:0,set outerHTML(v){this._h=v},getAttribute(){return null},disabled:false};}
+let ELS=null;
+function mk(){return {classList:{add(){},remove(){},toggle(){},contains(){return false}},querySelectorAll:()=>[],style:{},_h:'',set innerHTML(v){this._h=v},get innerHTML(){return this._h},textContent:'',value:'',scrollTop:0,set outerHTML(v){this._h=v},getAttribute(){return null},disabled:false,appendChild(c){if(c&&c.id&&ELS)ELS['#'+c.id]=c;},remove(){},click(){},id:''};}
 function boot(opts){
   opts=opts||{};
   const store={};
   global.localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=String(v)},removeItem:k=>{delete store[k]}};
-  const els={};
+  const els={};ELS=els;
   const html={attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]},getAttribute(k){return this.attrs[k]??null}};
-  global.document={querySelector:s=>els[s]||(els[s]=mk()),querySelectorAll:()=>[],addEventListener(){},hidden:false,documentElement:html};
+  global.document={querySelector:s=>els[s]||(els[s]=mk()),querySelectorAll:()=>[],addEventListener(){},hidden:false,documentElement:html,
+    getElementById:id=>els['#'+id]||null,createElement:()=>{const e=mk();e.appendChild=()=>{};e.remove=()=>{};e.click=()=>{};return e;},body:{classList:{add(){},remove(){}},appendChild(){}}};
+  global.location={search:'',pathname:'/'};global.history={replaceState(){}};
   global.window={confirm:()=>true,scrollTo(){},indexedDB:undefined,addEventListener(){},matchMedia:()=>({matches:false})};
   if(opts.AlanSync){global.window.AlanSync=opts.AlanSync;global.AlanSync=opts.AlanSync;}else{delete global.AlanSync;}
   Object.defineProperty(global,'navigator',{value:{userAgent:'test'},configurable:true,writable:true});
@@ -24,6 +28,7 @@ function boot(opts){
   eval(fs.readFileSync(__dirname+'/../js/who.js','utf8'));
   const src=fs.readFileSync(__dirname+'/../js/app.js','utf8').replace('window.A=A;','window.A=A;window.__T=function(n){return eval(n);};');
   eval(src);
+  (opts.ext||[]).forEach(n=>{eval(fs.readFileSync(__dirname+'/../js/'+n+'.js','utf8'));});
   return new Promise(res=>setTimeout(()=>{
     const T=window.__T;
     res({A:window.A,T:T,S:T('S'),els:els,store:store,txt:sel=>String((els[sel]||{})._h||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()});

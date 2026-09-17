@@ -22,8 +22,8 @@ function openDb(){
   return new Promise(function(res){
     if(!window.indexedDB){res(null);return;}
     try{
-      var r=indexedDB.open('alan-v2',1);
-      r.onupgradeneeded=function(){var d=r.result;if(!d.objectStoreNames.contains('kv'))d.createObjectStore('kv');if(!d.objectStoreNames.contains('audio'))d.createObjectStore('audio');};
+      var r=indexedDB.open('alan-v2',2);
+      r.onupgradeneeded=function(){var d=r.result;if(!d.objectStoreNames.contains('kv'))d.createObjectStore('kv');if(!d.objectStoreNames.contains('audio'))d.createObjectStore('audio');if(!d.objectStoreNames.contains('files'))d.createObjectStore('files');};
       r.onsuccess=function(){res(r.result);};
       r.onerror=function(){res(null);};
       r.onblocked=function(){res(null);};
@@ -42,6 +42,7 @@ function save(){
     var json=JSON.stringify(S);
     idbPut('kv','state',json).then(function(ok){if(!ok&&!lsSet(LSKEY,json))toast('Non riesco a salvare i dati');});
     lsSet(LSKEY,json);
+    extEmit('change');
   },80);
 }
 function migrateV1(){
@@ -79,8 +80,10 @@ function touched(e){e._updated=new Date().toISOString();if(window.AlanSync)AlanS
 function removed(e){e._updated=new Date().toISOString();if(window.AlanSync)AlanSync.remove(e);}
 /* Regola di SPEC §3: la prima azione registrata in [cry.t − 5 min, cry.t + 45 min] spiega il pianto aperto.
    Vale sia per le azioni fatte su questo telefono (A.finish) sia per quelle che arrivano dall'altro (mergeRemote). */
+/* una pappa "vale" se ha ml > 0 oppure è un allattamento al seno di almeno un minuto (src 'seno', dur in secondi) */
+function fedFeed(e){return e.k==='feed'&&(e.ml>0||(e.src==='seno'&&e.dur>=60));}
 function labelFor(e){
-  if(e.k==='feed')return e.ml>0?'fame':null;
+  if(e.k==='feed')return fedFeed(e)?'fame':null;
   if(e.k==='sleep')return 'sonno';
   if(e.k==='diaper')return 'cambio';
   if(e.k==='other'){var o=OTHER.filter(function(x){return x[0]===e.what;})[0];return o?o[2]:'contatto';}
@@ -115,6 +118,7 @@ function mergeRemote(list){
   if(changed){save();refreshViews();}
 }
 function refreshViews(){
+  extEmit('change');
   if(!flow)renderHome();
   renderCries();
   var pat=$('#v-pattern');if(pat&&pat.classList.contains('on'))renderStats();
@@ -196,7 +200,7 @@ function norms(ad){var w=ad/7;return {feedH:w<6?3:(w<12?3.5:4),awakeMin:w<4?55:(
 function context(now){
   var ev=sorted().filter(function(e){return e.t<=now;});
   var lastFeed=null,lastDiaper=null,lastSleep=null,lastWake=null;
-  ev.forEach(function(e){if(e.k==='feed'){if(e.ml>0)lastFeed=e;}else if(e.k==='diaper')lastDiaper=e;else if(e.k==='sleep')lastSleep=e;else if(e.k==='wake')lastWake=e;});
+  ev.forEach(function(e){if(e.k==='feed'){if(fedFeed(e))lastFeed=e;}else if(e.k==='diaper')lastDiaper=e;else if(e.k==='sleep')lastSleep=e;else if(e.k==='wake')lastWake=e;});
   var sleeping=!!(lastSleep&&(!lastWake||lastSleep.t>lastWake.t));
   var awakeMin=null,sleepingMin=null,lastNapMin=null;
   if(sleeping)sleepingMin=(now-lastSleep.t)/MIN;
@@ -607,8 +611,8 @@ function hypList(hy){
 }
 
 /* ---------- tap flows ---------- */
-A.flow=function(type,linkId){
-  flow={type:type,step:0,off:0,data:{},link:linkId||null};
+A.flow=function(type,linkId,data){
+  flow={type:type,step:0,off:0,data:data||{},link:linkId||null};
   showScreen();renderFlow();
 };
 A.setOff=function(o){if(flow){flow.off=o;renderFlow();}};
@@ -653,6 +657,7 @@ function renderFlow(){
     h+='<h2>Cosa hai fatto?</h2><div class="grid2">'+OTHER.map(function(o){return '<button style="border-bottom:4px solid var(--c-'+o[2]+')" onclick="A.finish(\''+o[0]+'\')">'+o[1]+'</button>';}).join('')+'</div>';
   }
   if(HEALTH_TYPES[flow.type])h=renderHealthFlow();
+  if(EXT.flows[flow.type])h=EXT.flows[flow.type].render(flow,API);
   el.innerHTML=h;
 }
 A.finish=function(val){
@@ -663,6 +668,7 @@ A.finish=function(val){
   else if(flow.type==='sleep'){e={k:val};msg=val==='sleep'?'Buona nanna':'Si è svegliato';}
   else if(flow.type==='other'){var o=OTHER.filter(function(x){return x[0]===val;})[0];e={k:'other',what:val};msg=o?o[1]+' registrato':'Registrato';}
   else if(HEALTH_TYPES[flow.type]){var hr=healthFinish(val);if(!hr){toast('Niente da salvare');return;}e=hr.e;t=hr.t;msg=hr.msg;}
+  else if(EXT.flows[flow.type]){var xr=EXT.flows[flow.type].finish(flow,val,API);if(xr===false){return;}if(!xr||!xr.e){toast('Niente da salvare');return;}e=xr.e;if(xr.t)t=xr.t;msg=xr.msg||'Salvato';}
   if(!e)return;
   e.id=uid();e.t=t;e.who=who;S.events.push(e);touched(e);
   var linked=tryLabelOpenCry(e,flow.link);
@@ -704,6 +710,8 @@ function renderStatus(){
   var tp=typicalPrep();$('#qFeed').textContent='di solito '+Math.round(tp)+' ml';
 }
 function describe(e,prev){
+  if(EXT.describe[e.k])return EXT.describe[e.k](e,API);
+  if(e.k==='feed'&&e.src==='seno')return ['Seno','<span class="detail">'+(e.dur?Math.round(e.dur/60)+' min':'')+(e.side?' · '+esc(e.side):'')+'</span>'];
   if(e.k==='feed')return ['Pappa','<span class="detail">'+(e.ml>0?e.ml+' ml'+(e.prep&&e.ml<e.prep?' su '+e.prep:''):'rifiutata'+(e.prep?' ('+e.prep+' ml)':''))+'</span>'];
   if(e.k==='diaper')return ['Cambio','<span class="detail">pipì '+LVL[e.pipi]+', cacca '+LVL[e.cacca]+'</span>'];
   if(e.k==='sleep')return ['Nanna',''];
@@ -717,7 +725,7 @@ function describe(e,prev){
   return [e.k,''];
 }
 function renderDiary(){
-  var ev=sorted().filter(function(e){return e.k!=='appt';}),vis=ev.slice(-10);
+  var ev=sorted().filter(function(e){return e.k!=='appt'&&!EXT.hidden[e.k];}),vis=ev.slice(-10);
   if(!vis.length){$('#diary').innerHTML='<div class="list"><div class="empty">Ancora vuoto. Tocca Pappa, Pannolino o Nanna: due tap e la voce è registrata.</div></div>';return;}
   var h='<div class="list">';
   for(var i=vis.length-1;i>=0;i--){
@@ -734,7 +742,7 @@ A.del=function(id){
   if(e&&e.k==='cry')dropAudio(e);
   if(S.openCry===id)S.openCry=null;save();renderHome();renderCries();
 };
-function renderHome(){renderHeader();renderStatus();renderHealthLine();renderNight();renderDiary();}
+function renderHome(){renderHeader();renderStatus();renderHealthLine();renderNight();renderDiary();renderExtHome();}
 
 /* ---------- cries tab ---------- */
 function renderCries(){
@@ -865,11 +873,12 @@ function renderStats(){
     }
   }
   h+='</div>';
+  h+=extHtml('stats');
   $('#stats').innerHTML=h;
 }
 
 /* ---------- settings, mic, storage ---------- */
-function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value=S.settings.birth||'';applyTheme(themePref());renderDiag();renderAccount();}
+function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value=S.settings.birth||'';applyTheme(themePref());renderDiag();renderAccount();fillExtAltro();}
 function renderAccount(){
   var el=$('#account');if(!el)return;
   if(!window.AlanSync){el.innerHTML='<p class="hint">Sync non caricato.</p>';return;}
@@ -1153,6 +1162,7 @@ function renderHealth(){
     h+='</div>';}
   if(past.length)h+='<p class="hint">'+past.length+(past.length===1?' visita fatta':' visite fatte')+'.</p>';
   h+='</div>';
+  h+=extHtml('salute');
   el.innerHTML=h;
 }
 function kindColor(k){return k==='vaccino'?'var(--c-aria)':(k==='bilancio'?'var(--c-cambio)':(k==='esame'?'var(--c-sonno)':'var(--c-contatto)'));}
@@ -1296,6 +1306,44 @@ function renderNight(){
   el.innerHTML=h+'</div>';
 }
 
+/* ---------- estensioni: ogni funzione aggiuntiva vive in js/<nome>.js e si registra su window.AlanExt ----------
+   Contratto: le estensioni NON toccano app.js. Registrano percorsi a tap (flow), blocchi in Home (home), tab intere (tab),
+   riquadri in Pattern/Salute/Altro (slot), descrizioni nel diario (describe), voci da nascondere nel diario (hide),
+   e reagiscono a 'change' (ogni salvataggio o merge). Tutto ciò che serve dall'app passa da API. */
+var EXT={flows:{},home:[],tabs:{},slots:{},describe:{},hidden:{},hooks:{}},extReady=false;
+function extEmit(evt){var hs=EXT.hooks[evt]||[];for(var i=0;i<hs.length;i++){try{hs[i](API);}catch(e){}}}
+function extHtml(slot){var fs=EXT.slots[slot]||[],out='';for(var i=0;i<fs.length;i++){try{out+=fs[i](API)||'';}catch(e){}}return out;}
+function renderExtHome(){
+  for(var i=0;i<EXT.home.length;i++){var b=EXT.home[i],host=$('#'+(b.where==='top'?'extTop':(b.where==='bottom'?'extBottom':'extMid')));if(!host)continue;
+    var el=document.getElementById?document.getElementById('home-'+b.id):null;
+    if(!el){el=document.createElement('div');el.id='home-'+b.id;host.appendChild(el);}
+    try{el.innerHTML=b.fn(API)||'';}catch(e){el.innerHTML='';}}
+}
+var API={
+  MIN:MIN,H:H,LABELS:LABELS,CAUSES:CAUSES,OTHER:OTHER,LVL:LVL,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
+  state:function(){return S;},events:function(){return S.events;},settings:function(){return S.settings;},who:function(){return who;},flow:function(){return flow;},
+  touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,snapshot:snapshot,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
+  fedFeed:fedFeed,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,nightSummary:nightSummary,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
+  fmtTime:fmtTime,fmtDur:fmtDur,fmtSec:fmtSec,fmtDate:fmtDate,fmtTemp:fmtTemp,dayKey:dayKey,dayLabel:dayLabel,isoDay:isoDay,noon:noon,inDays:inDays,pad:pad,esc:esc,mean:mean,median:median,pct:pct,niceTicks:niceTicks,
+  toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
+  q:function(s){return $(s);},lsGet:lsGet,lsSet:lsSet,
+  fileGet:function(k){return idbGet('files',k);},filePut:function(k,v){return idbPut('files',k,v);},fileDel:function(k){return idbDel('files',k);},
+  blobToBuf:blobToBuf,audioGet:audioGet,audioPut:audioPut,
+  sync:function(){return window.AlanSync||null;},syncReady:syncReady,cloudUpload:function(id,blob,mime){return window.AlanSync?AlanSync.uploadAudio(id,blob,mime):Promise.resolve({path:null,error:'non collegato'});},cloudDownload:function(path){return window.AlanSync?AlanSync.downloadAudio(path):Promise.resolve({data:null,error:{message:'non collegato'}});},cloudRemove:function(path){return window.AlanSync?AlanSync.removeAudio(path):Promise.resolve({});},
+  diag:diag,isStandalone:isStandalone,openCry:function(){A.openCry();}
+};
+window.AlanExt={
+  flow:function(type,def){EXT.flows[type]=def;},
+  home:function(id,fn,where){EXT.home.push({id:id,fn:fn,where:where||'mid'});},
+  tab:function(id,fn){EXT.tabs[id]=fn;},
+  slot:function(name,fn){(EXT.slots[name]=EXT.slots[name]||[]).push(fn);},
+  describe:function(k,fn){EXT.describe[k]=fn;},
+  hide:function(k){EXT.hidden[k]=true;},
+  on:function(evt,fn){(EXT.hooks[evt]=EXT.hooks[evt]||[]).push(fn);},
+  api:API,
+  refresh:function(){if(!extReady)return;if(!flow)renderHome();if(curView==='pattern')renderStats();else if(curView==='salute')renderHealth();else if(curView==='altro')fillExtAltro();else if(EXT.tabs[curView])try{EXT.tabs[curView](API);}catch(e){}}
+};
+
 /* ---------- aggiornamenti (service worker) ---------- */
 var swReg=null,swVersion=null,swWaiting=null,swReloading=false;
 function initUpdates(){
@@ -1344,10 +1392,14 @@ A.applyUpdate=function(btn){
 /* ---------- nav & init ---------- */
 function showView(v){
   var tabs=document.querySelectorAll('nav.tabs button');for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle('on',tabs[i].getAttribute('data-v')===v);
-  ['oggi','pianti','pattern','salute','altro'].forEach(function(x){$('#v-'+x).classList.toggle('on',x===v);});
+  ['oggi','pianti','pattern','salute','altro'].concat(Object.keys(EXT.tabs)).forEach(function(x){var el=$('#v-'+x);if(el)el.classList.toggle('on',x===v);});
   if(v==='pianti')renderCries();if(v==='pattern')renderStats();if(v==='salute')renderHealth();if(v==='altro')fillSettings();
+  if(EXT.tabs[v])try{EXT.tabs[v](API);}catch(e){}
+  curView=v;
   window.scrollTo(0,0);
 }
+var curView='oggi';
+function fillExtAltro(){var el=$('#extAltro');if(el)el.innerHTML=extHtml('altro');}
 /* Il nome arriva dal profilo al login. Al PRIMO passaggio da "Io" al nome, le voci registrate su questo telefono senza
    accesso vengono intestate al nome (sono ancora tutte locali: il pull dell'altro telefono avviene dopo). */
 function syncWho(){
@@ -1364,7 +1416,8 @@ function adoptName(name){
 }
 load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
-  applyTheme(themePref());renderHome();initUpdates();
+  applyTheme(themePref());extReady=true;renderHome();initUpdates();
+  try{if(/[?&]cry=1/.test(location.search)){history.replaceState(null,'',location.pathname);A.openCry();}}catch(e){}
   if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:function(){syncWho();renderHeader();renderAccount();},onReady:flushAudio}).then(function(){syncWho();renderHeader();renderAccount();flushAudio();});}
   window.addEventListener('online',function(){setTimeout(flushAudio,1500);});
   setInterval(function(){if(!flow)renderStatus();},30000);
