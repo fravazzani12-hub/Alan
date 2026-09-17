@@ -316,10 +316,11 @@ Una nota libera (≤ 200 caratteri, spazi e a capo normalizzati) su qualsiasi vo
 vive sulla voce (`note`, `noteBy` = nome del profilo di chi scrive) e passa da `touched` + `save`, quindi si sincronizza come
 la voce. Dove: in Oggi ogni riga del diario è toccabile sulla descrizione (`row` dell'API: `.row.tap`, target ≥ 44 px) e mostra
 la nota sotto, con "— nome" solo se chi ha scritto è diverso da chi ha registrato; finché non esiste nessuna nota un
-suggerimento in fondo al diario (`home` in `#extBottom`). In Salute la scheda "Note" elenca le ultime 20 note dalla più
-recente ("e altre N" oltre) e il pulsante "Scrivi una nota" apre il percorso `notepick`: le voci delle ultime 3 giornate,
-dalla più recente, tap → percorso `note`. Il percorso `note` mostra la voce, una textarea con contatore, "Salva la nota" e,
+suggerimento in fondo al diario e, sempre, il pulsante "Tutto il diario" (`home` in `#extBottom`), che apre il percorso
+`diario`: tutte le voci giorno per giorno (Oggi, Ieri, poi la data), 7 giornate alla volta con "Giorni precedenti" finché
+esistono voci più vecchie, tap su una voce → percorso `note`, anche a distanza di giorni. In Salute la scheda "Note" elenca
+le ultime 20 note dalla più recente ("e altre N" oltre) e "Scrivi una nota nel diario" apre lo stesso percorso `diario`. Il percorso `note` mostra la voce, una textarea con contatore, "Salva la nota" e,
 se esiste, "Togli la nota"; salva con `A.finish('save'|'clear')` (il `finish` dell'estensione aggiorna la voce e torna
 `false`, così app.js non crea una voce nuova); testo uguale → "Nessuna modifica". Il riepilogo per il pediatra (§9.5) aggiunge
 la sezione "Note" (data, ora, voce · testo, chi) con le note del periodo, riportate così come sono. Nessun consiglio.
-Esposto su `AlanExt.note` = {text, has, clean, set, all, recent, open, typed, card}.
+Esposto su `AlanExt.note` = {text, has, clean, set, all, recent(now, days), older, open, openDiary, more, typed, card}.
