@@ -80,8 +80,8 @@ function touched(e){e._updated=new Date().toISOString();if(window.AlanSync)AlanS
 function removed(e){e._updated=new Date().toISOString();if(window.AlanSync)AlanSync.remove(e);}
 /* Regola di SPEC §3: la prima azione registrata in [cry.t − 5 min, cry.t + 45 min] spiega il pianto aperto.
    Vale sia per le azioni fatte su questo telefono (A.finish) sia per quelle che arrivano dall'altro (mergeRemote). */
-/* una pappa "vale" se ha ml > 0 oppure è un allattamento al seno di almeno un minuto (src 'seno', dur in secondi) */
-function fedFeed(e){return e.k==='feed'&&(e.ml>0||(e.src==='seno'&&e.dur>=60));}
+/* una pappa "vale" se ha ml > 0 (biberon rifiutato = 0 non conta) */
+function fedFeed(e){return e.k==='feed'&&e.ml>0;}
 function labelFor(e){
   if(e.k==='feed')return fedFeed(e)?'fame':null;
   if(e.k==='sleep')return 'sonno';
@@ -634,7 +634,7 @@ function renderFlow(){
   if(flow.type==='feed'){
     h+='<div class="bar">'+backBtn()+'<div class="title">Pappa</div></div>'+whenRow();
     if(flow.step===0){
-      var opts=[60,90,120,150,180,210];
+      var opts=[60,90,115,120,125,150,180,210];
       h+='<h2>Quanto hai preparato?</h2><div class="grid3">'+opts.map(function(m){return '<button class="'+(Math.round(tp)===m?'on':'')+'" onclick="A.pick(\'prep\','+m+')">'+m+'<small>ml</small></button>';}).join('')+'</div>';
       var cv=d.prepCustom||tp;
       h+='<div class="stepper"><button onclick="A.stepPrep(-10)">−10</button><div class="val">'+cv+' ml</div><button onclick="A.stepPrep(10)">+10</button></div><button class="btn ghost" onclick="A.pick(\'prep\','+cv+')">Avanti con '+cv+' ml</button>';
@@ -711,7 +711,6 @@ function renderStatus(){
 }
 function describe(e,prev){
   if(EXT.describe[e.k])return EXT.describe[e.k](e,API);
-  if(e.k==='feed'&&e.src==='seno')return ['Seno','<span class="detail">'+(e.dur?Math.round(e.dur/60)+' min':'')+(e.side?' · '+esc(e.side):'')+'</span>'];
   if(e.k==='feed')return ['Pappa','<span class="detail">'+(e.ml>0?e.ml+' ml'+(e.prep&&e.ml<e.prep?' su '+e.prep:''):'rifiutata'+(e.prep?' ('+e.prep+' ml)':''))+'</span>'];
   if(e.k==='diaper')return ['Cambio','<span class="detail">pipì '+LVL[e.pipi]+', cacca '+LVL[e.cacca]+'</span>'];
   if(e.k==='sleep')return ['Nanna',''];
