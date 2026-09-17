@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F0B040">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Alan">
+<title>Alan — cosa vuole?</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div><h1 id="hName">Alan</h1><div class="age" id="hAge"></div></div>
+    <div class="seg" id="whoSeg"><button data-w="Fabio">Fabio</button><button data-w="Ilaria">Ilaria</button></div>
+  </header>
+
+  <section class="view on" id="v-oggi">
+    <div class="status" id="status"></div>
+    <div id="openCryBanner"></div>
+    <button class="cry" id="cryBtn" onclick="A.openCry()">Piange<small>registra e ascolta</small></button>
+    <div class="home-grid">
+      <button style="--tc:var(--c-fame)" onclick="A.flow('feed')">Pappa<small id="qFeed"></small></button>
+      <button style="--tc:var(--c-cambio)" onclick="A.flow('diaper')">Pannolino<small>pipì e cacca</small></button>
+      <button style="--tc:var(--c-sonno)" onclick="A.flow('sleep')" id="qSleep">Nanna<small></small></button>
+      <button style="--tc:var(--c-contatto)" onclick="A.flow('other')">Altro<small>ruttino, ciuccio, coccole…</small></button>
+    </div>
+    <h2>Ultime voci</h2>
+    <div id="diary"></div>
+  </section>
+
+  <section class="view" id="v-pianti"><div id="cries"></div></section>
+  <section class="view" id="v-pattern"><div id="stats"></div></section>
+
+  <section class="view" id="v-altro">
+    <div class="card">
+      <h3>Quando chiamare il pediatra o andare al pronto soccorso</h3>
+      <ul class="flags">
+        <li>Febbre: temperatura rettale ≥ 38 °C sotto i 3 mesi è sempre urgente, anche senza altri sintomi.</li>
+        <li>Pianto inconsolabile per più di 2 ore nonostante pappa, cambio e contatto, o un pianto diverso dal solito: molto acuto e stridulo, oppure debole e lamentoso.</li>
+        <li>Non si sveglia per mangiare, rifiuta due pappe di fila, è molle o sonnolento più del solito.</li>
+        <li>Vomito a getto ripetuto, vomito verde, pancia dura e gonfia, sangue nelle feci.</li>
+        <li>Meno di 4–5 pannolini bagnati in 24 ore, bocca secca, fontanella infossata.</li>
+        <li>Respiro affannoso, rientramenti tra le costole, labbra o pelle bluastre, pause nel respiro.</li>
+        <li>Colorito grigiastro o marezzato, eruzione che non sbianca premendo.</li>
+      </ul>
+      <p class="hint">L'app confronta il pianto con quelli già registrati di Alan e con il contesto. Non fa diagnosi: nel dubbio vincono l'istinto dei genitori e il pediatra.</p>
+    </div>
+    <div class="card">
+      <h3>Microfono e spazio</h3>
+      <div id="micInfo" class="hint">—</div>
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="A.testMic()">Prova il microfono</button>
+    </div>
+    <div class="card">
+      <h3>Account e sync</h3>
+      <div id="account"></div>
+    </div>
+    <div class="card">
+      <h3>Sincronizza con l'altro telefono</h3>
+      <p class="hint">Con l'account attivo il diario si allinea da solo tra i telefoni. Il codice serve solo come riserva (o senza account). Gli audio restano sul telefono che li ha registrati.</p>
+      <button class="btn" onclick="A.exportData()">Condividi i dati di questo telefono</button>
+      <label class="f" for="impTxt">Incolla qui un codice ricevuto</label>
+      <textarea class="f" id="impTxt" placeholder="AZ2:…"></textarea>
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="A.importData()">Importa e unisci</button>
+    </div>
+    <div class="card">
+      <h3>Impostazioni</h3>
+      <label class="f" for="sName">Nome</label>
+      <input class="f" id="sName" type="text">
+      <label class="f" for="sBirth">Data di nascita</label>
+      <input class="f" id="sBirth" type="date">
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="A.saveSettings()">Salva impostazioni</button>
+      <div class="spacer"></div>
+      <button class="btn warn" onclick="A.resetAll()">Cancella tutti i dati di questo telefono</button>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs">
+  <button class="on" data-v="oggi">Oggi</button>
+  <button data-v="pianti">Pianti</button>
+  <button data-v="pattern">Pattern</button>
+  <button data-v="altro">Altro</button>
+</nav>
+
+<div class="screen" id="screen"><div class="inner" id="screenInner"></div></div>
+<div class="toast" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+<script src="./js/config.js"></script>
+<script src="./js/sync.js"></script>
+<script src="./js/app.js"></script>
+<script>
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
+</script>
+</body>
+</html>
