@@ -1029,6 +1029,7 @@ function showUpdate(worker){
   swWaiting=worker;
   var b=$('#updBanner');if(!b)return;
   b.innerHTML='<button onclick="A.applyUpdate(this)">Nuova versione, tocca per aggiornare</button>';b.classList.add('on');
+  try{document.body.classList.add('upd-on');}catch(e){}
 }
 A.applyUpdate=function(btn){
   var w=swWaiting||(swReg&&swReg.waiting);
@@ -1046,7 +1047,20 @@ function showView(v){
   if(v==='pianti')renderCries();if(v==='pattern')renderStats();if(v==='altro')fillSettings();
   window.scrollTo(0,0);
 }
-function syncWho(){if(!window.AlanSync)return;var st=AlanSync.status();if(st.name&&st.name!==who){who=st.name;lsSet(WHOKEY,who);}}
+/* Il nome arriva dal profilo al login. Al PRIMO passaggio da "Io" al nome, le voci registrate su questo telefono senza
+   accesso vengono intestate al nome (sono ancora tutte locali: il pull dell'altro telefono avviene dopo). */
+function syncWho(){
+  if(!window.AlanSync)return;
+  var st=AlanSync.status();
+  if(st.name&&st.name!==who){var wasAnon=(!who||who==='Io');who=st.name;lsSet(WHOKEY,who);if(wasAnon)adoptName(who);}
+}
+function adoptName(name){
+  var n=0;
+  S.events.forEach(function(e){if(!e.who||e.who==='Io'){e.who=name;touched(e);n++;}});
+  if(!n)return;
+  save();if(!flow)renderHome();
+  toast((n===1?'La voce registrata':'Le '+n+' voci registrate')+' senza accesso '+(n===1?'è':'sono')+' ora di '+name);
+}
 load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
   renderHome();initUpdates();
