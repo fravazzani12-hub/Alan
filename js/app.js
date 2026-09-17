@@ -76,19 +76,63 @@ function load(){
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 /* ---------- sync hooks (js/sync.js, optional) ---------- */
 function touched(e){e._updated=new Date().toISOString();if(window.AlanSync)AlanSync.upsert(e);}
-function removed(e){if(window.AlanSync)AlanSync.remove(e);}
+function removed(e){e._updated=new Date().toISOString();if(window.AlanSync)AlanSync.remove(e);}
+/* Regola di SPEC §3: la prima azione registrata in [cry.t − 5 min, cry.t + 45 min] spiega il pianto aperto.
+   Vale sia per le azioni fatte su questo telefono (A.finish) sia per quelle che arrivano dall'altro (mergeRemote). */
+function labelFor(e){
+  if(e.k==='feed')return e.ml>0?'fame':null;
+  if(e.k==='sleep')return 'sonno';
+  if(e.k==='diaper')return 'cambio';
+  if(e.k==='other'){var o=OTHER.filter(function(x){return x[0]===e.what;})[0];return o?o[2]:'contatto';}
+  return null;
+}
+function tryLabelOpenCry(e,linkId){
+  var label=labelFor(e);if(!label)return null;
+  var cid=linkId||S.openCry,cry=cid?byId(cid):null;
+  if(cry&&cry.k==='cry'&&!cry.label&&e.t>=cry.t-5*MIN&&e.t-cry.t<=45*MIN){cry.label=label;touched(cry);if(S.openCry===cry.id)S.openCry=null;return cry;}
+  return null;
+}
 function mergeRemote(list){
   var changed=false;
   list.forEach(function(r){
     var cur=byId(r.id);
-    if(r._deleted){if(cur){S.events=S.events.filter(function(x){return x.id!==r.id;});if(cur.k==='cry')idbDel('audio',r.id);if(S.openCry===r.id)S.openCry=null;changed=true;}return;}
-    if(!cur){var n={};for(var k in r)if(k!=='_deleted')n[k]=r[k];n.audio=false;S.events.push(n);changed=true;return;}
+    if(r._deleted){
+      if(cur){S.events=S.events.filter(function(x){return x.id!==r.id;});if(cur.k==='cry'){idbDel('audio',r.id);setAudioOutbox(audioOutbox().filter(function(x){return x!==r.id;}));}if(S.openCry===r.id)S.openCry=null;changed=true;}
+      return;
+    }
+    if(!cur){
+      var n={};for(var k in r)if(k!=='_deleted')n[k]=r[k];n.audio=false;S.events.push(n);changed=true;
+      /* un pianto aperto registrato dall'altro telefono resta aperto anche qui: la prossima azione lo spiega da entrambi */
+      if(n.k==='cry'&&!n.label&&!S.openCry&&Date.now()-n.t<=45*MIN)S.openCry=n.id;
+      else if(n.k!=='cry')tryLabelOpenCry(n,null);
+      return;
+    }
     if(cur._updated&&r._updated&&r._updated<=cur._updated)return;
-    for(var k2 in r)if(k2!=='_deleted'&&k2!=='audio'&&k2!=='mime')cur[k2]=r[k2];
+    for(var k2 in r)if(k2!=='_deleted'&&k2!=='audio')cur[k2]=r[k2];
     if(cur.k==='cry'&&cur.label&&S.openCry===cur.id)S.openCry=null;
     changed=true;
   });
-  if(changed){save();if(!flow)renderHome();renderCries();}
+  if(changed){save();refreshViews();}
+}
+function refreshViews(){
+  if(!flow)renderHome();
+  renderCries();
+  var pat=$('#v-pattern');if(pat&&pat.classList.contains('on'))renderStats();
+  if(flow&&flow.type==='cry'&&flow.phase==='after')renderCry();
+}
+/* impostazioni condivise: last-writer-wins su _updated; se il server non ha nulla, vincono quelle locali */
+var settingsPushed=false;
+function mergeRemoteSettings(r){
+  if(!r){if(!settingsPushed&&(S.settings.name||S.settings.birth)){settingsPushed=true;pushSettings();}return;}
+  if(S.settings._updated&&r._updated&&r._updated<=S.settings._updated)return;
+  var changed=(r.name&&r.name!==S.settings.name)||(r.birth&&r.birth!==S.settings.birth);
+  if(r.name)S.settings.name=r.name;if(r.birth)S.settings.birth=r.birth;S.settings._updated=r._updated||S.settings._updated;
+  save();renderHeader();
+  if(changed){if(!flow)renderHome();var alt=$('#v-altro');if(alt&&alt.classList.contains('on'))fillSettings();toast('Impostazioni aggiornate dall\'altro telefono');}
+}
+function pushSettings(){
+  if(!S.settings._updated)S.settings._updated=new Date().toISOString();
+  if(window.AlanSync)AlanSync.upsertSettings(S.settings);
 }
 window.AlanApp={mergeRemote:mergeRemote,events:function(){return S.events;},refresh:function(){renderHome();renderCries();renderAccount();}};
 
@@ -608,22 +652,17 @@ function renderFlow(){
 }
 A.finish=function(val){
   if(!flow)return;
-  var t=Date.now()-flow.off*MIN,d=flow.data,e=null,label=null,msg='';
-  if(flow.type==='feed'){var ml=Number(val);e={k:'feed',prep:d.prep,ml:ml};label=ml>0?'fame':null;msg=ml>0?'Pappa: '+ml+' ml su '+d.prep:'Biberon rifiutato';}
-  else if(flow.type==='diaper'){e={k:'diaper',pipi:d.pipi,cacca:val};label='cambio';msg='Cambio: pipì '+LVL[d.pipi]+', cacca '+LVL[val];}
-  else if(flow.type==='sleep'){e={k:val};label=val==='sleep'?'sonno':null;msg=val==='sleep'?'Buona nanna':'Si è svegliato';}
-  else if(flow.type==='other'){var o=OTHER.filter(function(x){return x[0]===val;})[0];e={k:'other',what:val};label=o?o[2]:'contatto';msg=o?o[1]+' registrato':'Registrato';}
+  var t=Date.now()-flow.off*MIN,d=flow.data,e=null,msg='';
+  if(flow.type==='feed'){var ml=Number(val);e={k:'feed',prep:d.prep,ml:ml};msg=ml>0?'Pappa: '+ml+' ml su '+d.prep:'Biberon rifiutato';}
+  else if(flow.type==='diaper'){e={k:'diaper',pipi:d.pipi,cacca:val};msg='Cambio: pipì '+LVL[d.pipi]+', cacca '+LVL[val];}
+  else if(flow.type==='sleep'){e={k:val};msg=val==='sleep'?'Buona nanna':'Si è svegliato';}
+  else if(flow.type==='other'){var o=OTHER.filter(function(x){return x[0]===val;})[0];e={k:'other',what:val};msg=o?o[1]+' registrato':'Registrato';}
   if(!e)return;
   e.id=uid();e.t=t;e.who=who;S.events.push(e);touched(e);
-  var linked=null;
-  if(label){
-    var cid=flow.link||S.openCry;
-    var cry=cid?byId(cid):null;
-    if(cry&&cry.k==='cry'&&!cry.label&&t>=cry.t-5*MIN&&t-cry.t<=45*MIN){cry.label=label;linked=cry;touched(cry);if(S.openCry===cry.id)S.openCry=null;}
-  }
+  var linked=tryLabelOpenCry(e,flow.link);
   save();
   flow=null;$('#screen').classList.remove('on');renderHome();
-  toast(linked?msg+' · il pianto delle '+fmtTime(linked.t)+' era '+LABELS[label]:msg);
+  toast(linked?msg+' · il pianto delle '+fmtTime(linked.t)+' era '+LABELS[linked.label]:msg);
 };
 
 /* ---------- home ---------- */
@@ -887,7 +926,7 @@ A.testMic=function(btn){
     s.getTracks().forEach(function(t){t.stop();});busy(btn,false);toast('Microfono ok');
   }).catch(function(e){busy(btn,false);diag('perm',false,errStr(e)+' (prova)');toast(e&&e.name==='NotAllowedError'?'Microfono bloccato in questa finestra':'Microfono non disponibile: '+(e&&e.name));});
 };
-A.saveSettings=function(){S.settings.name=$('#sName').value.trim()||'Alan';S.settings.birth=$('#sBirth').value||S.settings.birth;save();toast('Impostazioni salvate');renderHome();};
+A.saveSettings=function(){S.settings.name=$('#sName').value.trim()||'Alan';S.settings.birth=$('#sBirth').value||S.settings.birth;S.settings._updated=new Date().toISOString();save();pushSettings();toast('Impostazioni salvate');renderHome();};
 A.resetAll=function(){
   if(!window.confirm('Cancellare diario, pianti e audio su questo telefono? Non si può annullare.'))return;
   S.events.filter(function(e){return e.k==='cry';}).forEach(function(e){idbDel('audio',e.id);});
@@ -989,7 +1028,7 @@ load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
   document.querySelectorAll('#whoSeg button').forEach(function(b){b.addEventListener('click',function(){A.setWho(b.getAttribute('data-w'));});});
   renderHome();initUpdates();
-  if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onStatus:renderAccount,onReady:flushAudio}).then(function(){renderAccount();flushAudio();});}
+  if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:renderAccount,onReady:flushAudio}).then(function(){renderAccount();flushAudio();});}
   window.addEventListener('online',function(){setTimeout(flushAudio,1500);});
   setInterval(function(){if(!flow)renderStatus();},30000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden){if(!flow)renderHome();setTimeout(flushAudio,1500);}});

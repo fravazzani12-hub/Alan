@@ -2,13 +2,15 @@
    Accesso con email e password: gli utenti si creano nella dashboard Supabase (Authentication → Users), nessuna email in gioco.
    Modello: tabella events (una riga per voce del diario), soft delete, last-writer-wins su updated_at.
    Contratto con app.js: ogni mutazione locale passa da upsert(e)/remove(e); le righe remote entrano da opts.onEvents(list),
-   già convertite in eventi piatti (campo _updated = ISO UTC con millisecondi, _deleted = true per il soft delete). */
+   già convertite in eventi piatti (campo _updated = ISO UTC con millisecondi, _deleted = true per il soft delete).
+   Impostazioni (nome, nascita): tabella family_settings, una riga per famiglia, stesso last-writer-wins; entrano da opts.onSettings(row|null).
+   Audio dei pianti: bucket privato "cries", oggetto <family_id>/<id>.<ext>; upload dopo il salvataggio, download on-demand. */
 window.AlanSync=(function(){
   'use strict';
   var CFG=window.ALAN_CONFIG||{};
-  var sb=null,session=null,familyId=null,channel=null,onEvents=null,onStatus=null,onReady=null,lastSync=null,flushing=false;
+  var sb=null,session=null,familyId=null,channel=null,onEvents=null,onStatus=null,onReady=null,onSettings=null,lastSync=null,flushing=false;
   var starting=false,chanStatus='off',lastError=null,others=[],presenceMeta=null,retryT=null,retryMs=2000;
-  var OUTBOX='alan.outbox',SINCE='alan.sync.since',PAGE=1000;
+  var OUTBOX='alan.outbox',SINCE='alan.sync.since',SETBOX='alan.settings.outbox',PAGE=1000;
   var SKIP=['id','t','k','who','audio','_deleted','_updated'];
 
   function configured(){return !!(CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY&&CFG.SUPABASE_URL.indexOf('INSERISCI')<0);}
@@ -35,7 +37,7 @@ window.AlanSync=(function(){
   }
 
   async function init(opts){
-    onEvents=opts.onEvents;onStatus=opts.onStatus||null;onReady=opts.onReady||null;
+    onEvents=opts.onEvents;onStatus=opts.onStatus||null;onReady=opts.onReady||null;onSettings=opts.onSettings||null;
     if(!available())return {ok:false,reason:'noconfig'};
     sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
     var got=await sb.auth.getSession();session=got&&got.data?got.data.session:null;
@@ -57,7 +59,7 @@ window.AlanSync=(function(){
     try{
       familyId=await loadFamily();notify();
       if(!familyId)return;
-      await pullAll();subscribe();await flush();
+      await pullAll();await pullSettings();subscribe();await flush();
       if(onReady)try{onReady();}catch(e){}
     }finally{starting=false;}
   }
@@ -82,6 +84,26 @@ window.AlanSync=(function(){
     }
     lastSync=Date.now();notify();return true;
   }
+  function settingsRowToObj(r){return r?{name:r.name,birth:r.birth,_updated:isoMs(r.updated_at)}:null;}
+  async function pullSettings(){
+    if(!sb||!familyId||!onSettings)return;
+    var r=await sb.from('family_settings').select('*').eq('family_id',familyId).maybeSingle();
+    if(r.error){fail('impostazioni',r.error);return;}
+    try{onSettings(settingsRowToObj(r.data));}catch(e){}
+  }
+  async function upsertSettings(st){
+    var row={name:st.name||null,birth:st.birth||null,updated_at:st._updated||new Date().toISOString()};
+    if(!sb||!familyId){lsSet(SETBOX,JSON.stringify(row));return false;}
+    row.family_id=familyId;
+    var r=await sb.from('family_settings').upsert(row,{onConflict:'family_id'});
+    if(r.error){fail('impostazioni',r.error);lsSet(SETBOX,JSON.stringify(row));return false;}
+    try{localStorage.removeItem(SETBOX);}catch(e){}
+    lastSync=Date.now();notify();return true;
+  }
+  function onSettingsRow(p){
+    var row=p['new']&&p['new'].family_id?p['new']:null;
+    if(row&&onSettings){try{onSettings(settingsRowToObj(row));}catch(e){}}
+  }
   function onRow(p){
     var row;
     if(p.eventType==='DELETE'){row=p.old&&p.old.id?{id:p.old.id,deleted:true,t:0}:null;}
@@ -103,6 +125,7 @@ window.AlanSync=(function(){
     var key=session&&session.user?session.user.id:('anon-'+Math.random().toString(36).slice(2));
     var ch=sb.channel('family-'+familyId,{config:{presence:{key:key}}});
     ch.on('postgres_changes',{event:'*',schema:'public',table:'events',filter:'family_id=eq.'+familyId},onRow)
+      .on('postgres_changes',{event:'*',schema:'public',table:'family_settings',filter:'family_id=eq.'+familyId},onSettingsRow)
       .on('presence',{event:'sync'},function(){
         var st=ch.presenceState(),list=[];
         for(var k in st)if(k!==key&&st[k]&&st[k].length)list.push(st[k][st[k].length-1]);
@@ -110,7 +133,7 @@ window.AlanSync=(function(){
       })
       .subscribe(function(status,err){
         chanStatus=status||'?';
-        if(status==='SUBSCRIBED'){retryMs=2000;if(presenceMeta)ch.track(presenceMeta).catch(function(){});pullAll();}
+        if(status==='SUBSCRIBED'){retryMs=2000;if(presenceMeta)ch.track(presenceMeta).catch(function(){});pullAll();pullSettings();}
         else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){if(err)fail('realtime',err);scheduleRetry();}
         else if(status==='CLOSED'){if(channel===ch)scheduleRetry();}
         notify();
@@ -145,10 +168,14 @@ window.AlanSync=(function(){
         if(r.error){fail('invio',r.error);rest.push(ob[i]);}
       }
       outboxSet(rest);if(ob.length&&!rest.length)lastSync=Date.now();
+      var pend=null;try{pend=JSON.parse(lsGet(SETBOX)||'null');}catch(e){}
+      if(pend)await upsertSettings({name:pend.name,birth:pend.birth,_updated:pend.updated_at});
     }finally{flushing=false;notify();}
   }
   function upsert(e){return send(e,false);}
-  function remove(e){return send(e,true);}
+  /* La cancellazione è una modifica: updated_at deve essere adesso, altrimenti il pull incrementale dell'altro telefono
+     (gt updated_at) non la vedrebbe mai se perde il messaggio realtime. */
+  function remove(e){var c={};for(var k in e)c[k]=e[k];c._updated=new Date().toISOString();return send(c,true);}
   /* Storage: name è "<id>.<ext>" (salvato nell'evento come e.cloud), il prefisso di famiglia lo mette qui. */
   function audioPath(name){return familyId+'/'+name;}
   async function uploadAudio(name,body,mime){
@@ -180,7 +207,7 @@ window.AlanSync=(function(){
   }
   function wake(){
     if(!sb||!familyId)return;
-    flush();pullAll();
+    flush();pullAll();pullSettings();
     if(!channel||channel.state!=='joined')subscribe();
   }
 
@@ -188,7 +215,7 @@ window.AlanSync=(function(){
     window.addEventListener('online',wake);
     document.addEventListener('visibilitychange',function(){if(!document.hidden)wake();});
   }
-  return {init:init,upsert:upsert,remove:remove,pullAll:pullAll,flush:flush,signIn:signIn,signOut:signOut,status:status,setPresence:setPresence,wake:wake,
+  return {init:init,upsert:upsert,remove:remove,pullAll:pullAll,pullSettings:pullSettings,upsertSettings:upsertSettings,flush:flush,signIn:signIn,signOut:signOut,status:status,setPresence:setPresence,wake:wake,
     uploadAudio:uploadAudio,downloadAudio:downloadAudio,removeAudio:removeAudio,
     _rowToEvent:rowToEvent,_eventToRow:eventToRow};
 })();
