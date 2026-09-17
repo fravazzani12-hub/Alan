@@ -20,7 +20,7 @@ per chi sviluppa (umano o Claude Code).
 | diaper | pipi (no/poca/tanta), cacca (no/poca/tanta) | |
 | sleep / wake | — | stato sonno = ultimo dei due |
 | other | what (ruttino/rigurgito/massaggio/ciuccio/coccole/passeggiata/bagnetto) | ruttino e rigurgito → aria, il resto → contatto |
-| measure | w (g), l (cm), hc (cm, cranio); qualunque sottoinsieme | `t` = mezzogiorno del giorno scelto (oggi/ieri/…/altra data); percentile OMS calcolato al volo dall'età |
+| measure | w (g), l (cm); uno o entrambi | `t` = mezzogiorno del giorno scelto (oggi/ieri/…/altra data); percentile OMS calcolato al volo dall'età |
 | temp | c (°C, un decimale) | ≥ 38 °C sotto i 90 giorni: mostra la bandiera rossa già presente in Altro, testo identico |
 | med | what (vitd/probiotico/simeticone/paracetamolo/altro), name | "Vitamina D" ha il tap rapido in Salute e in Home (solo dopo il primo uso) |
 | appt | kind (bilancio/vaccino/visita/esame/altro), title, place, note, done | `t` = data e ora dell'appuntamento (futuro); non compare nel diario; esportabile in .ics |
@@ -28,7 +28,7 @@ per chi sviluppa (umano o Claude Code).
 
 Impostazioni: `settings {name, birth (YYYY-MM-DD), _updated}`.
 
-Crescita (`js/who.js`): standard OMS 2006 maschi, parametri LMS di peso, lunghezza e circonferenza cranica per età campionati ogni
+Crescita (`js/who.js`): standard OMS 2006 maschi, parametri LMS di peso e lunghezza per età campionati ogni
 7 giorni da 0 a 2 anni (fonte: tabelle ufficiali WHO, via pacchetto npm `who-growth-standards`, MIT). z = ((x/M)^L − 1)/(L·S),
 percentile = Φ(z), interpolazione lineare fra i campioni. Il grafico disegna le bande 3°–97° e 15°–85°, la mediana e la
 traiettoria di Alan; il percentile mostrato è un calcolo, la lettura la fa il pediatra.
@@ -100,7 +100,7 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
 
 ## 5. UI
 - Intestazione: nome ed età a sinistra, a destra le pillole di presenza (nessun selettore di chi registra).
-- Tab Salute: Crescita (Peso/Lunghezza/Cranio, valore grande + percentile, grafico OMS, registrazione a stepper con "quando"),
+- Tab Salute: Crescita (Peso/Lunghezza, valore grande + percentile, grafico OMS, registrazione a stepper con "quando"),
   Vitamina D e medicine (tap unico + 7 giorni), Temperatura (chip + stepper ±0,1), Visite e vaccini (prossima in evidenza con
   conto alla rovescia, "Nel calendario" = file .ics con promemoria il giorno prima, "Fatta", tappe in arrivo con "Programma").
 - Home: sotto i riquadri di stato, la riga salute (Vitamina D di oggi, visita entro 14 giorni) e, dalle 5 alle 13, il riepilogo

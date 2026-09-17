@@ -20,10 +20,10 @@ const MIN=6e4,H=36e5;
   assert.deepStrictEqual(niceTicks(2.7,6.2,4),[3,4,5,6]);
   // --- grafico: senza misure ha bande e mediana, con misure ha i punti e l'etichetta dell'ultimo
   let svg=growthChart('w');assert.ok(/class="band b1"/.test(svg)&&/class="mid"/.test(svg)&&/mesi/.test(svg));assert.ok(!/class="pt/.test(svg));
-  // --- percorso misure: peso con stepper, lunghezza saltata, cranio saltato, "ieri"
+  // --- percorso misure: peso con stepper, lunghezza saltata, "ieri"
   A.flow('measure');assert.ok(/Peso\?/.test(txt('#screenInner')));
   A.hstep('w',100);A.hstep('w',-10);assert.strictEqual(app.T('flow').data.w,3590);
-  A.hdate(T('isoDay')(Date.now()-864e5));A.hkeep('w');assert.ok(/Lunghezza\?/.test(txt('#screenInner')));A.hskip('l');A.hskip('hc');
+  A.hdate(T('isoDay')(Date.now()-864e5));A.hkeep('w');assert.ok(/Lunghezza\?/.test(txt('#screenInner')));A.hskip('l');
   assert.ok(/Salvo peso 3,59 kg/.test(txt('#screenInner')));assert.ok(/percentile OMS/.test(txt('#screenInner')));
   A.finish(1);
   let m=S.events.filter(e=>e.k==='measure');assert.strictEqual(m.length,1);assert.strictEqual(m[0].w,3590);assert.strictEqual(m[0].l,undefined);
@@ -34,7 +34,7 @@ const MIN=6e4,H=36e5;
   // la mediana a 0 mesi (3,35 kg) sta sotto il punto di Alan a 0 giorni (3,30 kg)? no: 3,30 < 3,35, quindi il punto è più in basso (y maggiore)
   const midY=+svg.match(/class="mid" d="M[\d.]+ ([\d.]+)/)[1],ptY=+svg.match(/class="pt" cx="[\d.]+" cy="([\d.]+)"/)[1];assert.ok(ptY>midY&&ptY-midY<12,'punto 3,30 kg appena sotto la mediana 3,35: '+midY+' vs '+ptY);assert.ok(/class="pt last"/.test(svg)&&/3,59 kg/.test(svg)&&/class="me"/.test(svg));
   assert.ok(/\+290 g in 7 giorni \(290 g a settimana\)/.test(T('growthHero')('w')),T('growthHero')('w'));
-  assert.ok(/Ancora nessuna misura/.test(T('growthHero')('hc')));
+  assert.strictEqual(Object.keys(T('METRICS')).join(),'w,l','solo peso e lunghezza');assert.strictEqual(T('window').WHO_BOYS.hcfa,undefined,'niente tabella cranio');
   // --- temperatura: chip, stepper, avviso sotto i 3 mesi solo da 38
   A.flow('temp');A.htemp(37.5);assert.ok(!/Febbre/.test(txt('#screenInner')));A.htemp(38.2);assert.ok(/Febbre: temperatura rettale/.test(txt('#screenInner')));
   A.finish(38.2);const tt=S.events.filter(e=>e.k==='temp');assert.strictEqual(tt.length,1);assert.strictEqual(tt[0].c,38.2);assert.strictEqual(app.els['#toast'].textContent,'Temperatura 38,2 °C');
