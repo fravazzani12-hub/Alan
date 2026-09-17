@@ -156,3 +156,10 @@ button.busy::after{content:"";position:absolute;right:12px;top:50%;width:16px;he
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){button.busy::after{animation:none;border-right-color:currentColor;opacity:.4}}
 .bar .title{overflow-wrap:anywhere;min-width:0}
+/* presenza: chi ha l'app aperta (intestazione) */
+.presence{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:55%}
+.presence .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-size:14px;font-weight:700;color:var(--muted);background:var(--surface);line-height:1.2}
+.presence .pill i{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block;flex:none}
+.presence .pill.on{color:var(--text)}
+.presence .pill.on i{background:var(--c-cambio);box-shadow:0 0 0 3px rgba(46,158,110,.2)}
+.presence .pill.me{border-color:var(--text)}
