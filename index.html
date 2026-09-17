@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#F0B040">
+<script>try{var t=localStorage.getItem('alan.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Alan">
@@ -82,6 +83,8 @@
     </div>
     <div class="card">
       <h3>Impostazioni</h3>
+      <label class="f">Tema</label>
+      <div class="seg wide" id="themeSeg"><button data-t="auto" onclick="A.setTheme('auto')">Automatico</button><button data-t="light" onclick="A.setTheme('light')">Chiaro</button><button data-t="dark" onclick="A.setTheme('dark')">Scuro</button></div>
       <label class="f" for="sName">Nome</label>
       <input class="f" id="sName" type="text">
       <label class="f" for="sBirth">Data di nascita</label>

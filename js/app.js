@@ -869,7 +869,7 @@ function renderStats(){
 }
 
 /* ---------- settings, mic, storage ---------- */
-function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value=S.settings.birth||'';renderDiag();renderAccount();}
+function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value=S.settings.birth||'';applyTheme(themePref());renderDiag();renderAccount();}
 function renderAccount(){
   var el=$('#account');if(!el)return;
   if(!window.AlanSync){el.innerHTML='<p class="hint">Sync non caricato.</p>';return;}
@@ -959,6 +959,15 @@ A.testMic=function(btn){
     s.getTracks().forEach(function(t){t.stop();});busy(btn,false);toast('Microfono ok');
   }).catch(function(e){busy(btn,false);diag('perm',false,errStr(e)+' (prova)');toast(e&&e.name==='NotAllowedError'?'Microfono bloccato in questa finestra':'Microfono non disponibile: '+(e&&e.name));});
 };
+/* tema: auto (segue il sistema), chiaro, scuro. Salvato in localStorage e applicato prima del primo disegno (script inline in index.html). */
+var THEMEKEY='alan.theme';
+function applyTheme(t){
+  try{var root=document.documentElement;if(t==='light'||t==='dark')root.setAttribute('data-theme',t);else root.removeAttribute('data-theme');}catch(e){}
+  try{var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#11151C':(t==='light'?'#F0B040':(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'#11151C':'#F0B040')));}catch(e){}
+  var seg=$('#themeSeg');if(seg){var bs=seg.querySelectorAll('button');for(var i=0;i<bs.length;i++)bs[i].classList.toggle('on',bs[i].getAttribute('data-t')===(t||'auto'));}
+}
+function themePref(){var t=lsGet(THEMEKEY);return t==='light'||t==='dark'?t:'auto';}
+A.setTheme=function(t){t=t==='light'||t==='dark'?t:'auto';if(t==='auto'){try{localStorage.removeItem(THEMEKEY);}catch(e){}}else lsSet(THEMEKEY,t);applyTheme(t);toast(t==='auto'?'Tema come il sistema':(t==='dark'?'Tema scuro':'Tema chiaro'));};
 A.saveSettings=function(){S.settings.name=$('#sName').value.trim()||'Alan';S.settings.birth=$('#sBirth').value||S.settings.birth;S.settings._updated=new Date().toISOString();save();pushSettings();toast('Impostazioni salvate');renderHome();};
 A.resetAll=function(){
   if(!window.confirm('Cancellare diario, pianti e audio su questo telefono? Non si può annullare.'))return;
@@ -1355,7 +1364,7 @@ function adoptName(name){
 }
 load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
-  renderHome();initUpdates();
+  applyTheme(themePref());renderHome();initUpdates();
   if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:function(){syncWho();renderHeader();renderAccount();},onReady:flushAudio}).then(function(){syncWho();renderHeader();renderAccount();flushAudio();});}
   window.addEventListener('online',function(){setTimeout(flushAudio,1500);});
   setInterval(function(){if(!flow)renderStatus();},30000);

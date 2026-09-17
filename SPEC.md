@@ -105,6 +105,7 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
   conto alla rovescia, "Nel calendario" = file .ics con promemoria il giorno prima, "Fatta", tappe in arrivo con "Programma").
 - Home: sotto i riquadri di stato, la riga salute (Vitamina D di oggi, visita entro 14 giorni) e, dalle 5 alle 13, il riepilogo
   della notte (22–7: pappe e ml, cambi, pianti, sonno, chi si è alzato; tocca per l'elenco).
+- Tema: Altro → Impostazioni, Automatico/Chiaro/Scuro (`alan.theme` in localStorage, `data-theme` su `<html>` applicato da uno script inline prima del primo disegno; senza scelta vale il sistema).
 - Font Atkinson Hyperlegible; palette light/dark via `prefers-color-scheme`; tap target ≥ 44 px su ogni controllo (verificato a 390 px, chiaro e scuro); percorsi a schermo intero; toast su più righe, mai troncato.
 - Colori causa: fame #D9962A, sonno #5B73D9, cambio #2E9E6E, aria #B266A6, contatto #D96A5C; accento #F0B040. In dark mode le etichette causa usano inchiostro scuro.
 - I pulsanti che aspettano la rete (Accedi, Sincronizza adesso, Esci, Prova il microfono, ▶ che scarica) mostrano uno stato di attesa e non accettano un secondo tocco.
