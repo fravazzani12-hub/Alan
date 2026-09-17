@@ -3,7 +3,7 @@
 var MIN=6e4, H=36e5;
 var LSKEY='alan.v2', LSV1='alan.v1', WHOKEY='alan.who';
 var S={settings:{name:'Alan',birth:'2026-08-20'},events:[],openCry:null};
-var who='Fabio', A={}; window.A=A;
+var who='Io', A={}; window.A=A;
 var flow=null, rec=null, playing=null;
 var CAUSES=[
   {id:'fame',label:'Fame',c:'var(--c-fame)'},
@@ -70,7 +70,7 @@ function load(){
     if(!raw)raw=lsGet(LSKEY);
     if(raw){try{var o=JSON.parse(raw);if(o.settings)for(var k in o.settings)S.settings[k]=o.settings[k];S.events=Array.isArray(o.events)?o.events:[];S.openCry=o.openCry||null;}catch(e){}}
     else{migrateV1();save();}
-    who=lsGet(WHOKEY)||'Fabio';
+    who=lsGet(WHOKEY)||'Io';
   });
 }
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
@@ -161,7 +161,6 @@ function audioGet(id){
     return null;
   });
 }
-function audioExt(mime){mime=String(mime||'').toLowerCase();if(mime.indexOf('mp4')>=0||mime.indexOf('aac')>=0)return 'm4a';if(mime.indexOf('webm')>=0)return 'webm';if(mime.indexOf('ogg')>=0)return 'ogg';if(mime.indexOf('wav')>=0)return 'wav';return 'bin';}
 function busy(btn,on,label){
   if(!btn)return;
   if(on){if(btn._lbl==null)btn._lbl=btn.innerHTML;btn.disabled=true;btn.classList.add('busy');if(label)btn.textContent=label;}
@@ -473,9 +472,13 @@ A.stopRec=function(){
     if(c.sleeping){var w=({id:uid(),k:'wake',t:startT,who:who});S.events.push(w);touched(w);c=context(startT);}
     var feat=rec?features(rec.frames):null;
     if(rec)diag('feat',!!feat,feat?'tono medio '+Math.round(feat.meanF0)+' Hz, '+Math.round(feat.bursts10*10)/10+' raffiche/10 s':(rec.frames.length<16?'registrazione troppo corta ('+rec.frames.length+' frame)':'troppo poco suono sopra la soglia'));
-    var e={id:uid(),k:'cry',t:startT,dur:(now-startT)/1000,who:who,label:null,ctx:snapshot(c),bins:bins(c),feat:feat,audio:!!(rec&&rec.blob),mime:rec?rec.mime:''};
+    var recErr=null;if(rec){var dr=diagGet('rec'),dp=diagGet('perm');recErr=rec.err||(dp&&dp.ok===false?dp.d:null)||(dr&&dr.ok===false?dr.d:null);}
+    var info={mime:rec?rec.mime:'',bytes:rec&&rec.blob?rec.blob.size:0,frames:rec?rec.frames.length:0,err:rec?recErr:'nessuna registrazione'};
+    var e={id:uid(),k:'cry',t:startT,dur:(now-startT)/1000,who:who,label:null,ctx:snapshot(c),bins:bins(c),feat:feat,audio:!!(rec&&rec.blob),mime:rec?rec.mime:'',rec:info};
     S.events.push(e);S.openCry=e.id;touched(e);save();
     var blob=rec&&rec.blob,mime=rec?rec.mime:'';
+    if(blob)toast('Pianto salvato · audio '+Math.round(blob.size/1024)+' kB'+(feat?'':' · troppo corto per l\'impronta'));
+    else toast('Pianto salvato senza audio'+(info.err?': '+info.err:''));
     rec=null;flow.phase='after';flow.id=e.id;renderCry();renderHome();
     if(blob)storeAudio(e,blob,mime);
     else if(diagGet('rec')&&diagGet('rec').ok!==false)diag('idb',null,'niente audio da salvare');
@@ -506,13 +509,13 @@ function flushAudio(){
     uploading[id]=true;renderCry();
     audioGet(id).then(function(a){
       if(!a){setAudioOutbox(audioOutbox().filter(function(x){return x!==id;}));diag('up',false,'file non trovato sul telefono');return;}
-      var mime=a.mime||e.mime||'application/octet-stream',name=id+'.'+audioExt(mime);
+      var mime=a.mime||e.mime||'application/octet-stream';
       diag('up',null,'invio in corso…');
-      return AlanSync.uploadAudio(name,a.blob,mime).then(function(r){
-        if(r.error){diag('up',false,errStr(r.error)+(String(r.error.message||'').indexOf('ucket')>=0?' (bucket "cries" mancante: esegui il blocco 5 di supabase/schema.sql)':''));return;}
-        e.cloud=name;e.mime=mime;touched(e);save();
+      return AlanSync.uploadAudio(id,a.blob,mime).then(function(r){
+        if(!r||r.error||!r.path){var msg=r&&r.error?String(r.error):'nessuna risposta';diag('up',false,msg+(msg.indexOf('ucket')>=0?' (bucket "cries" mancante: esegui il blocco 5 di supabase/schema.sql)':''));lsSet('alan.lastUpload',msg);return;}
+        e.audioPath=r.path;e.mime=mime;touched(e);save();
         setAudioOutbox(audioOutbox().filter(function(x){return x!==id;}));
-        diag('up',true,name+' caricato'+(a.blob&&a.blob.size?', '+Math.round(a.blob.size/1024)+' kB':''));
+        diag('up',true,r.path+' caricato'+(a.blob&&a.blob.size?', '+Math.round(a.blob.size/1024)+' kB':''));
       });
     }).catch(function(err){diag('up',false,errStr(err));}).then(function(){delete uploading[id];renderCry();renderCries();});
   });
@@ -521,10 +524,10 @@ function audioStatusLine(e){
   if(!e)return '';
   var st;
   if(e.audio)st='Audio salvato su questo telefono';
-  else if(e.cloud)st='Audio sull\'altro telefono (si scarica al primo ascolto)';
+  else if(e.audioPath)st='Audio sull\'altro telefono (si scarica al primo ascolto)';
   else{var d=diagGet('idb'),r=diagGet('rec');st=(r&&r.ok===false)?'Senza audio: '+r.d:((d&&d.ok===false)?'Audio non salvato: '+d.d:'Senza audio');}
   if(e.audio){
-    if(e.cloud)st+=' · condiviso con l\'altro telefono';
+    if(e.audioPath)st+=' · condiviso con l\'altro telefono';
     else if(uploading[e.id])st+=' · invio in corso…';
     else if(audioOutbox().indexOf(e.id)>=0){var u=diagGet('up');st+=' · '+(u&&u.ok===false?'invio fallito, riprovo: '+u.d:(u&&u.d?u.d:'invio in attesa'));}
   }
@@ -539,7 +542,7 @@ A.cancelCry=function(){
 function dropAudio(e){
   if(!e)return;
   idbDel('audio',e.id);setAudioOutbox(audioOutbox().filter(function(x){return x!==e.id;}));
-  if(e.cloud&&window.AlanSync)AlanSync.removeAudio(e.cloud).catch(function(){});
+  if(e.audioPath&&window.AlanSync)AlanSync.removeAudio(e.audioPath).catch(function(){});
 }
 A.labelCry=function(id,label){
   var e=byId(id);if(!e)return;
@@ -667,9 +670,20 @@ A.finish=function(val){
 
 /* ---------- home ---------- */
 function statusTile(lbl,big,sub,color,warn,onclick){return '<button class="'+(warn?'warn':'')+'" style="--tc:'+color+'" onclick="'+onclick+'"><div class="lbl">'+lbl+'</div><div class="big">'+big+'</div><div class="sub">'+sub+'</div></button>';}
+/* intestazione: una pillola per genitore, pallino verde se ha l'app aperta (presence). I nomi vengono dal profilo
+   dell'utente loggato (blocco 7 dello schema), dalle voci del diario e da chi è collegato adesso. */
+function knownNames(){
+  var names={};if(who&&who!=='Io')names[who]=true;
+  S.events.forEach(function(e){if(e.who&&e.who!=='Io')names[e.who]=true;});
+  if(window.AlanSync){var st=AlanSync.status();if(st.name)names[st.name]=true;for(var n in (st.online||{}))if(n&&n!=='?')names[n]=true;}
+  return Object.keys(names).sort();
+}
 function renderHeader(){
   $('#hName').textContent=S.settings.name||'Alan';$('#hAge').textContent=ageStr();
-  var segs=$('#whoSeg').querySelectorAll('button');for(var i=0;i<segs.length;i++)segs[i].classList.toggle('on',segs[i].getAttribute('data-w')===who);
+  var st=window.AlanSync?AlanSync.status():{},online=st.online||{},me=st.name||null,h='';
+  knownNames().forEach(function(n){h+='<span class="pill'+(online[n]?' on':'')+(n===me?' me':'')+'"><i></i>'+esc(n)+'</span>';});
+  if(!h)h='<span class="pill"><i></i>'+esc(who)+'</span>';
+  $('#presence').innerHTML=h;
 }
 function renderStatus(){
   var now=Date.now(),c=context(now),h='';
@@ -736,8 +750,8 @@ function renderCries(){
     h+='<div class="list">';
     cries.slice(0,60).forEach(function(e){
       var tag=e.label?'<span class="tag" style="--hc:'+(cause(e.label)?cause(e.label).c:'var(--muted)')+'">'+LABELS[e.label]+'</span>':'<span class="tag" style="--hc:var(--muted)">?</span>';
-      var det=(e.dur?fmtSec(e.dur):'')+(e.feat?' · '+Math.round(e.feat.meanF0)+' Hz · '+Math.round(e.feat.bursts10*10)/10+' raffiche/10 s':' · senza audio');
-      h+='<div class="row" onclick="A.cryDetail(\''+e.id+'\')"><div class="time">'+(dayKey(e.t)===dayKey(Date.now())?'':'<small>'+dayLabel(e.t)+'</small><br>')+fmtTime(e.t)+'</div><div class="what">'+tag+' <span class="detail">'+det+'</span></div>'+(e.audio||e.cloud?'<button class="play'+(e.audio?'':' cloud')+'" aria-label="'+(e.audio?'Ascolta':'Scarica e ascolta')+'" onclick="event.stopPropagation();A.play(\''+e.id+'\',this)">▶</button>':'<span></span>')+'</div>';
+      var det=(e.dur?fmtSec(e.dur):'')+(e.feat?' · '+Math.round(e.feat.meanF0)+' Hz · '+Math.round(e.feat.bursts10*10)/10+' raffiche/10 s':((e.audio||e.audioPath)?' · troppo corto per l\'impronta':' · senza audio'));
+      h+='<div class="row" onclick="A.cryDetail(\''+e.id+'\')"><div class="time">'+(dayKey(e.t)===dayKey(Date.now())?'':'<small>'+dayLabel(e.t)+'</small><br>')+fmtTime(e.t)+'</div><div class="what">'+tag+' <span class="detail">'+det+'</span></div>'+(e.audio||e.audioPath?'<button class="play'+(e.audio?'':' cloud')+'" aria-label="'+(e.audio?'Ascolta':'Scarica e ascolta')+'" onclick="event.stopPropagation();A.play(\''+e.id+'\',this)">▶</button>':'<span></span>')+'</div>';
     });
     h+='</div>';
   }
@@ -754,10 +768,10 @@ A.play=function(id,btn){
   busy(btn,true,e&&!e.audio?'…':null);
   audioGet(id).then(function(a){
     if(a)return a;
-    if(!e||!e.cloud)return null;
+    if(!e||!e.audioPath)return null;
     if(!syncReady()){diag('dl',false,'non collegato al cloud');toast(window.AlanSync&&AlanSync.status().signedIn?'Non collegato: riprova con la rete':'Serve l\'accesso in Altro → Account');return null;}
-    diag('dl',null,'scarico '+e.cloud+'…');
-    return AlanSync.downloadAudio(e.cloud).then(function(r){
+    diag('dl',null,'scarico '+e.audioPath+'…');
+    return AlanSync.downloadAudio(e.audioPath).then(function(r){
       if(r.error||!r.data){diag('dl',false,errStr(r.error||{message:'risposta vuota'}));toast('Audio non scaricato');return null;}
       return blobToBuf(r.data).then(function(buf){
         var mime=e.mime||r.data.type||'audio/mp4';
@@ -770,7 +784,7 @@ A.play=function(id,btn){
     });
   }).then(function(a){
     busy(btn,false);
-    if(!a){if(e&&!e.cloud)toast('Audio non presente su questo telefono');return;}
+    if(!a){if(e&&!e.audioPath)toast('Audio non presente su questo telefono');return;}
     try{p.pause();}catch(_){}
     objUrl=URL.createObjectURL(a.blob);p.src=objUrl;
     p.onended=function(){if(objUrl)URL.revokeObjectURL(objUrl);objUrl=null;};
@@ -783,7 +797,8 @@ A.cryDetail=function(id){
   var e=byId(id);if(!e)return;
   flow={type:'crydetail',id:id};showScreen();
   var h='<div class="bar">'+backBtn()+'<div class="title">Pianto delle '+fmtTime(e.t)+' · '+dayLabel(e.t)+'</div></div>';
-  if(e.audio||e.cloud)h+='<button class="btn ghost" onclick="A.play(\''+id+'\',this)">▶ '+(e.audio?'Ascolta':'Scarica e ascolta')+'</button><div class="spacer"></div>';
+  if(e.audio||e.audioPath)h+='<button class="btn ghost" onclick="A.play(\''+id+'\',this)">▶ '+(e.audio?'Ascolta':'Scarica e ascolta')+'</button><div class="spacer"></div>';
+  if(e.rec)h+='<p class="hint">Registrazione: '+(e.rec.bytes?Math.round(e.rec.bytes/1024)+' kB, '+esc(e.rec.mime||'?'):'nessun audio')+' · '+e.rec.frames+' campioni'+(e.rec.err?' · '+esc(e.rec.err):'')+(e.audioPath?' · in cloud':(e.audio?' · solo su questo telefono':''))+'</p>';
   h+=hypList(hypotheses(e.ctx||snapshot(context(e.t)),e.bins||bins(context(e.t)),e.feat?e.feat.vec:null));
   h+='<h2 style="font-size:18px">Spiegazione</h2><div class="chips">'+['fame','sonno','cambio','aria','contatto','solo'].map(function(l){return '<button class="'+(e.label===l?'on':'')+'" onclick="A.labelCry(\''+id+'\',\''+l+'\');A.cryDetail(\''+id+'\')">'+LABELS[l]+'</button>';}).join('')+'</div>';
   if(e.feat)h+='<p class="hint">Tono medio '+Math.round(e.feat.meanF0)+' Hz (variazione ±'+Math.round(e.feat.sdF0)+') · intensità '+Math.round(e.feat.meanRms*1000)/10+' · '+Math.round(e.feat.bursts10*10)/10+' raffiche/10 s, lunghe in media '+Math.round(e.feat.meanBurst)+' ms con pause di '+Math.round(e.feat.meanPause)+' ms · voce nel '+Math.round(e.feat.voiced*100)+'% del tempo.</p>';
@@ -857,8 +872,8 @@ function renderAccount(){
     h+='<button class="btn" onclick="A.login(this)">Accedi</button>';
   }else{
     var live=st.channel==='SUBSCRIBED'?'in ascolto':(st.channel==='off'||st.channel==='joining'?'in collegamento…':'interrotto, riprovo');
-    var other=st.others&&st.others.length?st.others.map(function(o){return esc(o.who||'altro telefono');}).join(', ')+' adesso':'non collegato adesso';
-    h+='<div class="kv"><div>Account</div><div>'+esc(st.email||'')+'</div><div>Famiglia</div><div>'+(st.family?'collegata':'non ancora')+'</div><div>Ultimo sync</div><div>'+(st.lastSync?fmtTime(st.lastSync):'—')+'</div>';
+    var other=st.others&&st.others.length?st.others.map(function(o){return esc(o.name||o.who||'altro telefono');}).join(', ')+' adesso':'non collegato adesso';
+    h+='<div class="kv"><div>Account</div><div>'+esc(st.name||'')+' <span class="m">'+esc(st.email||'')+'</span></div><div>Famiglia</div><div>'+(st.family?'collegata':'non ancora')+'</div><div>Ultimo sync</div><div>'+(st.lastSync?fmtTime(st.lastSync):'—')+'</div>';
     h+='<div>Tempo reale</div><div>'+(st.family?live:'—')+'</div><div>Altro telefono</div><div>'+(st.family?other:'—')+'</div>';
     if(st.pending)h+='<div>Da inviare</div><div>'+st.pending+' voci</div>';
     h+='</div>';
@@ -888,7 +903,7 @@ function renderDiag(){
   var mr=window.MediaRecorder,ok=function(m){try{return mr&&mr.isTypeSupported&&mr.isTypeSupported(m);}catch(e){return false;}};
   env.push(['Formati registrabili',mr?[['audio/mp4','mp4'],['audio/webm;codecs=opus','webm']].filter(function(x){return ok(x[0]);}).map(function(x){return x[1];}).join(', ')||'nessuno dichiarato (uso il predefinito)':'MediaRecorder assente']);
   env.push(['Archivio',db?'IndexedDB attivo':'IndexedDB non disponibile (solo memoria del browser, senza audio)']);
-  var cries=S.events.filter(function(e){return e.k==='cry';}),withA=cries.filter(function(e){return e.audio;}).length,inCloud=cries.filter(function(e){return e.cloud;}).length;
+  var cries=S.events.filter(function(e){return e.k==='cry';}),withA=cries.filter(function(e){return e.audio;}).length,inCloud=cries.filter(function(e){return e.audioPath;}).length;
   env.push(['Pianti',cries.length+' · con audio qui: '+withA+' · nel cloud: '+inCloud+(audioOutbox().length?' · da inviare: '+audioOutbox().length:'')]);
   if(window.AlanSync){var st=AlanSync.status();env.push(['Sync',!st.available?(st.configured&&!st.lib?'libreria non caricata (rete?)':'non configurato'):(!st.signedIn?'non collegato (fai l\'accesso)':(!st.family?'account senza famiglia':'famiglia ok · tempo reale '+(st.channel==='SUBSCRIBED'?'attivo':st.channel.toLowerCase())+(st.pending?' · '+st.pending+' voci da inviare':'')))]);}
   env.push(['Spazio usato','<span id="diagSpace">…</span>']);
@@ -1031,12 +1046,11 @@ function showView(v){
   if(v==='pianti')renderCries();if(v==='pattern')renderStats();if(v==='altro')fillSettings();
   window.scrollTo(0,0);
 }
-A.setWho=function(w){who=w;lsSet(WHOKEY,w);renderHeader();if(window.AlanSync)AlanSync.setPresence({who:who,at:Date.now()});};
+function syncWho(){if(!window.AlanSync)return;var st=AlanSync.status();if(st.name&&st.name!==who){who=st.name;lsSet(WHOKEY,who);}}
 load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
-  document.querySelectorAll('#whoSeg button').forEach(function(b){b.addEventListener('click',function(){A.setWho(b.getAttribute('data-w'));});});
   renderHome();initUpdates();
-  if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:renderAccount,onReady:flushAudio}).then(function(){renderAccount();flushAudio();});}
+  if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:function(){syncWho();renderHeader();renderAccount();},onReady:flushAudio}).then(function(){syncWho();renderHeader();renderAccount();flushAudio();});}
   window.addEventListener('online',function(){setTimeout(flushAudio,1500);});
   setInterval(function(){if(!flow)renderStatus();},30000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden){if(!flow)renderHome();setTimeout(flushAudio,1500);}});
