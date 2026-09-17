@@ -713,6 +713,50 @@ A.importData=function(){
   new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer().then(function(buf){finish(new TextDecoder().decode(new Uint8Array(buf)));}).catch(function(){toast('Codice danneggiato');});
 };
 
+/* ---------- aggiornamenti (service worker) ---------- */
+var swReg=null,swVersion=null,swWaiting=null,swReloading=false;
+function initUpdates(){
+  if(!('serviceWorker' in navigator))return;
+  var hadController=!!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    /* al primo install non c'era un controller: non ricaricare. Dopo un aggiornamento sì. */
+    if(!hadController){hadController=true;return;}
+    if(swReloading)return;swReloading=true;location.reload();
+  });
+  navigator.serviceWorker.addEventListener('message',function(e){if(e.data&&e.data.type==='VERSION'){swVersion=e.data.version;renderVersion();}});
+  navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(function(reg){
+    swReg=reg;
+    if(reg.waiting&&navigator.serviceWorker.controller)showUpdate(reg.waiting);
+    reg.addEventListener('updatefound',function(){
+      var nw=reg.installing;if(!nw)return;
+      nw.addEventListener('statechange',function(){if(nw.state==='installed'&&navigator.serviceWorker.controller)showUpdate(nw);});
+    });
+    askVersion();
+  }).catch(function(){});
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)checkUpdate();});
+  setInterval(checkUpdate,3600e3);
+}
+function checkUpdate(){if(swReg)swReg.update().catch(function(){});}
+function askVersion(){
+  var c=navigator.serviceWorker&&navigator.serviceWorker.controller;if(!c||!window.MessageChannel)return;
+  var mc=new MessageChannel();mc.port1.onmessage=function(e){if(e.data&&e.data.version){swVersion=e.data.version;renderVersion();}};
+  try{c.postMessage({type:'GET_VERSION'},[mc.port2]);}catch(e){}
+}
+function renderVersion(){var el=$('#verInfo');if(el)el.textContent=swVersion?'Versione '+swVersion:'';}
+function showUpdate(worker){
+  swWaiting=worker;
+  var b=$('#updBanner');if(!b)return;
+  b.innerHTML='<button onclick="A.applyUpdate(this)">Nuova versione, tocca per aggiornare</button>';b.classList.add('on');
+}
+A.applyUpdate=function(btn){
+  var w=swWaiting||(swReg&&swReg.waiting);
+  if(btn){btn.disabled=true;btn.textContent='Aggiorno…';}
+  if(!w){location.reload();return;}
+  try{w.postMessage({type:'SKIP_WAITING'});}catch(e){location.reload();return;}
+  /* se controllerchange non arriva (worker già attivo altrove), ricarica comunque */
+  setTimeout(function(){if(!swReloading){swReloading=true;location.reload();}},4000);
+};
+
 /* ---------- nav & init ---------- */
 function showView(v){
   var tabs=document.querySelectorAll('nav.tabs button');for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle('on',tabs[i].getAttribute('data-v')===v);
@@ -724,7 +768,7 @@ A.setWho=function(w){who=w;lsSet(WHOKEY,w);renderHeader();if(window.AlanSync)Ala
 load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
   document.querySelectorAll('#whoSeg button').forEach(function(b){b.addEventListener('click',function(){A.setWho(b.getAttribute('data-w'));});});
-  renderHome();
+  renderHome();initUpdates();
   if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onStatus:renderAccount}).then(function(){renderAccount();});}
   setInterval(function(){if(!flow)renderStatus();},30000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden&&!flow)renderHome();});

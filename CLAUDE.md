@@ -11,7 +11,7 @@ Progetto: PWA "Alan — cosa vuole?" (diario neonato + analisi del pianto + sync
 - Segreti: nessuno nel repo. `js/config.js` contiene solo URL e chiave anon (pubblica); la sicurezza è nelle policy RLS di `supabase/schema.sql`.
 
 ## Struttura
-- `index.html` markup; `css/app.css` stile (token in :root, dark via prefers-color-scheme); `js/app.js` UI + motore + audio; `js/sync.js` sync; `sw.js` cache shell (a ogni release: bump di `CACHE` in sw.js e del `?v=` degli asset in index.html e sw.js, altrimenti i telefoni restano sulla versione vecchia); `supabase/schema.sql` schema.
+- `index.html` markup; `css/app.css` stile (token in :root, dark via prefers-color-scheme); `js/app.js` UI + motore + audio; `js/sync.js` sync; `sw.js` cache shell + aggiornamento con banner (a ogni release alza `VERSION` in sw.js, è l'unico numero da toccare: senza bump i telefoni restano sulla versione vecchia; niente `?v=` sugli asset); `supabase/schema.sql` schema.
 - `SPEC.md` è la fonte di verità su requisiti e motore: aggiornalo quando cambi formule, dati o flussi.
 
 ## Regole di lavoro
