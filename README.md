@@ -41,7 +41,7 @@ Safari → Condividi → "Aggiungi alla schermata Home". Da quel momento aprila 
 - **Pattern**: 24 h, medie 7 giorni contro le norme per età, perché piangeva, contesto → causa, suono → causa.
 - **Salute**: crescita con il grafico dei percentili OMS (peso e lunghezza) e il percentile di Alan, vitamina D con un tap e gli ultimi sette giorni, temperatura, visite e vaccini con "Nel calendario" (file .ics, si apre in Calendario) e le tappe del calendario vaccinale suggerite in base all'età.
 - **Home, in più**: la vitamina D di oggi e la prossima visita sotto i riquadri, e la mattina il riepilogo della notte (pappe, cambi, pianti, sonno, chi si è alzato).
-- **Altro**: bandiere rosse pediatriche, **Diagnostica** (cosa è riuscito e cosa no nell'ultima registrazione, passo per passo, con "Condividi la diagnostica" per mandare il testo), account e sync, codice di riserva per unire i diari, impostazioni (nome e data di nascita, condivise tra i telefoni).
+- **Altro**: bandiere rosse pediatriche, **Diagnostica** (cosa è riuscito e cosa no nell'ultima registrazione, passo per passo, con "Condividi la diagnostica" per mandare il testo), account e sync, codice di riserva per unire i diari, impostazioni (tema chiaro/scuro/automatico; nome e data di nascita, condivise tra i telefoni).
 - **Aggiornamenti**: quando esce una versione nuova compare in alto il banner "Nuova versione, tocca per aggiornare", anche nell'app installata.
 
 ## Se l'audio non funziona

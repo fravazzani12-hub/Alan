@@ -32,6 +32,8 @@ body.upd-on .wrap{padding-top:calc(72px + env(safe-area-inset-top))}
 body.upd-on .screen{padding-top:calc(64px + env(safe-area-inset-top))}
 .upd button{width:100%;min-height:52px;border:0;border-radius:14px;background:var(--amber);color:var(--amber-ink);font-size:16px;font-weight:700;box-shadow:0 4px 0 var(--amber-shadow)}
 .upd button:active{transform:translateY(2px);box-shadow:0 2px 0 var(--amber-shadow)}
+/* tema: il selettore in Impostazioni scrive data-theme su <html>; senza attributo vale prefers-color-scheme */
+.seg.wide{display:flex;width:100%}.seg.wide button{flex:1;text-align:center}
 header.top{display:flex;justify-content:space-between;align-items:center;padding:6px 0 12px}
 h1{font-size:24px;margin:0;font-weight:700;line-height:1.1;overflow-wrap:anywhere}
 header.top>div:first-child{min-width:0;padding-right:8px}

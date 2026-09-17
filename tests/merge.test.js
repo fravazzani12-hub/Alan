@@ -56,5 +56,10 @@ const {boot}=require('./stub');
   S.events.push({id:'io3',k:'feed',t:t0+3,who:'Io',prep:120,ml:90});
   app.T("window.AlanSync.status=function(){return {family:'F',name:'Ilaria B'};}");sent.length=0;app.T('syncWho()');
   assert.strictEqual(byId('io3').who,'Io','senza transizione da Io nessuna rinomina');assert.strictEqual(sent.length,0);
+  // tema: scuro/chiaro scrivono data-theme e localStorage, automatico li toglie
+  app.A.setTheme('dark');assert.strictEqual(document.documentElement.getAttribute('data-theme'),'dark');assert.strictEqual(app.store['alan.theme'],'dark');
+  app.A.setTheme('light');assert.strictEqual(document.documentElement.getAttribute('data-theme'),'light');
+  app.A.setTheme('auto');assert.strictEqual(document.documentElement.getAttribute('data-theme'),null);assert.strictEqual(app.store['alan.theme'],undefined);
+  app.A.setTheme('boh');assert.strictEqual(document.documentElement.getAttribute('data-theme'),null);
   console.log('merge ok');
 })().catch(e=>{console.error(e);process.exit(1);});

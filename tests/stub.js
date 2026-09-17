@@ -12,7 +12,8 @@ function boot(opts){
   const store={};
   global.localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=String(v)},removeItem:k=>{delete store[k]}};
   const els={};
-  global.document={querySelector:s=>els[s]||(els[s]=mk()),querySelectorAll:()=>[],addEventListener(){},hidden:false};
+  const html={attrs:{},setAttribute(k,v){this.attrs[k]=v},removeAttribute(k){delete this.attrs[k]},getAttribute(k){return this.attrs[k]??null}};
+  global.document={querySelector:s=>els[s]||(els[s]=mk()),querySelectorAll:()=>[],addEventListener(){},hidden:false,documentElement:html};
   global.window={confirm:()=>true,scrollTo(){},indexedDB:undefined,addEventListener(){},matchMedia:()=>({matches:false})};
   if(opts.AlanSync){global.window.AlanSync=opts.AlanSync;global.AlanSync=opts.AlanSync;}else{delete global.AlanSync;}
   Object.defineProperty(global,'navigator',{value:{userAgent:'test'},configurable:true,writable:true});
