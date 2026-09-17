@@ -23,7 +23,7 @@ per chi sviluppa (umano o Claude Code).
 Locale: IndexedDB `alan-v2` (store `kv` → `state` JSON, store `audio` → Blob), mirror in localStorage `alan.v2`.
 Remoto (opzionale): tabella `events` (vedi `supabase/schema.sql`): `data` jsonb contiene tutti i campi tranne id/t/k/who;
 soft delete con `deleted`; conflitti risolti per `updated_at` (last-writer-wins). Sync: pull incrementale per `updated_at`,
-realtime su `postgres_changes`, outbox in localStorage per l'offline.
+realtime su `postgres_changes`, outbox in localStorage per l'offline. Auth: email + password (utenti creati in dashboard), nessun flusso email.
 
 ## 3. Etichettatura dei pianti
 - Un pianto salvato resta "aperto" (`openCry`). La prima azione registrata con `t` in [cry.t − 5 min, cry.t + 45 min] gli

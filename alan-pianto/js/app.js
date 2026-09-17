@@ -633,20 +633,18 @@ function renderAccount(){
   var st=AlanSync.status(),h='';
   if(!st.available){el.innerHTML='<p class="hint">Sync non configurato: compila js/config.js con URL e chiave anon del progetto Supabase (vedi README).</p>';return;}
   if(!st.signedIn){
-    h+='<p class="hint">Accedi con la tua email: ricevi un codice di 6 cifre, lo inserisci una volta sola su questo telefono.</p>';
-    h+='<label class="f" for="accEmail">Email</label><input class="f" id="accEmail" type="email" inputmode="email" autocomplete="email"><div class="spacer"></div>';
-    h+='<button class="btn" onclick="A.sendCode()">Invia il codice</button>';
-    h+='<label class="f" for="accCode">Codice ricevuto</label><input class="f" id="accCode" type="text" inputmode="numeric" autocomplete="one-time-code"><div class="spacer"></div>';
-    h+='<button class="btn ghost" onclick="A.verifyCode()">Conferma</button>';
+    h+='<p class="hint">Accedi con l\'email e la password che avete impostato su Supabase. Si fa una volta sola per telefono.</p>';
+    h+='<label class="f" for="accEmail">Email</label><input class="f" id="accEmail" type="email" inputmode="email" autocomplete="username" value="'+esc(lsGet('alan.email')||'')+'">';
+    h+='<label class="f" for="accPass">Password</label><input class="f" id="accPass" type="password" autocomplete="current-password"><div class="spacer"></div>';
+    h+='<button class="btn" onclick="A.login()">Accedi</button>';
   }else{
     h+='<div class="kv"><div>Account</div><div>'+esc(st.email||'')+'</div><div>Famiglia</div><div>'+(st.family?'collegata':'non ancora')+'</div><div>Ultimo sync</div><div>'+(st.lastSync?fmtTime(st.lastSync):'—')+'</div></div>';
-    if(!st.family)h+='<p class="hint">Questo account non è ancora in una famiglia: esegui il passo 4 del README (SQL family_members) e riapri l\'app.</p>';
+    if(!st.family)h+='<p class="hint">Questo account non è ancora in una famiglia: esegui il blocco SQL finale di supabase/schema.sql e tocca "Sincronizza adesso".</p>';
     h+='<div class="spacer"></div><button class="btn ghost" onclick="A.syncNow()">Sincronizza adesso</button><div class="spacer"></div><button class="btn ghost" onclick="A.signOut()">Esci</button>';
   }
   el.innerHTML=h;
 }
-A.sendCode=function(){var em=($('#accEmail').value||'').trim();if(!em){toast('Scrivi la tua email');return;}AlanSync.signIn(em).then(function(r){if(r&&r.error)toast('Errore: '+r.error.message);else{toast('Codice inviato a '+em);try{localStorage.setItem('alan.email',em);}catch(e){}}});};
-A.verifyCode=function(){var em=($('#accEmail').value||lsGet('alan.email')||'').trim(),code=($('#accCode').value||'').trim();if(!em||!code){toast('Servono email e codice');return;}AlanSync.verify(em,code).then(function(r){if(r&&r.error)toast('Codice non valido');else{toast('Accesso fatto');setTimeout(renderAccount,800);}});};
+A.login=function(){var em=($('#accEmail').value||'').trim(),pw=$('#accPass').value||'';if(!em||!pw){toast('Servono email e password');return;}AlanSync.signIn(em,pw).then(function(r){if(r&&r.error)toast('Accesso rifiutato: '+r.error.message);else{lsSet('alan.email',em);toast('Accesso fatto');setTimeout(renderAccount,800);}});};
 A.syncNow=function(){AlanSync.pullAll().then(function(){toast('Sincronizzato');renderAccount();});};
 A.signOut=function(){AlanSync.signOut().then(function(){toast('Uscito');renderAccount();});};
 function renderMicInfo(){

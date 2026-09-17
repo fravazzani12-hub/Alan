@@ -17,16 +17,14 @@ Supabase (Postgres + Realtime + Auth via codice email). Tutto gratis ai volumi d
 ### 2. Supabase (database condiviso)
 1. https://supabase.com → New project (piano Free, regione EU). Scegli una password del DB e conservala.
 2. SQL Editor → New query → incolla `supabase/schema.sql` → Run.
-3. Authentication → Email Templates → **Magic Link**: sostituisci il corpo con un testo che contenga
-   `{{ .Token }}` (es. `Il tuo codice per Alan: {{ .Token }}`). Così arriva il codice a 6 cifre invece del link.
-4. Authentication → Providers → Email: lascia attivo; "Confirm email" può restare acceso.
-5. Settings → API: copia **Project URL** e **anon public key** in `js/config.js`. Committa.
+3. Authentication → Users → Add user → Create new user: email e password di Fabio, spunta **Auto Confirm User** → Create. Ripeti per Ilaria.
+   Nessuna email viene inviata: il mailer integrato di Supabase non serve e non va configurato.
+4. Settings → API Keys: copia **Project URL** e la chiave **anon** (o publishable) in `js/config.js`. Committa.
+5. SQL Editor: esegui il blocco 5 in fondo a `supabase/schema.sql` (mette i due utenti nella stessa famiglia).
 
 ### 3. Primo accesso
-1. Sul telefono di Fabio: apri l'app → Altro → Account e sync → email → "Invia il codice" → codice → Conferma.
-2. Lo stesso sul telefono di Ilaria con la sua email.
-3. Supabase → SQL Editor: esegui il blocco 5 in fondo a `supabase/schema.sql` (mette entrambi nella stessa famiglia).
-4. Riapri l'app su entrambi i telefoni: "Famiglia: collegata". Da qui ogni voce registrata compare sull'altro telefono in un secondo.
+1. Sul telefono di Fabio: apri l'app → Altro → Account e sync → email e password → Accedi. "Famiglia: collegata".
+2. Lo stesso sul telefono di Ilaria. Da qui ogni voce registrata compare sull'altro telefono in un secondo.
 
 ### 4. Icona in Home
 Safari → Condividi → "Aggiungi alla schermata Home". Da quel momento aprila sempre da lì (i dati locali vivono in quel browser).

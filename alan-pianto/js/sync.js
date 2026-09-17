@@ -1,4 +1,5 @@
 /* Sync con Supabase: opzionale. Se js/config.js non è compilato, l'app resta locale.
+   Accesso con email e password: gli utenti si creano nella dashboard Supabase (Authentication → Users), nessuna email in gioco.
    Modello: tabella events (una riga per voce del diario), soft delete, last-writer-wins su updated_at.
    L'audio dei pianti NON viene sincronizzato (resta in IndexedDB del telefono che ha registrato). */
 window.AlanSync=(function(){
@@ -83,8 +84,7 @@ window.AlanSync=(function(){
   }
   function upsert(e){return send(e,false);}
   function remove(e){return send(e,true);}
-  async function signIn(email){return sb.auth.signInWithOtp({email:email,options:{shouldCreateUser:true}});}
-  async function verify(email,token){return sb.auth.verifyOtp({email:email,token:token,type:'email'});}
+  async function signIn(email,password){return sb.auth.signInWithPassword({email:email,password:password});}
   async function signOut(){familyId=null;return sb.auth.signOut();}
   function status(){return {available:available(),signedIn:!!session,email:session&&session.user?session.user.email:null,family:familyId,lastSync:lastSync,pending:outboxGet().length};}
 
@@ -92,5 +92,5 @@ window.AlanSync=(function(){
     window.addEventListener('online',function(){flush();pullAll();});
     document.addEventListener('visibilitychange',function(){if(!document.hidden){flush();pullAll();}});
   }
-  return {init:init,upsert:upsert,remove:remove,pullAll:pullAll,signIn:signIn,verify:verify,signOut:signOut,status:status};
+  return {init:init,upsert:upsert,remove:remove,pullAll:pullAll,signIn:signIn,signOut:signOut,status:status};
 })();

@@ -52,7 +52,7 @@ begin
   end if;
 end $$;
 
--- 5) DOPO che Fabio e Ilaria hanno fatto il primo accesso dall'app (Altro → Account e sync),
+-- 5) DOPO aver creato i due utenti in Authentication → Users (Add user, Auto Confirm),
 --    eseguire questo per metterli nella stessa famiglia (l'uuid è arbitrario, basta che sia lo stesso per entrambi):
 -- insert into public.family_members (family_id, user_id)
 -- select '11111111-1111-4111-8111-111111111111', id from auth.users
