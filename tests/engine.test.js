@@ -1,51 +1,47 @@
-// Harness a stub DOM per il motore: node tests/engine.test.js
-// stubs
-const store={};
-global.localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=v},removeItem:k=>{delete store[k]}};
-const els={};
-function mk(){return {classList:{add(){},remove(){},toggle(){},contains(){return false}},querySelectorAll:()=>[],style:{},_h:'',set innerHTML(v){this._h=v},get innerHTML(){return this._h},textContent:'',value:'',scrollTop:0,set outerHTML(v){this._h=v}};}
-global.document={querySelector:s=>els[s]||(els[s]=mk()),querySelectorAll:()=>[],addEventListener(){}};
-global.window={confirm:()=>true,scrollTo(){},indexedDB:undefined,addEventListener(){}};
-global.navigator={};
-global.TextEncoder=require('util').TextEncoder; global.TextDecoder=require('util').TextDecoder;
-global.btoa=s=>Buffer.from(s,'binary').toString('base64'); global.atob=s=>Buffer.from(s,'base64').toString('binary');
-global.setInterval=()=>1; global.clearInterval=()=>{};
-const src=require('fs').readFileSync(__dirname+'/../js/app.js','utf8').replace('window.A=A;','window.A=A;window.__T=function(n){return eval(n);};');
-eval(src);
-const A=window.A;
+// Motore: dataset sintetico, precisione LOO, voto acustico, percorsi a tap. node tests/engine.test.js
+'use strict';
+const assert=require('assert');
+const {boot,synth}=require('./stub');
 (async()=>{
- await new Promise(r=>setTimeout(r,200));
- const txt=s=>String(s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
- // synthetic frames generator: label-dependent acoustic profile
- function synth(label, seconds=8){
-   const frames=[]; const base={fame:{f0:420,burst:900,pause:500},sonno:{f0:350,burst:600,pause:900},cambio:{f0:480,burst:1200,pause:400}}[label];
-   let t=0, on=true, left=base.burst;
-   while(t<seconds*1000){ const on_=on; frames.push({t, rms:on_?0.05+Math.random()*0.02:0.003, f0:on_?base.f0+(Math.random()-0.5)*60:null, zcr:on_?800+Math.random()*100:200, cent:on_?1500+Math.random()*300:400}); t+=50; left-=50; if(left<=0){on=!on; left=on?base.burst:base.pause;} }
-   return frames;
- }
-  const T=window.__T; const features=T('features'), hypotheses=T('hypotheses'), accuracy=T('accuracy'), S=T('S'), context=T('context'), snapshot=T('snapshot'), bins=T('bins'), audioVote=T('audioVote');
- // build dataset of 12 labeled cries with synthetic features and random contexts
- const labels=['fame','sonno','cambio'];
- for(let i=0;i<12;i++){ const l=labels[i%3]; const f=features(synth(l)); const t=Date.now()-(i+1)*3*3600e3; const c=context(t); S.events.push({id:'c'+i,k:'cry',t,dur:8,label:l,ctx:snapshot(c),bins:bins(c),feat:f,audio:false}); }
- console.log('feat vec example', features(synth('fame')).vec.map(x=>+x.toFixed(2)));
- const acc=accuracy(); console.log('accuracy', JSON.stringify(acc));
- const v=audioVote(features(synth('sonno')).vec,null); console.log('vote for synthetic sonno', JSON.stringify(v.p), 'nearest', v.nearest.map(x=>x.label));
- // now the flows
- A.flow('feed'); console.log('FEED0:',txt(els['#screenInner']._h).slice(0,200));
- A.pick('prep',90); console.log('FEED1:',txt(els['#screenInner']._h).slice(0,120));
- A.finish(80); console.log('diary:',txt(els['#diary']._h).slice(0,120));
- A.flow('diaper'); A.pick('pipi','tanta'); A.finish('no'); console.log('diary:',txt(els['#diary']._h).slice(0,120));
- A.flow('sleep'); console.log('SLEEP:',txt(els['#screenInner']._h).slice(0,120)); A.finish('sleep');
- A.flow('sleep'); A.finish('wake');
- // cry without mic: openCry → startRec sets nomic
- A.openCry(); console.log('CRY:',txt(els['#screenInner']._h).slice(0,300));
- A.stopRec(); await new Promise(r=>setTimeout(r,50));
- console.log('AFTER:',txt(els['#screenInner']._h).slice(0,200));
- console.log('openCry', S.openCry);
- A.flow('feed', S.openCry); A.pick('prep',120); A.finish(120);
- console.log('toast:',els['#toast'].textContent);
- console.log('labeled last cry:', S.events.filter(e=>e.k==='cry').slice(-1)[0].label);
- T('renderCries()'); console.log('CRIES:',txt(els['#cries']._h).slice(0,300));
- T('renderStats()'); console.log('STATS:',txt(els['#stats']._h).slice(0,400));
- A.exportData(); console.log('export len', (els['#impTxt'].value||'').length);
-})();
+  const app=await boot();const {A,T,S,txt}=app;
+  const features=T('features'),accuracy=T('accuracy'),context=T('context'),snapshot=T('snapshot'),bins=T('bins'),audioVote=T('audioVote'),hypotheses=T('hypotheses');
+  const labels=['fame','sonno','cambio'];
+  for(let i=0;i<30;i++){const l=labels[i%3];const f=features(synth(l,8,{seed:i}));const t=Date.now()-(i+1)*3*3600e3;const c=context(t);S.events.push({id:'c'+i,k:'cry',t,dur:8,label:l,ctx:snapshot(c),bins:bins(c),feat:f,audio:false});}
+  const acc=accuracy();
+  assert.strictEqual(acc.n,30);assert.strictEqual(acc.audN,30);assert.strictEqual(acc.ctxN,30);
+  assert.ok(acc.aud>=0.8,'il suono sintetico separa le tre cause (LOO): '+acc.aud);
+  assert.ok(acc.both!=null&&acc.ctx!=null,'LOO calcolata anche per contesto e insieme');
+  assert.ok(Math.abs(acc.base-1/3)<1e-9,'baseline = causa più frequente');
+  const v=audioVote(features(synth('sonno',8,{seed:99})).vec,null);
+  assert.strictEqual(v.n,30);assert.strictEqual(Object.keys(v.p).sort().join(),'aria,cambio,contatto,fame,sonno');
+  assert.strictEqual(v.nearest.length,3);assert.ok(v.meanD>0);
+  const sum=Object.values(v.p).reduce((s,x)=>s+x,0);assert.ok(Math.abs(sum-1)<1e-9,'voto normalizzato');
+  assert.ok(Object.values(v.p).every(x=>x>0),'smoothing: nessuna causa a zero');
+  // su 30 pianti nuovi (10 per causa) il k-NN ne riconosce almeno 25
+  let okv=0;for(let s=100;s<110;s++)for(const l of labels){const vv=audioVote(features(synth(l,8,{seed:s})).vec,null);if(Object.keys(vv.p).reduce((a,b)=>vv.p[a]>vv.p[b]?a:b)===l)okv++;}
+  assert.ok(okv>=25,'k-NN su pianti nuovi: '+okv+'/30');
+  // con meno di 3 pianti etichettati con impronta il voto non esiste
+  assert.strictEqual(audioVote(v&&features(synth('fame',8)).vec,null)!==null,true);
+  const saved=S.events.splice(0);S.events.push(saved[0],saved[1]);assert.strictEqual(audioVote(features(synth('fame',8)).vec,null),null);S.events.push(...saved.slice(2));
+  // fusione: con vec le ipotesi cambiano rispetto al solo contesto, senza vec coincidono
+  const c=context(Date.now()),h0=hypotheses(snapshot(c),bins(c),null),h1=hypotheses(snapshot(c),bins(c),v&&features(synth('sonno',8,{seed:5})).vec);
+  assert.strictEqual(h0.w,0);assert.ok(h1.w>0&&h1.w<=0.6,'peso del suono in (0, 0.6]: '+h1.w);
+  assert.ok(Math.abs(h0.list.reduce((s,x)=>s+x.p,0)-1)<1e-9);
+  // percorsi a tap
+  A.flow('feed');assert.ok(/Quanto hai preparato/.test(txt('#screenInner')));
+  A.pick('prep',90);assert.ok(/Quanto ne ha bevuto/.test(txt('#screenInner')));assert.ok(/Niente rifiutato/.test(txt('#screenInner')));
+  A.finish(80);assert.ok(/Pappa 80 ml su 90/.test(txt('#diary')));
+  A.flow('diaper');A.pick('pipi','tanta');A.finish('no');assert.ok(/Cambio pipì tanta, cacca no/.test(txt('#diary')));
+  A.flow('sleep');assert.ok(/Si è addormentato/.test(txt('#screenInner')));A.finish('sleep');
+  A.flow('sleep');assert.ok(/Dorme da/.test(txt('#screenInner')));A.finish('wake');
+  assert.ok(/Sveglio ha dormito/.test(txt('#diary')));
+  // pianto senza microfono: viene comunque salvato e resta aperto
+  A.openCry();assert.ok(/Microfono non disponibile|non espone/.test(txt('#screenInner')));
+  A.stopRec();await new Promise(r=>setTimeout(r,30));
+  assert.ok(S.openCry,'pianto aperto');assert.ok(/Pianto delle/.test(txt('#screenInner')));
+  A.leaveOpen();
+  T('renderCries()');assert.ok(/Quanto ci azzecca/.test(txt('#cries')));
+  T('renderStats()');assert.ok(/Ultime 24 ore/.test(txt('#stats'))&&/Perché piangeva/.test(txt('#stats')));
+  A.exportData();assert.ok(/^AZ[02]:/.test(app.els['#impTxt'].value),'export produce un codice');
+  console.log('engine ok · precisione LOO suono '+Math.round(acc.aud*100)+'%, peso suono '+Math.round(h1.w*100)+'%');
+})().catch(e=>{console.error(e);process.exit(1);});
