@@ -13,9 +13,9 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   const now=d(17,10,30); // gio 17/9/2026 10:30, 28 giorni di vita
   let id=0;const ev=(o)=>{o.id='r'+(++id);o.who=o.who||'Fabio';S.events.push(o);return o;};
   // --- diario: due giorni completi (15 e 16), più voci di oggi e voci vecchie fuori dal periodo
-  // pappe 15/9: biberon 100/120, 120, 90, rifiutato, seno 10 min (vale), seno 30 s (non vale)
+  // pappe 15/9: biberon 100/120, 120, 90, rifiutato, 100 alle 21 (cronometrato), rifiutato alle 23
   ev({k:'feed',t:d(15,8),prep:120,ml:100,src:'biberon'});ev({k:'feed',t:d(15,11),prep:120,ml:120});ev({k:'feed',t:d(15,14),prep:120,ml:90});
-  ev({k:'feed',t:d(15,18),prep:120,ml:0});ev({k:'feed',t:d(15,21),src:'seno',dur:600,side:'sinistro'});ev({k:'feed',t:d(15,23),src:'seno',dur:30});
+  ev({k:'feed',t:d(15,18),prep:120,ml:0});ev({k:'feed',t:d(15,21),prep:120,ml:100,src:'biberon',dur:600});ev({k:'feed',t:d(15,23),prep:120,ml:0});
   // pappe 16/9: 110, 100, 130, 100
   ev({k:'feed',t:d(16,7),prep:120,ml:110});ev({k:'feed',t:d(16,10,30),prep:120,ml:100});ev({k:'feed',t:d(16,14,30),prep:150,ml:130});ev({k:'feed',t:d(16,20),prep:120,ml:100});
   // sonno: notte 15 (00:30–05:00 = 4 h 30), pisolino 13–14; notte 16 (22:30 del 15 → 06:30 = 8 h), pisolini 9–10 e 15–16:30
@@ -50,10 +50,10 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   assert.strictEqual(r.head.name,'Alan');assert.strictEqual(r.head.birth,'20/08/2026');
   assert.strictEqual(r.head.age,'4 settimane (28 giorni)');assert.strictEqual(r.head.date,'17/09/2026 10:30');
   assert.strictEqual(R.ageAt(d(19,10)),'4 settimane e 2 giorni (30 giorni)');
-  // pappe: 8 valide (7 biberon + 1 seno), 750 ml, 1 rifiutato, intervallo medio 4 h 20
+  // pappe: 8 valide, 850 ml, 2 rifiutati, intervallo medio 4 h 20
   const f=r.feeds;
-  assert.strictEqual(f.n,8);assert.strictEqual(f.biberon,7);assert.strictEqual(f.seno,1);assert.strictEqual(f.refused,1);
-  assert.strictEqual(f.perDay,4);assert.strictEqual(f.ml,750);assert.strictEqual(f.mlPerDay,375);near(f.mlPerFeed,107.14,0.01,'ml per biberon');
+  assert.strictEqual(f.n,8);assert.strictEqual(f.biberon,8);assert.strictEqual(f.seno,undefined);assert.strictEqual(f.refused,2);
+  assert.strictEqual(f.perDay,4);assert.strictEqual(f.ml,850);assert.strictEqual(f.mlPerDay,425);near(f.mlPerFeed,106.25,0.01,'ml per biberon');
   near(f.gap,4.3333*H,MIN,'intervallo medio (3+3+7+3,5+4+5,5)/6 h, la notte di 10 h esclusa');
   // sonno: notti 4 h 30 e 8 h → 6 h 15; 3 pisolini (1,5 al giorno) di 70 min; nelle 24 ore 7 h e 9 h → 8 h
   const s=r.sleep;
@@ -98,8 +98,8 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   assert.ok(/mer 16\/9 · 3 sett · 4,30 kg \(\d+°\) · 54,5 cm \(\d+°\)/.test(t),t);
   assert.ok(/gio 3\/9 · 2 sett · 3,90 kg \(\d+°\) · 52,5 cm/.test(t));
   assert.ok(/Ultimo peso: \+400 g in 13 giorni/.test(t));
-  assert.ok(/Pappe al giorno: 4 \(in tutto 8\)/.test(t));assert.ok(/Latte al biberon al giorno: 375 ml/.test(t));assert.ok(/Per biberon: 107 ml, su 7 biberon/.test(t));
-  assert.ok(/Poppate al seno: 1\n/.test(t));assert.ok(/Intervallo medio: 4 h 20/.test(t));assert.ok(/Biberon rifiutati: 1/.test(t));
+  assert.ok(/Pappe al giorno: 4 \(in tutto 8\)/.test(t));assert.ok(/Latte al biberon al giorno: 425 ml/.test(t));assert.ok(/Per biberon: 106 ml, su 8 biberon/.test(t));
+  assert.ok(!/seno/.test(t));assert.ok(/Intervallo medio: 4 h 20/.test(t));assert.ok(/Biberon rifiutati: 2/.test(t));
   assert.ok(/Notte \(22–7\), in media: 6 h 15 su 2 notti/.test(t));assert.ok(/Pisolini al giorno: 1,5, di 1 h 10 l'uno/.test(t));assert.ok(/Sonno nelle 24 ore, in media: 8 h su 2 giorni/.test(t));
   assert.ok(/Cambi al giorno: 3 \(in tutto 6\)/.test(t));assert.ok(/Con pipì, al giorno: 2,5/.test(t));assert.ok(/Con cacca, al giorno: 1,5/.test(t));
   assert.ok(/Pianti al giorno: 2,5 \(in tutto 5\)/.test(t));assert.ok(/Durata media registrata: 01:15/.test(t));assert.ok(/Senza spiegazione: 1/.test(t));

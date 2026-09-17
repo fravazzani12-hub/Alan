@@ -17,8 +17,7 @@ per chi sviluppa (umano o Claude Code).
 | k | campi | note |
 |---|---|---|
 | feed | prep (ml preparati), ml (ml bevuti, scelti a tap a passi di 10, 0 ≤ ml ≤ prep; 0 = biberon rifiutato) | una pappa con ml = 0 non conta come ultima pappa, non entra nel tipico e non etichetta un pianto |
-| feed (dal cronometro, `js/timer.js`) | src ('seno'/'biberon'), dur (s), side (sinistro/destro/entrambi), sides [{side,dur}] (segmenti del seno in ordine) | `t` = inizio della poppata; il seno vale come pappa (`fedFeed`, etichettatura di §3) da 60 s in su; `ml`/`prep` restano quelli del biberon |
-| pump | ml, dur (s, null senza cronometro), side (sinistro/destro/entrambi) | `js/timer.js`; `t` = inizio della sessione; nel diario "Tiralatte 80 ml · 15 min · sinistro" |
+| feed (dal cronometro, `js/timer.js`) | src ('biberon'), dur (s) | `t` = inizio della pappa; `ml`/`prep` come sempre |
 | food | name (≤ 40 caratteri, spazi normalizzati), group (cereali/verdure/frutta/proteine/latticini, `altro` per i nomi scritti a mano), amount (assaggio/poco/tutto), reaction (bene/nongradito/reazione), note (≤ 120 caratteri, solo con `reaction = reazione`, altrimenti '') | `js/svezzamento.js`; alimenti distinti per nome normalizzato (minuscolo, spazi collassati); nel diario `Nome · quanto · com'è andata [· nota]` |
 | moment | kind ('first'/'photo'/'story'); prima volta: code, title (15 tappe fisse); foto/racconto: text (≤ 80), photo (bool: esiste una foto), photoPath (`<family_id>/<id>.<ext>` nel bucket `cries`), mime | `js/momenti.js`; nascosto dal diario di Home; prima volta con `t` = adesso se il giorno è oggi, altrimenti mezzogiorno del giorno scelto; la foto sta in IndexedDB store `files` come `{buf,mime}` |
 | letter | text (≤ 4000) | `js/momenti.js`; `t` = adesso, `who` = chi scrive; nascosto dal diario |
@@ -104,6 +103,7 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
 - Precisione = leave-one-out su tutti i pianti etichettati: contesto, suono, insieme, e baseline "causa più frequente".
 
 ## 5. UI
+- "Quando" in ogni percorso: adesso / 15 / 30 / 60 min fa / "altra ora" (selettore HH:MM; un orario nel futuro di oltre 5 min vale per ieri). Nella Pappa anche "finita alle": la differenza diventa `dur` (secondi, ≤ 6 h) con `src 'biberon'`.
 - Intestazione: nome ed età a sinistra, a destra le pillole di presenza (nessun selettore di chi registra).
 - Tab Salute: Crescita (Peso/Lunghezza, valore grande + percentile, grafico OMS, registrazione a stepper con "quando"),
   Vitamina D e medicine (tap unico + 7 giorni), Temperatura (chip + stepper ±0,1), Visite e vaccini (prossima in evidenza con
@@ -145,34 +145,22 @@ Ogni estensione ha la sua suite `tests/<nome>.test.js` (caricata con `boot({ext:
 target ≥ 44 px, un'idea per schermata, numeri come fatti e mai come giudizi.
 
 ### 9.1 Cronometro (`js/timer.js`)
-In Home, sopra i riquadri di stato (`#extTop`), la riga "Cronometro" con Seno, Biberon, Tiralatte; Seno chiede subito il lato
-(Sinistro/Destro, con "l'ultima volta" sul lato con cui è finita la poppata precedente). Lo stato del cronometro è volatile e
-locale al telefono (non sincronizzato: l'altro genitore vede la poppata solo quando è salvata): localStorage `alan.timer` =
-`{kind ('seno'|'biberon'|'tiralatte'), side, start (epoch ms), sides:[{side,start,end}]}`; il tempo mostrato si calcola sempre
-dai timestamp, quindi sopravvive alla chiusura dell'app e al cambio di tab (ogni secondo si aggiornano solo i testi
-`#tmClock`/`#tmSides`, mai tutta la Home; l'intervallo parte solo con un cronometro attivo e si spegne alla fine).
-Il riquadro attivo mostra etichetta (Biberon / Seno sinistro / Seno destro / Tiralatte), ora d'inizio, cronometro, per il seno i
-totali per lato e "Cambia lato" (chiude il segmento aperto e ne apre uno sull'altro lato), poi "Fine" e "Annulla senza salvare"
-(con conferma). Fine:
-- **seno** → `feed {src:'seno', dur (s totali), side ('sinistro'|'destro'|'entrambi'), sides:[{side,dur}]}` con `t` = inizio,
-  salvato dal percorso interno `seno` così passa da `A.finish` (id, chi, etichettatura del pianto aperto: da 60 s vale come pappa, §3);
-- **biberon** → apre il percorso Pappa con `flow.data.src='biberon'`, `flow.data.dur` e "quando" = minuti dall'inizio; la voce
-  salvata riceve `src` e `dur` dall'hook `change` (localStorage `alan.timer.pending` finché la voce non compare, scade dopo 6 h);
-  se si esce dal percorso Pappa con "‹" la durata si perde, il cronometro è già chiuso;
-- **tiralatte** → percorso `pump`: lato a chip (Sinistro/Destro/Entrambi, default Entrambi), sei valori rapidi (40–150 ml,
-  evidenziato il tipico = mediana delle ultime 6 sessioni, 60 senza storia) che salvano al tap, oppure stepper ±10 (0–300) e
-  "Salva N ml"; salva `pump {ml, dur (s) | null, side}` con `t` = inizio (senza cronometro chiede il "quando"). Nel diario:
-  "Tiralatte 80 ml · 15 min · sinistro".
-Pattern, in coda: riquadro "Allattamento" solo se negli ultimi 7 giorni ci sono poppate al seno con durata, biberon con durata o
-sessioni di tiralatte: minuti di seno per ciascuno dei 7 giorni (barre), numero di poppate, media per poppata, ripartizione
-sinistro/destro in % (dai `sides`, o da `side` se singolo), biberon al cronometro (durata media), tiralatte (ml totali, sessioni,
-durata media). Colori: seno e biberon `--c-fame`, tiralatte `--c-aria`. Nessuna notifica e nessun lock screen per il cronometro.
+In Home, sopra i riquadri di stato (`#extTop`), la riga "Cronometro" con "Inizia la pappa". Stato volatile e locale al telefono
+(non sincronizzato: l'altro genitore vede la pappa solo quando è salvata): localStorage `alan.timer` = `{start (epoch ms)}`; il tempo
+mostrato si calcola sempre dai timestamp, quindi sopravvive alla chiusura dell'app e al cambio di tab (ogni secondo si aggiorna solo
+`#tmClock`, mai tutta la Home; l'intervallo parte solo con un cronometro attivo e si spegne alla fine).
+Il riquadro attivo mostra "Pappa in corso", ora d'inizio, cronometro, "Fine" e "Annulla senza salvare" (con conferma). Fine apre il
+percorso Pappa con `flow.data.src='biberon'`, `flow.data.dur` e "quando" = minuti dall'inizio; la voce salvata riceve `src` e `dur`
+dall'hook `change` (localStorage `alan.timer.pending` finché la voce non compare, scade dopo 6 h); se si esce dal percorso Pappa con
+"‹" la durata si perde, il cronometro è già chiuso.
+Pattern, in coda: riquadro "Quanto dura la pappa" solo se negli ultimi 7 giorni ci sono pappe con durata: media, più corta / più
+lunga, ml al minuto. Solo biberon: nessun allattamento al seno né tiralatte nell'app.
 
 ### 9.2 Previsioni (`js/predict.js`)
 Nessun dato nuovo: le previsioni sono calcolate al volo dagli eventi `sleep`/`wake`/`feed`. Osservazioni degli ultimi 7 giorni
 (fino a `now`): **veglie** = da un `wake` alla `sleep` successiva (5–240 min); **pisolini** = da una `sleep` al `wake` successivo
 (5–600 min), "di giorno" se la nanna è iniziata tra le 7 e le 19, altrimenti "di notte"; **intervalli pappe** = tra due pappe
-valide consecutive (`fedFeed`: ml > 0 oppure seno ≥ 60 s), 0,5–8 h. Una `sleep` dopo un'altra `sleep` (o un `wake` dopo un
+valide consecutive (`fedFeed`: ml > 0), 0,5–8 h. Una `sleep` dopo un'altra `sleep` (o un `wake` dopo un
 `wake`) non produce osservazioni. Valore atteso di ogni grandezza: con meno di 4 osservazioni vale la norma per età
 (`norms(ageDays())`: `awakeMin`, `feedH`, senza le riduzioni del modello di §4.1), da 4 a 10 osservazioni 70 % media di Alan +
 30 % norma (basis `misto`), oltre 10 la sola media di Alan (basis `alan`); soglie e pesi sono costanti in cima al file.
@@ -208,8 +196,7 @@ pulsanti e senza «Ok» (non ha interruttore e non si nasconde); (2) **visita** 
 `nextAppt`: anche passata da meno di 2 ore) con «Oggi/Domani alle HH:MM · titolo (o tipo) · luogo», colore `--c-sonno`, il testo
 porta in Salute, «Ok» nasconde per oggi; (3) **pappa in ritardo** — `sinceFeedH − n.feedH > 0,5 h` (norma per età di §4.1,
 senza le riduzioni del modello), informazione neutra «Ultima pappa 4 h 10 fa, di solito ogni 3 h», colore `--c-fame`; non
-compare oltre 12 h dall'ultima pappa (più probabile una registrazione mancante); il seno ≥ 60 s vale come pappa, il biberon
-rifiutato no; (4) **vitamina D** non ancora data oggi, dalle 10:00, solo se è stata data almeno una volta nei 7 giorni
+compare oltre 12 h dall'ultima pappa (più probabile una registrazione mancante); il biberon rifiutato non vale come pappa; (4) **vitamina D** non ancora data oggi, dalle 10:00, solo se è stata data almeno una volta nei 7 giorni
 precedenti, colore `--c-cambio`, con «Segna» e «Ok» (dalle 10 in poi dice la stessa cosa della pillola «Vitamina D · non ancora
 oggi» della riga salute: per evitare il doppione basta spegnere l'interruttore). Le regole si ricalcolano a ogni `renderHome` e
 sull'hook `change`; un `setInterval` di 60 s ridisegna solo se il testo delle righe cambierebbe (solo il blocco se cambia il
@@ -228,14 +215,12 @@ destra, dall'alto in basso).
    Nanna→Sveglio con la finestra (una nanna aperta arriva fino ad adesso); una notte senza sonno segnato si vede come "—" e non
    entra nella media (uno zero sarebbe falso: il sonno non era tracciato); linea tratteggiata = media, lettura "in media 9 h 20 a
    notte, su N notti".
-2. **Latte al giorno**: ml dei biberon (feed non seno con ml > 0) per ciascuno degli ultimi 7 giorni, oggi in corso più chiaro e
-   fuori dalla media; sotto il giorno, il numero di poppate al seno (feed `src:'seno'` con `dur ≥ 60 s`, come `fedFeed`); se nella
-   settimana c'è solo seno le barre contano le poppate; media sui giorni interi con almeno una pappa (o su oggi se è l'unico),
-   lettura "in media 640 ml al giorno al biberon, più 2,5 poppate al seno al giorno, su N giorni".
-3. **Quando mangia**: 7 righe (dal più vecchio a oggi) sull'asse delle 24 ore, un pallino per pappa (pieno = biberon, vuoto =
-   seno), i pianti come tacche rosse, la notte 22–7 in ombra, un segno tratteggiato sull'ora attuale nella riga di oggi; lettura
+2. **Latte al giorno**: ml dei biberon (feed con ml > 0) per ciascuno degli ultimi 7 giorni, oggi in corso più chiaro e
+   fuori dalla media; media sui giorni interi con almeno una pappa (o su oggi se è l'unico), lettura "in media 640 ml al giorno,
+   su N giorni".
+3. **Quando mangia**: 7 righe (dal più vecchio a oggi) sull'asse delle 24 ore, un pallino per pappa, i pianti come tacche rosse, la notte 22–7 in ombra, un segno tratteggiato sull'ora attuale nella riga di oggi; lettura
    "in media 6,5 pappe al giorno · una ogni 3 h 10 · N pianti in 7 giorni" (intervallo medio fra pappe consecutive fra 30 min e
-   8 h, stessa regola di Pattern). Pappe con ml = 0 e seno sotto i 60 s non contano.
+   8 h, stessa regola di Pattern). Pappe con ml = 0 non contano.
 Decimali in italiano con la virgola; l'unità dell'asse è scritta una volta sola sopra l'asse; le etichette dei valori hanno un
 alone del colore della superficie (`paint-order:stroke`) per restare leggibili sopra le barre.
 
@@ -253,8 +238,8 @@ elenchi (misure, temperature, medicine, visite) arrivano invece fino ad adesso.
 Sezioni: intestazione (nome, data di nascita gg/mm/aaaa, età in settimane e giorni, data e ora del riepilogo, periodo); Misure =
 ultime 5 misure di sempre in tabella (data, età in settimane, peso e lunghezza con il percentile OMS calcolato all'età della misura
 via `pctOf('wfa'|'lhfa')`, più "Ultimo peso: ±N g in N giorni" fra le ultime due pesate; tabella al posto del grafico perché più
-leggibile in stampa); Pappe = pappe valide al giorno (`fedFeed`: biberon con ml > 0 o seno ≥ 60 s), ml al biberon al giorno e per
-biberon, poppate al seno, intervallo medio fra pappe consecutive (solo intervalli fra 30 min e 8 h), biberon rifiutati; Sonno =
+leggibile in stampa); Pappe = pappe valide al giorno (`fedFeed`: ml > 0), ml al giorno e per
+biberon, intervallo medio fra pappe consecutive (solo intervalli fra 30 min e 8 h), biberon rifiutati; Sonno =
 media della notte 22–7 sulle notti con sonno segnato, pisolini al giorno (nanne iniziate fra le 7 e le 22) con durata media, sonno
 nelle 24 ore sui giorni con sonno segnato; Cambi = al giorno, con pipì, con cacca; Pianti = al giorno, durata media registrata,
 senza spiegazione, e le cause in % sui pianti spiegati ("passato da solo" compreso); Temperature = elenco dal primo giorno del

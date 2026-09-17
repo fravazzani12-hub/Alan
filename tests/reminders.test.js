@@ -56,8 +56,8 @@ const MIN=6e4,H=36e5,DAY=864e5;
   S.events[0].t=NOW-4*H;S.events[0].ml=0;assert.deepStrictEqual(RM.compute(NOW),[],'biberon rifiutato non è l\'ultima pappa');
   S.events[0].ml=100;S.events[0].t=NOW-(4*H+10*MIN);S.settings.birth=API.isoDay(NOW-80*DAY);assert.strictEqual(RM.compute(NOW)[0].text,'Ultima pappa 4 h 10 fa, di solito ogni 3 h 30','norma a 11 settimane');
   S.settings.birth=API.isoDay(NOW-40*DAY);
-  S.events.push({id:'s1',k:'feed',t:NOW-4*H+5*MIN,who:'Ilaria',src:'seno',dur:600,side:'sinistro'});
-  assert.strictEqual(RM.compute(NOW)[0].text,'Ultima pappa 3 h 55 fa, di solito ogni 3 h','il seno ≥ 60 s vale come pappa');
+  S.events.push({id:'s1',k:'feed',t:NOW-4*H+5*MIN,who:'Ilaria',prep:120,ml:100,src:'biberon',dur:600});
+  assert.strictEqual(RM.compute(NOW)[0].text,'Ultima pappa 3 h 55 fa, di solito ogni 3 h','la pappa cronometrata vale come le altre');
   S.events.splice(0);
   // --- (1) vitamina D: dopo le 10, non oggi, data almeno una volta negli ultimi 7 giorni
   assert.deepStrictEqual(RM.compute(NOW),[],'mai data: niente');

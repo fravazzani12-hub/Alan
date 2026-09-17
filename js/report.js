@@ -74,10 +74,10 @@ function compute(days,now){
   var per=function(n){return covered?n/covered:null;};
 
   /* pappe */
-  var fed=inW.filter(API.fedFeed),bib=[],seno=0,refused=0;
-  inW.forEach(function(e){if(e.k!=='feed')return;if(e.src==='seno'){if(API.fedFeed(e))seno++;}else if(e.ml>0)bib.push(e.ml);else refused++;});
+  var fed=inW.filter(API.fedFeed),bib=[],refused=0;
+  inW.forEach(function(e){if(e.k!=='feed')return;if(e.ml>0)bib.push(e.ml);else refused++;});
   var gaps=[];for(var j=1;j<fed.length;j++){var g=fed[j].t-fed[j-1].t;if(g>0.5*H&&g<8*H)gaps.push(g);}
-  var feeds={n:fed.length,biberon:bib.length,seno:seno,refused:refused,perDay:per(fed.length),ml:sum(bib),mlPerDay:bib.length?per(sum(bib)):null,mlPerFeed:mean(bib),gap:mean(gaps)};
+  var feeds={n:fed.length,biberon:bib.length,refused:refused,perDay:per(fed.length),ml:sum(bib),mlPerDay:bib.length?per(sum(bib)):null,mlPerFeed:mean(bib),gap:mean(gaps)};
 
   /* sonno: notti 22–7 che finiscono nei giorni del periodo, pisolini (nanne iniziate tra le 7 e le 22), totale per giornata */
   var spans=sleepSpans(all,now),nights=[],naps=[],totals=[];
@@ -142,7 +142,6 @@ function sections(r){
     frows.push(['Pappe al giorno',dec1(f.perDay)+' (in tutto '+f.n+')']);
     if(f.mlPerDay!=null)frows.push(['Latte al biberon al giorno',Math.round(f.mlPerDay)+' ml']);
     if(f.mlPerFeed!=null)frows.push(['Per biberon',Math.round(f.mlPerFeed)+' ml, su '+plural(f.biberon,'biberon','biberon')]);
-    if(f.seno)frows.push(['Poppate al seno',String(f.seno)]);
     if(f.gap!=null)frows.push(['Intervallo medio',fmtH(f.gap)]);
     if(f.refused)frows.push(['Biberon rifiutati',String(f.refused)]);
   }

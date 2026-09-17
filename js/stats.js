@@ -2,10 +2,9 @@
    (viewBox 360 di larghezza, stesse classi .gc .grid .lbl del grafico di crescita, colori dai token via --hc).
    1. Sonno per notte: ore dormite (Nanna → Sveglio) nelle ultime 7 notti complete, dalle 22 alle 7; media tratteggiata.
       Una notte senza sonno segnato non fa media e si vede come "—".
-   2. Latte al giorno: ml dei biberon negli ultimi 7 giorni (oggi in corso, più chiaro, fuori dalla media); sotto il giorno il
-      numero di poppate al seno. Se nella settimana c'è solo seno, le barre contano le poppate.
-   3. Quando mangia: una riga per giorno (dal più vecchio a oggi), un pallino per pappa sull'asse delle 24 ore (pieno = biberon,
-      vuoto = seno), i pianti come tacche rosse, la notte 22–7 in ombra.
+   2. Latte al giorno: ml dei biberon negli ultimi 7 giorni (oggi in corso, più chiaro, fuori dalla media).
+   3. Quando mangia: una riga per giorno (dal più vecchio a oggi), un pallino per pappa sull'asse delle 24 ore,
+      i pianti come tacche rosse, la notte 22–7 in ombra.
    Solo calcoli sugli eventi (nessuno stato proprio), letture fattuali: mai giudizi. Calcoli esposti su AlanExt.stats. */
 (function(){
 'use strict';
@@ -20,7 +19,6 @@ function wd(t){return WD[new Date(t).getDay()];}
 function dayName(t,now){var k=API.dayKey(t);if(k===API.dayKey(now))return 'oggi';if(k===API.dayKey(at(now,-1,12)))return 'ieri';return wd(t);}
 function fmtH(ms){var m=Math.round(ms/MIN);if(m<1)return '0';var h=Math.floor(m/60),r=m%60;if(!h)return r+' min';return r?h+'h'+API.pad(r):h+' h';}
 function hourOf(t){var d=new Date(t);return d.getHours()+d.getMinutes()/60;}
-function isSeno(e){return e.k==='feed'&&e.src==='seno';}
 /* un decimale con la virgola, senza ",0" */
 function dec1(x){var r=Math.round(x*10)/10;return String(r).replace('.',',');}
 function plural(n,s,p,shown){return (shown!=null?shown:n)+' '+(n===1?s:p);}
@@ -52,24 +50,24 @@ function nights(now){
   var rec=list.filter(function(n){return n.rec;});
   return {nights:list,recorded:rec.length,mean:rec.length?API.mean(rec.map(function(n){return n.sleep;})):null};
 }
-/* Ultimi 7 giorni dal più vecchio a oggi (in corso): ml dei biberon, numero di biberon e di poppate al seno. La media è sui
-   giorni interi con almeno una pappa; se esiste solo oggi, su oggi. mode: 'ml' se c'è latte al biberon, 'seno' se solo seno. */
+/* Ultimi 7 giorni dal più vecchio a oggi (in corso): ml dei biberon e numero di biberon. La media è sui giorni interi con
+   almeno una pappa; se esiste solo oggi, su oggi. mode: 'ml' se c'è latte, altrimenti null. */
 function milkPerDay(now){
   now=now||Date.now();
   var ev=API.sorted(),list=[];
   for(var i=6;i>=0;i--){
     var start=at(now,-i,0),end=i?at(now,-i+1,0):now;
     var f=ev.filter(function(e){return e.k==='feed'&&e.t>=start&&e.t<end;});
-    var ml=0,n=0,seno=0;
-    f.forEach(function(e){if(isSeno(e)){if(API.fedFeed(e))seno++;}else if(e.ml>0){ml+=e.ml;n++;}});
-    list.push({start:start,end:end,label:dayName(start,now),ml:ml,n:n,seno:seno,partial:!i});
+    var ml=0,n=0;
+    f.forEach(function(e){if(e.ml>0){ml+=e.ml;n++;}});
+    list.push({start:start,end:end,label:dayName(start,now),ml:ml,n:n,partial:!i});
   }
-  var anyMl=list.some(function(d){return d.ml>0;}),anySeno=list.some(function(d){return d.seno>0;});
-  var mode=anyMl?'ml':(anySeno?'seno':null);
-  var full=list.filter(function(d){return !d.partial&&(d.ml>0||d.seno>0);});
-  if(!full.length&&list[6].ml+list[6].seno>0)full=[list[6]];
+  var anyMl=list.some(function(d){return d.ml>0;});
+  var mode=anyMl?'ml':null;
+  var full=list.filter(function(d){return !d.partial&&d.ml>0;});
+  if(!full.length&&list[6].ml>0)full=[list[6]];
   var avg=function(key){return full.length?API.mean(full.map(function(d){return d[key];})):null;};
-  return {days:list,mode:mode,meanMl:anyMl?avg('ml'):null,meanSeno:anySeno?avg('seno'):null,mean:mode==='ml'?avg('ml'):(mode==='seno'?avg('seno'):null),daysUsed:full.length};
+  return {days:list,mode:mode,meanMl:anyMl?avg('ml'):null,mean:mode==='ml'?avg('ml'):null,daysUsed:full.length};
 }
 /* Ultimi 7 giorni dal più vecchio a oggi: pappe (ora decimale 0–24, sorgente, ml) e pianti. perDay = media sui giorni interi con
    pappe (o su oggi se è l'unico); meanGap = intervallo medio fra pappe consecutive nella finestra, fra 30 min e 8 h. */
@@ -79,7 +77,7 @@ function feedTimes(now){
   for(var i=6;i>=0;i--){
     var start=at(now,-i,0),end=i?at(now,-i+1,0):now;
     var feeds=[],cries=[];
-    ev.forEach(function(e){if(e.t<start||e.t>=end)return;if(API.fedFeed(e))feeds.push({t:e.t,h:hourOf(e.t),src:isSeno(e)?'seno':'biberon',ml:e.ml||0});else if(e.k==='cry')cries.push({t:e.t,h:hourOf(e.t)});});
+    ev.forEach(function(e){if(e.t<start||e.t>=end)return;if(API.fedFeed(e))feeds.push({t:e.t,h:hourOf(e.t),ml:e.ml||0});else if(e.k==='cry')cries.push({t:e.t,h:hourOf(e.t)});});
     list.push({start:start,end:end,label:dayName(start,now),feeds:feeds,cries:cries,partial:!i});
     nCries+=cries.length;
   }
@@ -131,7 +129,7 @@ function rhythm(ft,now){
     h+='<line class="grid st-row" x1="'+L+'" y1="'+f1(y)+'" x2="'+(W-R)+'" y2="'+f1(y)+'"/>';
     h+='<text class="lbl'+(d.partial?' st-now':'')+'" x="'+(L-8)+'" y="'+f1(y+4)+'" text-anchor="end">'+API.esc(d.label)+'</text>';
     d.cries.forEach(function(c){var x=sx(c.h);h+='<line class="st-cry" x1="'+f1(x)+'" y1="'+f1(y-11)+'" x2="'+f1(x)+'" y2="'+f1(y-5)+'"/>';});
-    d.feeds.forEach(function(f){h+='<circle class="st-feed'+(f.src==='seno'?' seno':'')+'" cx="'+f1(sx(f.h))+'" cy="'+f1(y+2)+'" r="5"/>';});
+    d.feeds.forEach(function(f){h+='<circle class="st-feed" cx="'+f1(sx(f.h))+'" cy="'+f1(y+2)+'" r="5"/>';});
     if(d.partial){var xn=sx(hourOf(Math.max(d.start,Math.min(now,d.end))));h+='<line class="st-nowline" x1="'+f1(xn)+'" y1="'+f1(y-10)+'" x2="'+f1(xn)+'" y2="'+f1(y+11)+'"/>';}
   });
   return h+'</svg>';
@@ -150,18 +148,12 @@ function sleepCard(now){
 function milkCard(now){
   now=now||Date.now();
   var d=milkPerDay(now),h='<div class="card st-card"><h3>Latte al giorno</h3>';
-  if(!d.mode)return h+'<p class="hint st-wait">Qui compaiono i ml bevuti ogni giorno (e le poppate al seno) dopo le prime pappe registrate.</p></div>';
-  var seno=d.mode==='seno',anySub=!seno&&d.days.some(function(x){return x.seno>0;});
-  h+='<div class="st-g">'+bars({items:d.days.map(function(x){return {label:x.label,value:seno?x.seno:x.ml,rec:true,partial:x.partial,sub:anySub&&x.seno?x.seno+' seno':''};}),sub:anySub,color:'var(--c-fame)',mean:d.mean,minMax:seno?4:100,
-    fmt:function(v){return String(Math.round(v));},axis:function(v){return String(Math.round(v));},unit:seno?'poppate':'ml',aria:seno?'Poppate al seno al giorno, ultimi 7 giorni':'Latte al biberon al giorno, ultimi 7 giorni'})+'</div>';
+  if(!d.mode)return h+'<p class="hint st-wait">Qui compaiono i ml bevuti ogni giorno dopo le prime pappe registrate.</p></div>';
+  h+='<div class="st-g">'+bars({items:d.days.map(function(x){return {label:x.label,value:x.ml,rec:true,partial:x.partial,sub:''};}),sub:false,color:'var(--c-fame)',mean:d.mean,minMax:100,
+    fmt:function(v){return String(Math.round(v));},axis:function(v){return String(Math.round(v));},unit:'ml',aria:'Latte al giorno, ultimi 7 giorni'})+'</div>';
   var days=plural(d.daysUsed,'giorno','giorni');
-  if(seno){
-    h+='<p class="st-read"><b>in media '+plural(d.mean,'poppata al seno','poppate al seno',dec1(d.mean))+'</b> al giorno, su '+days+'</p>';
-    h+='<p class="hint">Solo poppate al seno questa settimana: le barre contano le poppate (i ml non si misurano). Oggi è in corso (barra più chiara) e non entra nella media.</p>';
-  }else{
-    h+='<p class="st-read"><b>in media '+Math.round(d.mean)+' ml</b> al giorno al biberon'+(d.meanSeno?', più '+plural(d.meanSeno,'poppata al seno','poppate al seno',dec1(d.meanSeno))+' al giorno':'')+', su '+days+'</p>';
-    h+='<p class="hint">Barre = ml bevuti al biberon'+(anySub?'; sotto il giorno, le poppate al seno':'')+'. Oggi è in corso (barra più chiara) e non entra nella media.</p>';
-  }
+  h+='<p class="st-read"><b>in media '+Math.round(d.mean)+' ml</b> al giorno, su '+days+'</p>';
+  h+='<p class="hint">Barre = ml bevuti. Oggi è in corso (barra più chiara) e non entra nella media.</p>';
   return h+'</div>';
 }
 function feedCard(now){
@@ -173,7 +165,7 @@ function feedCard(now){
   if(d.meanGap!=null)bits.push('una ogni '+API.fmtDur(d.meanGap));
   if(d.nCries)bits.push(plural(d.nCries,'pianto','pianti')+' in 7 giorni');
   h+='<p class="st-read">'+bits.join(' · ')+'</p>';
-  h+='<p class="st-legend"><span class="st-k"><i class="dot"></i>biberon</span><span class="st-k"><i class="dot seno"></i>seno</span><span class="st-k"><i class="tick"></i>pianto</span><span class="st-k"><i class="night"></i>notte 22–7</span></p>';
+  h+='<p class="st-legend"><span class="st-k"><i class="dot"></i>pappa</span><span class="st-k"><i class="tick"></i>pianto</span><span class="st-k"><i class="night"></i>notte 22–7</span></p>';
   return h+'</div>';
 }
 function render(now){now=now||Date.now();return sleepCard(now)+milkCard(now)+feedCard(now);}

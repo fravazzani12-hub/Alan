@@ -82,14 +82,14 @@ const MIN=6e4,H=36e5;
   add('wake',now-5*H);add('sleep',now-5*H+3*MIN);add('wake',now-4*H);add('sleep',now-4*H+5*H+MIN);add('wake',now-10*MIN);
   assert.strictEqual(P.observations(now).awakes.length,0);
 
-  // --- pappe: solo quelle valide (ml>0 o seno ≥60 s), intervalli 0,5–8 h
+  // --- pappe: solo quelle valide (ml>0), intervalli 0,5–8 h
   reset();
   add('feed',now-10*H,{prep:120,ml:100});add('feed',now-9*H,{prep:120,ml:0});add('feed',now-7*H,{prep:120,ml:100});
   add('feed',now-6*H-50*MIN,{prep:120,ml:100}); // 10 min dopo: sotto 0,5 h
-  add('feed',now-4*H,{src:'seno',dur:600});add('feed',now-3*H,{src:'seno',dur:30}); // seno breve non vale
+  add('feed',now-4*H,{prep:120,ml:80});add('feed',now-3*H,{prep:120,ml:0}); // rifiutata: non vale
   add('feed',now-H,{prep:120,ml:90});
   const of=P.observations(now).feeds;
-  assert.deepStrictEqual(of.map(x=>Math.round(x*100)/100),[3,2.83,3],'10→7 h (la rifiutata non conta), 6:50→4 h seno, 4→1 h (seno breve saltato)');
+  assert.deepStrictEqual(of.map(x=>Math.round(x*100)/100),[3,2.83,3],'10→7 h (la rifiutata non conta), 6:50→4 h, 4→1 h (rifiutata saltata)');
   f=P.nextFeed(now);assert.strictEqual(f.basis,'norma');assert.strictEqual(f.n,3);assert.strictEqual(f.at,now-H+norm.feedH*H);
 
   // --- "tra poco" sotto i 5 minuti, "da N min" se passato, senza allarmi
