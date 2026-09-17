@@ -23,9 +23,19 @@ create table if not exists public.events (
 create index if not exists events_family_updated on public.events (family_id, updated_at);
 create index if not exists events_family_t on public.events (family_id, t);
 
+-- 2b) Impostazioni condivise (nome, data di nascita): una riga per famiglia, last-writer-wins su updated_at.
+create table if not exists public.family_settings (
+  family_id   uuid primary key,
+  name        text,
+  birth       text,                       -- YYYY-MM-DD
+  updated_at  timestamptz not null default now(),
+  updated_by  uuid default auth.uid()
+);
+
 -- 3) Sicurezza: ogni riga è visibile e modificabile solo dai membri della sua famiglia.
 alter table public.family_members enable row level security;
 alter table public.events enable row level security;
+alter table public.family_settings enable row level security;
 
 drop policy if exists "members: read own" on public.family_members;
 create policy "members: read own" on public.family_members
@@ -44,15 +54,51 @@ create policy "events: family update" on public.events
   for update using (family_id in (select family_id from public.family_members where user_id = auth.uid()))
   with check (family_id in (select family_id from public.family_members where user_id = auth.uid()));
 
+drop policy if exists "settings: family read" on public.family_settings;
+create policy "settings: family read" on public.family_settings
+  for select using (family_id in (select family_id from public.family_members where user_id = auth.uid()));
+
+drop policy if exists "settings: family insert" on public.family_settings;
+create policy "settings: family insert" on public.family_settings
+  for insert with check (family_id in (select family_id from public.family_members where user_id = auth.uid()));
+
+drop policy if exists "settings: family update" on public.family_settings;
+create policy "settings: family update" on public.family_settings
+  for update using (family_id in (select family_id from public.family_members where user_id = auth.uid()))
+  with check (family_id in (select family_id from public.family_members where user_id = auth.uid()));
+
 -- 4) Realtime: le modifiche arrivano subito all'altro telefono.
 do $$
 begin
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'events') then
     alter publication supabase_realtime add table public.events;
   end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'family_settings') then
+    alter publication supabase_realtime add table public.family_settings;
+  end if;
 end $$;
 
--- 5) DOPO aver creato i due utenti in Authentication → Users (Add user, Auto Confirm),
+-- 5) Audio dei pianti: bucket privato "cries", un oggetto per pianto in <family_id>/<id>.<ext>.
+--    Le policy leggono la cartella (primo segmento del nome) e la confrontano con la famiglia dell'utente.
+insert into storage.buckets (id, name, public) values ('cries', 'cries', false) on conflict (id) do nothing;
+
+drop policy if exists "cries: family read" on storage.objects;
+create policy "cries: family read" on storage.objects
+  for select using (bucket_id = 'cries' and (storage.foldername(name))[1] in (select family_id::text from public.family_members where user_id = auth.uid()));
+
+drop policy if exists "cries: family insert" on storage.objects;
+create policy "cries: family insert" on storage.objects
+  for insert with check (bucket_id = 'cries' and (storage.foldername(name))[1] in (select family_id::text from public.family_members where user_id = auth.uid()));
+
+drop policy if exists "cries: family update" on storage.objects;
+create policy "cries: family update" on storage.objects
+  for update using (bucket_id = 'cries' and (storage.foldername(name))[1] in (select family_id::text from public.family_members where user_id = auth.uid()));
+
+drop policy if exists "cries: family delete" on storage.objects;
+create policy "cries: family delete" on storage.objects
+  for delete using (bucket_id = 'cries' and (storage.foldername(name))[1] in (select family_id::text from public.family_members where user_id = auth.uid()));
+
+-- 6) DOPO aver creato i due utenti in Authentication → Users (Add user, Auto Confirm),
 --    eseguire questo per metterli nella stessa famiglia (l'uuid è arbitrario, basta che sia lo stesso per entrambi):
 -- insert into public.family_members (family_id, user_id)
 -- select '11111111-1111-4111-8111-111111111111', id from auth.users
