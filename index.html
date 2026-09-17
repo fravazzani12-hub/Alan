@@ -14,14 +14,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./css/app.css">
+<link rel="stylesheet" href="./css/app.css?v=3">
 </head>
 <body>
 <div class="wrap">
-  <div class="upd" id="updBanner"></div>
   <header class="top">
     <div><h1 id="hName">Alan</h1><div class="age" id="hAge"></div></div>
-    <div class="seg" id="whoSeg"><button data-w="Fabio">Fabio</button><button data-w="Ilaria">Ilaria</button></div>
+    <div class="presence" id="presence"></div>
   </header>
 
   <section class="view on" id="v-oggi">
@@ -56,13 +55,10 @@
       <p class="hint">L'app confronta il pianto con quelli già registrati di Alan e con il contesto. Non fa diagnosi: nel dubbio vincono l'istinto dei genitori e il pediatra.</p>
     </div>
     <div class="card">
-      <h3>Diagnostica</h3>
-      <p class="hint">Cosa è riuscito e cosa no nell'ultima registrazione e nel riascolto, passo per passo. Se l'audio non funziona, guarda qui.</p>
-      <div id="diag"></div>
+      <h3>Microfono e spazio</h3>
+      <div id="micInfo" class="hint">—</div>
       <div class="spacer"></div>
-      <button class="btn ghost" onclick="A.testMic(this)">Prova il microfono</button>
-      <div class="spacer"></div>
-      <button class="btn ghost" onclick="A.copyDiag(this)">Condividi la diagnostica</button>
+      <button class="btn ghost" onclick="A.testMic()">Prova il microfono</button>
     </div>
     <div class="card">
       <h3>Account e sync</h3>
@@ -70,7 +66,7 @@
     </div>
     <div class="card">
       <h3>Sincronizza con l'altro telefono</h3>
-      <p class="hint">Con l'account attivo diario, impostazioni e audio dei pianti si allineano da soli tra i telefoni. Il codice serve solo come riserva (o senza account) e non porta gli audio.</p>
+      <p class="hint">Con l'account attivo il diario si allinea da solo tra i telefoni. Il codice serve solo come riserva (o senza account). Gli audio restano sul telefono che li ha registrati.</p>
       <button class="btn" onclick="A.exportData()">Condividi i dati di questo telefono</button>
       <label class="f" for="impTxt">Incolla qui un codice ricevuto</label>
       <textarea class="f" id="impTxt" placeholder="AZ2:…"></textarea>
@@ -100,9 +96,12 @@
 
 <div class="screen" id="screen"><div class="inner" id="screenInner"></div></div>
 <div class="toast" id="toast"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
-<script src="./js/config.js"></script>
-<script src="./js/sync.js"></script>
-<script src="./js/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./js/config.js?v=3"></script>
+<script src="./js/sync.js?v=3"></script>
+<script src="./js/app.js?v=3"></script>
+<script>
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
+</script>
 </body>
 </html>
