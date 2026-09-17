@@ -62,7 +62,9 @@ function nextFeed(now){
   now=now||Date.now();
   var c=API.context(now);
   if(c.lastFeedT==null)return null;
-  var ex=expected(observations(now).feeds,c.n.feedH);
+  var set=API.settings().feedH,ex;
+  if(set>0)ex={value:set,basis:'impostato',n:0,alan:null,norm:set};
+  else ex=expected(observations(now).feeds,c.n.feedH);
   return result(c.lastFeedT+ex.value*H,now,ex);
 }
 
@@ -79,6 +81,7 @@ var PHRASE={nanna:['Probabile nanna','Nanna attesa'],risveglio:['Probabile risve
 function phrase(kind,p,now){return PHRASE[kind][p.at-now>=0?0:1]+' '+rel(p,now);}
 function fmtH(h){var r=Math.round(h*10)/10;return String(r).replace('.',',')+' h';}
 function basisText(ex,name){
+  if(ex.basis==='impostato')return 'intervallo scelto da voi';
   if(ex.basis==='norma')return 'norma per età';
   if(ex.basis==='misto')return 'ritmo di '+name+' e norma';
   return 'ritmo di '+name;

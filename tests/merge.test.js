@@ -56,6 +56,13 @@ const {boot}=require('./stub');
   S.events.push({id:'io3',k:'feed',t:t0+3,who:'Io',prep:120,ml:90});
   app.T("window.AlanSync.status=function(){return {family:'F',name:'Ilaria B'};}");sent.length=0;app.T('syncWho()');
   assert.strictEqual(byId('io3').who,'Io','senza transizione da Io nessuna rinomina');assert.strictEqual(sent.length,0);
+  // intervallo pappe: scelto → norme e riquadri lo usano, viaggia nelle impostazioni; remoto null → torna per età
+  app.A.setFeedH(4);assert.strictEqual(S.settings.feedH,4);assert.strictEqual(app.T('norms')(30).feedH,4);
+  let sf=sent.filter(x=>x[0]==='set').pop();assert.strictEqual(sf[1].feedH,4);assert.ok(/ogni 4 h/.test(app.els['#toast'].textContent));
+  mergeRemoteSettings({name:'Alan',birth:'2026-08-20',feedH:3.5,_updated:new Date(Date.now()+9000).toISOString()});assert.strictEqual(S.settings.feedH,3.5);assert.strictEqual(app.T('norms')(30).feedH,3.5);
+  mergeRemoteSettings({name:'Alan',birth:'2026-08-20',feedH:null,_updated:new Date(Date.now()+10000).toISOString()});assert.strictEqual(S.settings.feedH,null);assert.strictEqual(app.T('norms')(30).feedH,3);
+  mergeRemoteSettings({name:'Alan',birth:'2026-08-20',_updated:new Date(Date.now()+11000).toISOString()});assert.strictEqual(S.settings.feedH,null,'riga senza colonna: intervallo invariato');
+  app.A.setFeedH(null);assert.strictEqual(S.settings.feedH,null);
   // tema: scuro/chiaro scrivono data-theme e localStorage, automatico li toglie
   app.A.setTheme('dark');assert.strictEqual(document.documentElement.getAttribute('data-theme'),'dark');assert.strictEqual(app.store['alan.theme'],'dark');
   app.A.setTheme('light');assert.strictEqual(document.documentElement.getAttribute('data-theme'),'light');

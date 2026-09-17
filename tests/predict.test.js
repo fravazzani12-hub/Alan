@@ -91,6 +91,9 @@ const MIN=6e4,H=36e5;
   const of=P.observations(now).feeds;
   assert.deepStrictEqual(of.map(x=>Math.round(x*100)/100),[3,2.83,3],'10→7 h (la rifiutata non conta), 6:50→4 h, 4→1 h (rifiutata saltata)');
   f=P.nextFeed(now);assert.strictEqual(f.basis,'norma');assert.strictEqual(f.n,3);assert.strictEqual(f.at,now-H+norm.feedH*H);
+  // intervallo scelto dai genitori: vince su tutto
+  S.settings.feedH=4;f=P.nextFeed(now);assert.strictEqual(f.basis,'impostato');assert.strictEqual(f.at,now-H+4*H);assert.strictEqual(f.minutes,180);
+  assert.strictEqual(window.AlanExt.api.norms(30).feedH,4,'anche le norme lo usano');S.settings.feedH=null;assert.strictEqual(window.AlanExt.api.norms(30).feedH,3);
 
   // --- "tra poco" sotto i 5 minuti, "da N min" se passato, senza allarmi
   reset();

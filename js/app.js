@@ -130,8 +130,9 @@ var settingsPushed=false;
 function mergeRemoteSettings(r){
   if(!r){if(!settingsPushed&&(S.settings.name||S.settings.birth)){settingsPushed=true;pushSettings();}return;}
   if(S.settings._updated&&r._updated&&r._updated<=S.settings._updated)return;
-  var changed=(r.name&&r.name!==S.settings.name)||(r.birth&&r.birth!==S.settings.birth);
-  if(r.name)S.settings.name=r.name;if(r.birth)S.settings.birth=r.birth;S.settings._updated=r._updated||S.settings._updated;
+  var fh=r.feedH>0?r.feedH:null;
+  var changed=(r.name&&r.name!==S.settings.name)||(r.birth&&r.birth!==S.settings.birth)||(r.feedH!==undefined&&fh!==(S.settings.feedH||null));
+  if(r.name)S.settings.name=r.name;if(r.birth)S.settings.birth=r.birth;if(r.feedH!==undefined)S.settings.feedH=fh;S.settings._updated=r._updated||S.settings._updated;
   save();renderHeader();
   if(changed){if(!flow)renderHome();var alt=$('#v-altro');if(alt&&alt.classList.contains('on'))fillSettings();toast('Impostazioni aggiornate dall\'altro telefono');}
 }
@@ -196,7 +197,8 @@ function cause(id){for(var i=0;i<CAUSES.length;i++)if(CAUSES[i].id===id)return C
 function byId(id){for(var i=0;i<S.events.length;i++)if(S.events[i].id===id)return S.events[i];return null;}
 
 /* ---------- norms & context ---------- */
-function norms(ad){var w=ad/7;return {feedH:w<6?3:(w<12?3.5:4),awakeMin:w<4?55:(w<8?70:(w<12?85:105))};}
+/* norme per età; se i genitori hanno scelto un intervallo pappe (Impostazioni), quello vale per tutti (modello, riquadri, previsioni, promemoria) */
+function norms(ad){var w=ad/7,o={feedH:w<6?3:(w<12?3.5:4),awakeMin:w<4?55:(w<8?70:(w<12?85:105))};if(S.settings.feedH>0)o.feedH=S.settings.feedH;return o;}
 function context(now){
   var ev=sorted().filter(function(e){return e.t<=now;});
   var lastFeed=null,lastDiaper=null,lastSleep=null,lastWake=null;
@@ -899,7 +901,9 @@ function renderStats(){
 }
 
 /* ---------- settings, mic, storage ---------- */
-function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value=S.settings.birth||'';applyTheme(themePref());renderDiag();renderAccount();fillExtAltro();}
+function fillFeedSeg(){var seg=$('#feedSeg');if(!seg)return;var cur=S.settings.feedH>0?String(S.settings.feedH):'auto',bs=seg.querySelectorAll('button');for(var i=0;i<bs.length;i++)bs[i].classList.toggle('on',bs[i].getAttribute('data-h')===cur);}
+A.setFeedH=function(v){var n=Number(v);S.settings.feedH=n>0?n:null;S.settings._updated=new Date().toISOString();save();pushSettings();fillFeedSeg();renderHome();toast(n>0?'Pappa prevista ogni '+fmtDur(n*H):'Intervallo pappe automatico per età');};
+function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value=S.settings.birth||'';fillFeedSeg();applyTheme(themePref());renderDiag();renderAccount();fillExtAltro();}
 function renderAccount(){
   var el=$('#account');if(!el)return;
   if(!window.AlanSync){el.innerHTML='<p class="hint">Sync non caricato.</p>';return;}
