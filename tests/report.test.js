@@ -102,13 +102,14 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   assert.ok(!/seno/.test(t));assert.ok(/Intervallo medio: 4 h 20/.test(t));assert.ok(/Biberon rifiutati: 2/.test(t));
   assert.ok(/Notte \(22–7\), in media: 6 h 15 su 2 notti/.test(t));assert.ok(/Pisolini al giorno: 1,5, di 1 h 10 l'uno/.test(t));assert.ok(/Sonno nelle 24 ore, in media: 8 h su 2 giorni/.test(t));
   assert.ok(/Cambi al giorno: 3 \(in tutto 6\)/.test(t));assert.ok(/Con pipì, al giorno: 2,5/.test(t));assert.ok(/Con cacca, al giorno: 1,5/.test(t));
+  assert.ok(/Pipì poca \/ normale \/ tanta: 2 \/ 0 \/ 3/.test(t),'quantità pipì: '+t);assert.ok(/Cacca poca \/ normale \/ tanta: 1 \/ 0 \/ 2/.test(t),'quantità cacca: '+t);
   assert.ok(/Pianti al giorno: 2,5 \(in tutto 5\)/.test(t));assert.ok(/Durata media registrata: 01:15/.test(t));assert.ok(/Senza spiegazione: 1/.test(t));
   assert.ok(/Cosa voleva, sui 4 pianti spiegati:\nFame: 2 \(50%\)\nSonno: 1 \(25%\)\nPassato da solo: 1 \(25%\)/.test(t),t);
   assert.ok(/gio 17\/9 08:00: 36,8 °C\nmer 16\/9 20:00: 37,2 °C\nLa più alta: 37,2 °C\./.test(t),t);
   assert.ok(/Vitamina D: 3 volte, l'ultima gio 17\/9\nParacetamolo: 1 volta, l'ultima mer 16\/9/.test(t));
   assert.ok(/Fatte:\ngio 10\/9: Bilancio di salute · Bilancio 1° mese · Studio dott\. Rossi/.test(t));
   assert.ok(/In programma:\nmar 20\/10 09:00: Vaccino · ASL · esavalente/.test(t),'titolo uguale al tipo non si ripete: '+t);
-  assert.ok(!/passato da solo va/.test(t)&&!/bene|poco|troppo|normale/i.test(t),'nessun giudizio nel testo');
+  assert.ok(!/passato da solo va/.test(t)&&!/bene|poco|troppo/i.test(t)&&!/normale/i.test(t.replace(/poca \/ normale \/ tanta/g,'')),'nessun giudizio nel testo ("normale" solo come quantità del pannolino)');
 
   // ================= schermata =================
   T('fillExtAltro()');

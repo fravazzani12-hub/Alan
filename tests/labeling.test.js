@@ -19,7 +19,7 @@ const MIN=6e4;
   A.flow('sleep');A.finish('wake');assert.strictEqual(c.label,null);
   A.flow('sleep');A.finish('sleep');assert.strictEqual(c.label,'sonno');
   // pannolino → cambio, ruttino → aria, coccole → contatto
-  c=cry(Date.now()-MIN);A.flow('diaper');A.pick('pipi','si');A.finish('si');assert.strictEqual(c.label,'cambio');
+  c=cry(Date.now()-MIN);A.flow('diaper');A.pick('pipi','poca');A.finish('tanta');assert.strictEqual(c.label,'cambio');
   c=cry(Date.now()-MIN);A.flow('other');A.finish('ruttino');assert.strictEqual(c.label,'aria');
   c=cry(Date.now()-MIN);A.flow('other');A.finish('coccole');assert.strictEqual(c.label,'contatto');
   // fuori finestra: pianto di 50 min fa → nessuna etichetta
@@ -31,7 +31,7 @@ const MIN=6e4;
   c=cry(Date.now()-12*MIN);A.flow('feed');A.setOff(15);A.pick('prep',90);A.finish(90);assert.strictEqual(c.label,'fame');
   // link esplicito dalla schermata del pianto batte openCry
   const a=cry(Date.now()-4*MIN),b=cry(Date.now()-2*MIN);S.openCry=b.id;
-  A.flow('diaper',a.id);A.pick('pipi','no');A.finish('si');assert.strictEqual(a.label,'cambio');assert.strictEqual(b.label,null);assert.strictEqual(S.openCry,b.id);
+  A.flow('diaper',a.id);A.pick('pipi','no');A.finish('normale');assert.strictEqual(a.label,'cambio');assert.strictEqual(b.label,null);assert.strictEqual(S.openCry,b.id);
   // un pianto già spiegato non viene rietichettato
   A.flow('feed',a.id);A.pick('prep',90);A.finish(90);assert.strictEqual(a.label,'cambio');
   // azione che arriva dall'altro telefono etichetta il pianto aperto qui

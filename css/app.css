@@ -294,6 +294,8 @@ button.rm-open{background:transparent;border:0;text-align:left;padding:6px 0;min
 .gc .st-feed.seno{fill:var(--surface);stroke:var(--hc);stroke-width:2}
 .gc .st-cry{stroke:var(--danger);stroke-width:2;stroke-linecap:round}
 .gc .st-nowline{stroke:var(--text);stroke-width:1.5;stroke-dasharray:2 2;opacity:.8}
+.gc .st-seg{fill:var(--hc)}.gc .st-seg.poca{opacity:.35}.gc .st-seg.normale{opacity:.7}.gc .st-seg.part{opacity:.25}
+.st-h4{margin:10px 0 0;font-size:14px;font-weight:700;color:var(--text)}
 .st-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:4px 0 6px;font-size:13px;color:var(--muted)}
 .st-legend .st-k{display:inline-flex;align-items:center;gap:6px}
 .st-legend i{display:inline-block;flex:none}
@@ -301,6 +303,7 @@ button.rm-open{background:transparent;border:0;text-align:left;padding:6px 0;min
 .st-legend .dot.seno{background:var(--surface);border:2px solid var(--c-fame);box-sizing:border-box}
 .st-legend .tick{width:2px;height:9px;border-radius:1px;background:var(--danger)}
 .st-legend .night{width:14px;height:10px;border-radius:2px;background:var(--c-sonno);opacity:.18}
+.st-legend .lv{width:14px;height:10px;border-radius:2px;background:var(--text)}.st-legend .lv.poca{opacity:.35}.st-legend .lv.normale{opacity:.7}
 /* == /stats == */
 
 /* == report == */

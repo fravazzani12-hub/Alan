@@ -5,6 +5,8 @@
    2. Latte al giorno: ml dei biberon negli ultimi 7 giorni (oggi in corso, più chiaro, fuori dalla media).
    3. Quando mangia: una riga per giorno (dal più vecchio a oggi), un pallino per pappa sull'asse delle 24 ore,
       i pianti come tacche rosse, la notte 22–7 in ombra.
+   4. Pannolini: due grafici (pipì e cacca), una barra per giorno con i cambi in cui c'era, divisa per quantità
+      (poca chiara, normale media, tanta piena); media tratteggiata sui giorni interi.
    Solo calcoli sugli eventi (nessuno stato proprio), letture fattuali: mai giudizi. Calcoli esposti su AlanExt.stats. */
 (function(){
 'use strict';
@@ -88,6 +90,28 @@ function feedTimes(now){
   return {days:list,nFeeds:all.length,nCries:nCries,perDay:full.length?API.mean(full.map(function(d){return d.feeds.length;})):null,meanGap:gaps.length?API.mean(gaps)*H:null};
 }
 
+/* Ultimi 7 giorni dal più vecchio a oggi: cambi e, per pipì e cacca, quanti con poca/normale/tanta (i valori vecchi si
+   normalizzano con API.lvlKey). La media è sui giorni interi con almeno un cambio; se esiste solo oggi, su oggi. */
+function diapersPerDay(now){
+  now=now||Date.now();
+  var ev=API.sorted(),list=[],tot={pipi:{poca:0,normale:0,tanta:0,tot:0},cacca:{poca:0,normale:0,tanta:0,tot:0}},n=0;
+  var blank=function(){return {poca:0,normale:0,tanta:0,tot:0};};
+  for(var i=6;i>=0;i--){
+    var start=at(now,-i,0),end=i?at(now,-i+1,0):now,d={start:start,end:end,label:dayName(start,now),partial:!i,n:0,pipi:blank(),cacca:blank()};
+    ev.forEach(function(e){
+      if(e.k!=='diaper'||e.t<start||e.t>=end)return;
+      d.n++;
+      ['pipi','cacca'].forEach(function(k){var l=API.lvlKey(e[k]);if(l==='no')return;d[k][l]++;d[k].tot++;tot[k][l]++;tot[k].tot++;});
+    });
+    n+=d.n;list.push(d);
+  }
+  var full=list.filter(function(d){return !d.partial&&d.n>0;});
+  if(!full.length&&list[6].n>0)full=[list[6]];
+  var avg=function(f){return full.length?API.mean(full.map(f)):null;};
+  return {days:list,n:n,pipi:tot.pipi,cacca:tot.cacca,daysUsed:full.length,
+    perDay:avg(function(d){return d.n;}),wetPerDay:avg(function(d){return d.pipi.tot;}),pooPerDay:avg(function(d){return d.cacca.tot;})};
+}
+
 /* ---------- disegno ---------- */
 /* grafico a barre: items [{label,sub,value,partial,rec}], fmt(v) etichetta sopra la barra, axis(v) etichette a sinistra,
    unit = unità scritta una volta sopra l'asse, mean = linea tratteggiata con "media" nel margine destro (mai sopra una barra).
@@ -113,6 +137,32 @@ function bars(o){
     }else h+='<text class="st-val none" x="'+f1(x)+'" y="'+f1(y0-6)+'" text-anchor="middle">—</text>';
     h+='<text class="lbl'+(it.partial?' st-now':'')+'" x="'+f1(x)+'" y="'+(Hh-B+16)+'" text-anchor="middle">'+API.esc(it.label)+'</text>';
     if(o.sub&&it.sub)h+='<text class="st-sub" x="'+f1(x)+'" y="'+(Hh-B+31)+'" text-anchor="middle">'+API.esc(it.sub)+'</text>';
+  });
+  if(o.mean!=null){var ym=sy(o.mean);h+='<line class="st-mean" x1="'+L+'" y1="'+f1(ym)+'" x2="'+(W-R)+'" y2="'+f1(ym)+'"/><text class="st-sub st-meanlbl" x="'+(W-R+5)+'" y="'+f1(ym+4)+'">media</text>';}
+  return h+'</svg>';
+}
+/* barre impilate: items [{label,partial,segs:{poca,normale,tanta}}]; ogni segmento ha la classe del suo livello (tonalità del
+   colore --hc), il totale sta sopra la barra; mean = linea tratteggiata "media" */
+function stacked(o){
+  var W=360,L=30,R=o.mean!=null?38:14,T=18,B=26,Hh=118+B,items=o.items,n=items.length;
+  var max=0;items.forEach(function(it){var v=it.segs.poca+it.segs.normale+it.segs.tanta;if(v>max)max=v;});if(o.mean!=null&&o.mean>max)max=o.mean;
+  if(max<=0)max=1;max*=1.15;
+  var ticks=API.niceTicks(0,max,3).filter(function(v){return v===Math.round(v);});
+  var slot=(W-L-R)/n,bw=Math.min(30,slot*0.62);
+  var sy=function(v){return T+(Hh-T-B)*(1-v/max);},sx=function(i){return L+slot*(i+0.5);};
+  var h='<svg class="gc st-chart" viewBox="0 0 '+W+' '+Hh+'" style="--hc:'+o.color+'" role="img" aria-label="'+API.esc(o.aria)+'">';
+  ticks.forEach(function(v){var y=sy(v);if(y<T-1)return;h+='<line class="grid" x1="'+L+'" y1="'+f1(y)+'" x2="'+(W-R)+'" y2="'+f1(y)+'"/><text class="lbl" x="'+(L-6)+'" y="'+f1(y+4)+'" text-anchor="end">'+v+'</text>';});
+  h+='<line class="grid st-base" x1="'+L+'" y1="'+f1(sy(0))+'" x2="'+(W-R)+'" y2="'+f1(sy(0))+'"/>';
+  items.forEach(function(it,i){
+    var x=sx(i),y0=sy(0),acc=0,total=it.segs.poca+it.segs.normale+it.segs.tanta;
+    API.LVL_ORDER.forEach(function(l){
+      var v=it.segs[l];if(!v)return;
+      var y1=sy(acc),y2=sy(acc+v);acc+=v;
+      h+='<rect class="st-seg '+l+(it.partial?' part':'')+'" x="'+f1(x-bw/2)+'" y="'+f1(y2)+'" width="'+f1(bw)+'" height="'+f1(Math.max(1,y1-y2))+'"/>';
+    });
+    if(total)h+='<text class="st-val" x="'+f1(x)+'" y="'+f1(sy(total)-5)+'" text-anchor="middle">'+total+'</text>';
+    else h+='<text class="st-val none" x="'+f1(x)+'" y="'+f1(y0-6)+'" text-anchor="middle">0</text>';
+    h+='<text class="lbl'+(it.partial?' st-now':'')+'" x="'+f1(x)+'" y="'+(Hh-B+16)+'" text-anchor="middle">'+API.esc(it.label)+'</text>';
   });
   if(o.mean!=null){var ym=sy(o.mean);h+='<line class="st-mean" x1="'+L+'" y1="'+f1(ym)+'" x2="'+(W-R)+'" y2="'+f1(ym)+'"/><text class="st-sub st-meanlbl" x="'+(W-R+5)+'" y="'+f1(ym+4)+'">media</text>';}
   return h+'</svg>';
@@ -168,9 +218,25 @@ function feedCard(now){
   h+='<p class="st-legend"><span class="st-k"><i class="dot"></i>pappa</span><span class="st-k"><i class="tick"></i>pianto</span><span class="st-k"><i class="night"></i>notte 22–7</span></p>';
   return h+'</div>';
 }
-function render(now){now=now||Date.now();return sleepCard(now)+milkCard(now)+feedCard(now);}
+function lvlLine(t){var bits=[];API.LVL_ORDER.forEach(function(l){if(t[l])bits.push(t[l]+' '+API.LVL[l]);});return bits.join(' · ');}
+function diaperCard(now){
+  now=now||Date.now();
+  var d=diapersPerDay(now),h='<div class="card st-card"><h3>Pannolini</h3>';
+  if(!d.n)return h+'<p class="hint st-wait">Qui compaiono, giorno per giorno, i cambi con pipì e con cacca e quanta ne ha fatta, dopo i primi pannolini registrati.</p></div>';
+  var days=plural(d.daysUsed,'giorno','giorni');
+  h+='<p class="st-read"><b>in media '+plural(d.perDay,'cambio','cambi',dec1(d.perDay))+'</b> al giorno, su '+days+'</p>';
+  [['pipi','Pipì',d.wetPerDay,'var(--c-sonno)'],['cacca','Cacca',d.pooPerDay,'var(--c-cambio)']].forEach(function(r){
+    var k=r[0],t=d[k];
+    h+='<h4 class="st-h4">'+r[1]+'</h4><div class="st-g">'+stacked({items:d.days.map(function(x){return {label:x.label,partial:x.partial,segs:x[k]};}),color:r[3],mean:r[2],aria:r[1]+' al giorno, ultimi 7 giorni, per quantità'})+'</div>';
+    h+='<p class="st-read">'+(r[2]!=null?'<b>'+dec1(r[2])+' al giorno</b>':'<b>0 al giorno</b>')+(t.tot?' · '+lvlLine(t)+' in 7 giorni':'')+'</p>';
+  });
+  h+='<p class="st-legend"><span class="st-k"><i class="lv poca"></i>poca</span><span class="st-k"><i class="lv normale"></i>normale</span><span class="st-k"><i class="lv tanta"></i>tanta</span></p>';
+  h+='<p class="hint">Ogni barra è un giorno: i cambi in cui c\'era pipì o cacca, divisi per quanta ne ha fatta. Oggi è in corso (barra più chiara) e non entra nella media. Solo conteggi, nessuna soglia.</p>';
+  return h+'</div>';
+}
+function render(now){now=now||Date.now();return sleepCard(now)+milkCard(now)+feedCard(now)+diaperCard(now);}
 
 X.slot('stats',function(){return render();});
-X.stats={nights:nights,milkPerDay:milkPerDay,feedTimes:feedTimes,sleepCard:sleepCard,milkCard:milkCard,feedCard:feedCard,render:render,fmtH:fmtH,dec1:dec1,sleepSpans:sleepSpans};
+X.stats={nights:nights,milkPerDay:milkPerDay,feedTimes:feedTimes,diapersPerDay:diapersPerDay,sleepCard:sleepCard,milkCard:milkCard,feedCard:feedCard,diaperCard:diaperCard,render:render,fmtH:fmtH,dec1:dec1,sleepSpans:sleepSpans};
 X.refresh();
 })();

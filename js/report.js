@@ -86,9 +86,9 @@ function compute(days,now){
   var sleep={nights:nights.length,nightMean:mean(nights),naps:naps.length,napsPerDay:per(naps.length),napMean:mean(naps),daysRec:totals.length,dayMean:mean(totals)};
 
   /* cambi */
-  var dp=inW.filter(function(e){return e.k==='diaper';}),wet=0,poo=0;
-  dp.forEach(function(e){if(e.pipi&&e.pipi!=='no')wet++;if(e.cacca&&e.cacca!=='no')poo++;});
-  var diapers={n:dp.length,perDay:per(dp.length),wet:wet,wetPerDay:per(wet),poo:poo,pooPerDay:per(poo)};
+  var dp=inW.filter(function(e){return e.k==='diaper';}),wet=0,poo=0,wetLv={poca:0,normale:0,tanta:0},pooLv={poca:0,normale:0,tanta:0};
+  dp.forEach(function(e){var a=API.lvlKey(e.pipi),b=API.lvlKey(e.cacca);if(a!=='no'){wet++;wetLv[a]++;}if(b!=='no'){poo++;pooLv[b]++;}});
+  var diapers={n:dp.length,perDay:per(dp.length),wet:wet,wetPerDay:per(wet),wetLv:wetLv,poo:poo,pooPerDay:per(poo),pooLv:pooLv};
 
   /* pianti: cause in % sui pianti spiegati ("passato da solo" compreso) */
   var cr=inW.filter(function(e){return e.k==='cry';}),counts={},labeled=0,durs=[];
@@ -154,7 +154,8 @@ function sections(r){
   out.push({title:'Sonno',id:'sonno',note:srows.length?'Conta solo il sonno segnato con Nanna e Sveglio.':null,empty:'Nessuna nanna registrata nel periodo.',blocks:srows.length?[{rows:srows}]:[]});
   /* cambi */
   var drows=[];
-  if(d.n){drows.push(['Cambi al giorno',dec1(d.perDay)+' (in tutto '+d.n+')']);drows.push(['Con pipì, al giorno',dec1(d.wetPerDay)]);drows.push(['Con cacca, al giorno',dec1(d.pooPerDay)]);}
+  var lv=function(t){return API.LVL_ORDER.map(function(l){return t[l];}).join(' / ');};
+  if(d.n){drows.push(['Cambi al giorno',dec1(d.perDay)+' (in tutto '+d.n+')']);drows.push(['Con pipì, al giorno',dec1(d.wetPerDay)]);if(d.wet)drows.push(['Pipì poca / normale / tanta',lv(d.wetLv)]);drows.push(['Con cacca, al giorno',dec1(d.pooPerDay)]);if(d.poo)drows.push(['Cacca poca / normale / tanta',lv(d.pooLv)]);}
   out.push({title:'Cambi',id:'cambi',empty:'Nessun cambio registrato nel periodo.',blocks:drows.length?[{rows:drows}]:[]});
   /* pianti */
   var crows=[],cause=[];
