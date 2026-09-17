@@ -710,7 +710,7 @@ function describe(e,prev){
   if(e.k==='wake'){var d='';if(prev&&prev.k==='sleep')d='<span class="detail">ha dormito '+fmtDur(e.t-prev.t)+'</span>';return ['Sveglio',d];}
   if(e.k==='other'){var o=OTHER.filter(function(x){return x[0]===e.what;})[0];return [o?o[1]:'Altro',''];}
   if(e.k==='cry'){var d2=e.label?LABELS[e.label]:'senza spiegazione';if(e.dur)d2+=' · '+fmtSec(e.dur);return ['Pianto','<span class="detail">'+d2+'</span>'];}
-  if(e.k==='measure'){var mp=[];if(e.w!=null)mp.push(METRICS.w.fmt(e.w));if(e.l!=null)mp.push(METRICS.l.fmt(e.l));if(e.hc!=null)mp.push('cranio '+METRICS.hc.fmt(e.hc));return ['Misure','<span class="detail">'+esc(mp.join(' · '))+'</span>'];}
+  if(e.k==='measure'){var mp=[];if(e.w!=null)mp.push(METRICS.w.fmt(e.w));if(e.l!=null)mp.push(METRICS.l.fmt(e.l));return ['Misure','<span class="detail">'+esc(mp.join(' · '))+'</span>'];}
   if(e.k==='temp')return ['Temperatura','<span class="detail">'+fmtTemp(e.c)+'</span>'];
   if(e.k==='med')return [esc(medName(e)),''];
   if(e.k==='appt')return ['Visita','<span class="detail">'+esc(e.title||apptKind(e.kind))+'</span>'];
@@ -1005,7 +1005,7 @@ A.importData=function(){
   new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer().then(function(buf){finish(new TextDecoder().decode(new Uint8Array(buf)));}).catch(function(){toast('Codice danneggiato');});
 };
 
-/* ---------- salute: crescita OMS, vitamina D e medicine, temperatura, visite e vaccini ---------- */
+/* ---------- salute: crescita OMS (peso, lunghezza), vitamina D e medicine, temperatura, visite e vaccini ---------- */
 var HEALTH_TYPES={measure:1,temp:1,med:1,appt:1};
 var MEDS=[['vitd','Vitamina D'],['probiotico','Probiotico'],['simeticone','Simeticone'],['paracetamolo','Paracetamolo'],['altro','Altro']];
 var APPT_KINDS=[['bilancio','Bilancio di salute'],['vaccino','Vaccino'],['visita','Visita specialistica'],['esame','Esame'],['altro','Altro']];
@@ -1013,8 +1013,7 @@ var APPT_KINDS=[['bilancio','Bilancio di salute'],['vaccino','Vaccino'],['visita
 var MILESTONES=[[1,'bilancio','Bilancio di salute del 1° mese'],[3,'vaccino','Esavalente 1ª · pneumococco 1ª · rotavirus 1ª · meningococco B 1ª'],[3,'bilancio','Bilancio di salute (2–3 mesi)'],[4,'vaccino','Meningococco B 2ª · rotavirus 2ª'],[5,'vaccino','Esavalente 2ª · pneumococco 2ª'],[6,'vaccino','Meningococco B 3ª'],[6,'bilancio','Bilancio di salute (5–6 mesi)'],[9,'bilancio','Bilancio di salute (8–9 mesi)'],[11,'vaccino','Esavalente 3ª · pneumococco 3ª'],[12,'bilancio','Bilancio di salute (12 mesi)'],[13,'vaccino','MPRV · meningococco ACWY · meningococco B 4ª']];
 var METRICS={
   w:{key:'wfa',label:'Peso',c:'var(--c-fame)',toX:function(v){return v/1000;},fmt:function(v){return (v/1000).toFixed(2).replace('.',',')+' kg';},axis:function(v){return v.toFixed(1).replace('.',',');},step:[100,10],min:1500,max:20000,start:3500,unit:'g'},
-  l:{key:'lhfa',label:'Lunghezza',c:'var(--c-sonno)',toX:function(v){return v;},fmt:function(v){return String(v).replace('.',',')+' cm';},axis:function(v){return String(Math.round(v));},step:[1,0.5],min:35,max:100,start:50,unit:'cm'},
-  hc:{key:'hcfa',label:'Cranio',c:'var(--c-aria)',toX:function(v){return v;},fmt:function(v){return String(v).replace('.',',')+' cm';},axis:function(v){return String(Math.round(v));},step:[1,0.5],min:25,max:60,start:35,unit:'cm'}
+  l:{key:'lhfa',label:'Lunghezza',c:'var(--c-sonno)',toX:function(v){return v;},fmt:function(v){return String(v).replace('.',',')+' cm';},axis:function(v){return String(Math.round(v));},step:[1,0.5],min:35,max:100,start:50,unit:'cm'}
 };
 var ZP={3:-1.8808,15:-1.0364,50:0,85:1.0364,97:1.8808};
 var healthMetric='w';
@@ -1106,12 +1105,12 @@ function renderHealth(){
   var el=$('#health');if(!el)return;
   var h='',m=METRICS[healthMetric];
   /* crescita */
-  h+='<div class="card"><div class="cardhead"><h3>Crescita</h3><div class="seg small">'+['w','l','hc'].map(function(k){return '<button class="'+(k===healthMetric?'on':'')+'" onclick="A.setMetric(\''+k+'\')">'+METRICS[k].label+'</button>';}).join('')+'</div></div>';
+  h+='<div class="card"><div class="cardhead"><h3>Crescita</h3><div class="seg small">'+['w','l'].map(function(k){return '<button class="'+(k===healthMetric?'on':'')+'" onclick="A.setMetric(\''+k+'\')">'+METRICS[k].label+'</button>';}).join('')+'</div></div>';
   h+=growthHero(healthMetric)+'<div class="growth">'+growthChart(healthMetric)+'</div>';
   h+='<p class="hint">Bande: 3°–97° e 15°–85° percentile, linea tratteggiata = mediana. Standard OMS 2006, maschi. Il percentile lo conferma il pediatra.</p>';
   h+='<button class="btn" onclick="A.flow(\'measure\')">Registra peso e misure</button>';
   var ms=measures().slice(-6).reverse();
-  if(ms.length){h+='<div class="spacer"></div><div class="list">';ms.forEach(function(e){var parts=[];if(e.w!=null)parts.push(METRICS.w.fmt(e.w));if(e.l!=null)parts.push(METRICS.l.fmt(e.l));if(e.hc!=null)parts.push('cranio '+METRICS.hc.fmt(e.hc));var dA=ageDaysAt(e.t);h+='<div class="row"><div class="time"><small>'+fmtDate(e.t)+'</small></div><div class="what">'+esc(parts.join(' · '))+'<span class="who">'+(dA!=null?Math.floor(dA/7)+' sett'+(e.w!=null?' · '+ordPct(pctOf('wfa',dA,e.w/1000))+' peso':''):'')+'</span></div><button class="del" aria-label="Elimina" onclick="A.del(\''+e.id+'\');renderHealth()">×</button></div>';});h+='</div>';}
+  if(ms.length){h+='<div class="spacer"></div><div class="list">';ms.forEach(function(e){var parts=[];if(e.w!=null)parts.push(METRICS.w.fmt(e.w));if(e.l!=null)parts.push(METRICS.l.fmt(e.l));var dA=ageDaysAt(e.t);h+='<div class="row"><div class="time"><small>'+fmtDate(e.t)+'</small></div><div class="what">'+esc(parts.join(' · '))+'<span class="who">'+(dA!=null?Math.floor(dA/7)+' sett'+(e.w!=null?' · '+ordPct(pctOf('wfa',dA,e.w/1000))+' peso':''):'')+'</span></div><button class="del" aria-label="Elimina" onclick="A.del(\''+e.id+'\');renderHealth()">×</button></div>';});h+='</div>';}
   h+='</div>';
   /* vitamina D e medicine */
   var vd=todayMeds('vitd'),vdLast=vd.length?vd[vd.length-1]:null;
@@ -1201,7 +1200,7 @@ function stepper(key){
 function renderHealthFlow(){
   var d=flow.data,h='';
   if(flow.type==='measure'){
-    var steps=['w','l','hc'],key=steps[flow.step];
+    var steps=['w','l'],key=steps[flow.step];
     h+='<div class="bar">'+backBtn()+'<div class="title">Peso e misure</div></div>'+dayChips();
     if(key){var m=METRICS[key],last=lastMeasure(key);
       h+='<h2>'+m.label+'?</h2>'+stepper(key)+(last!=null?'<p class="hint">Ultima misura: '+esc(m.fmt(last))+'</p>':'');
@@ -1240,8 +1239,8 @@ function renderHealthFlow(){
 function healthFinish(val){
   var d=flow.data,t=Date.now()-flow.off*MIN;
   if(flow.type==='measure'){
-    var e={k:'measure'};if(d.w!=null)e.w=Math.round(d.w);if(d.l!=null)e.l=d.l;if(d.hc!=null)e.hc=d.hc;
-    if(e.w==null&&e.l==null&&e.hc==null)return null;
+    var e={k:'measure'};if(d.w!=null)e.w=Math.round(d.w);if(d.l!=null)e.l=d.l;
+    if(e.w==null&&e.l==null)return null;
     var at=noon(d.date||isoDay(Date.now()))||Date.now();if(dayKey(at)===dayKey(Date.now()))at=Math.min(Date.now(),at+(Date.now()-noon(isoDay(Date.now()))));
     var msg='Misure salvate'+(e.w!=null?' · peso al '+ordPct(pctOf('wfa',ageDaysAt(at)||0,e.w/1000))+' percentile':'');
     return {e:e,t:at,msg:msg};
