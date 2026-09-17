@@ -45,5 +45,16 @@ const {boot}=require('./stub');
   // salvataggio locale → upsertSettings con _updated nuovo
   document.querySelector('#sName').value='Alan';document.querySelector('#sBirth').value='2026-08-20';app.A.saveSettings();
   const last=sent.filter(x=>x[0]==='set').pop();assert.strictEqual(last[1].name,'Alan');assert.ok(Date.parse(last[1]._updated)>Date.parse(newer)-10000);
+  // primo accesso: le voci locali "Io" prendono il nome del profilo e vengono rispedite; un secondo cambio nome non le tocca
+  S.events.push({id:'io1',k:'feed',t:t0,who:'Io',prep:120,ml:90},{id:'io2',k:'sleep',t:t0+1,who:''},{id:'r9',k:'feed',t:t0+2,who:'Fabio',prep:100,ml:100});
+  app.T("who='Io'");app.T("window.AlanSync.status=function(){return {family:'F',name:'Ilaria'};}");
+  sent.length=0;app.T('syncWho()');
+  assert.strictEqual(app.T('who'),'Ilaria');
+  assert.strictEqual(byId('io1').who,'Ilaria');assert.strictEqual(byId('io2').who,'Ilaria');assert.strictEqual(byId('r9').who,'Fabio');
+  assert.deepStrictEqual(sent.filter(x=>x[0]==='up').map(x=>x[1].id).sort(),['io1','io2']);
+  assert.ok(/2 voci registrate senza accesso sono ora di Ilaria/.test(app.els['#toast'].textContent));
+  S.events.push({id:'io3',k:'feed',t:t0+3,who:'Io',prep:120,ml:90});
+  app.T("window.AlanSync.status=function(){return {family:'F',name:'Ilaria B'};}");sent.length=0;app.T('syncWho()');
+  assert.strictEqual(byId('io3').who,'Io','senza transizione da Io nessuna rinomina');assert.strictEqual(sent.length,0);
   console.log('merge ok');
 })().catch(e=>{console.error(e);process.exit(1);});

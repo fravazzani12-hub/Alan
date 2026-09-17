@@ -24,8 +24,12 @@ body{font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Robo
 button{font:inherit;cursor:pointer;touch-action:manipulation;color:inherit}
 button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 .wrap{max-width:520px;margin:0 auto;padding:10px 14px 0}
-/* banner aggiornamento (in flusso, sopra l'intestazione) */
-.upd{display:none;margin:0 0 10px}.upd.on{display:block}
+/* banner aggiornamento: fisso in alto, sopra tutto (anche i percorsi a schermo intero), finché non si tocca */
+.upd{display:none;position:fixed;top:0;left:0;right:0;z-index:30;padding:calc(8px + env(safe-area-inset-top)) 14px 8px;background:var(--bg);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.upd.on{display:block}
+.upd button{max-width:520px;margin:0 auto;display:block}
+body.upd-on .wrap{padding-top:calc(72px + env(safe-area-inset-top))}
+body.upd-on .screen{padding-top:calc(64px + env(safe-area-inset-top))}
 .upd button{width:100%;min-height:52px;border:0;border-radius:14px;background:var(--amber);color:var(--amber-ink);font-size:16px;font-weight:700;box-shadow:0 4px 0 var(--amber-shadow)}
 .upd button:active{transform:translateY(2px);box-shadow:0 2px 0 var(--amber-shadow)}
 header.top{display:flex;justify-content:space-between;align-items:center;padding:6px 0 12px}
