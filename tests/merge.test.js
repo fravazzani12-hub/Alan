@@ -8,8 +8,8 @@ const {boot}=require('./stub');
   const {S}=app,mergeRemote=app.T('mergeRemote'),mergeRemoteSettings=app.T('mergeRemoteSettings'),byId=app.T('byId');
   const t0=Date.now()-3600e3;
   // nuovo evento remoto: entra con audio=false anche se il jsonb diceva audio true; cloud e mime restano
-  mergeRemote([{id:'r1',k:'cry',t:t0,who:'Ilaria',label:'fame',dur:9,audio:true,cloud:'r1.m4a',mime:'audio/mp4',_updated:'2026-09-17T10:00:00.000Z'}]);
-  const r1=byId('r1');assert.ok(r1);assert.strictEqual(r1.audio,false);assert.strictEqual(r1.cloud,'r1.m4a');assert.strictEqual(r1.mime,'audio/mp4');assert.strictEqual(r1._deleted,undefined);
+  mergeRemote([{id:'r1',k:'cry',t:t0,who:'Ilaria',label:'fame',dur:9,audio:true,audioPath:'F/r1.m4a',mime:'audio/mp4',_updated:'2026-09-17T10:00:00.000Z'}]);
+  const r1=byId('r1');assert.ok(r1);assert.strictEqual(r1.audio,false);assert.strictEqual(r1.audioPath,'F/r1.m4a');assert.strictEqual(r1.mime,'audio/mp4');assert.strictEqual(r1._deleted,undefined);
   // versione più vecchia: ignorata
   mergeRemote([{id:'r1',k:'cry',t:t0,who:'Ilaria',label:'sonno',_updated:'2026-09-17T09:59:59.999Z'}]);
   assert.strictEqual(byId('r1').label,'fame');

@@ -12,14 +12,15 @@ per chi sviluppa (umano o Claude Code).
 5. Onestà sul risultato: l'app deve misurare da sola quanto ci azzecca, non fingere di tradurre.
 6. I problemi (in particolare sull'audio) devono essere leggibili dal telefono, senza strumenti da sviluppatore.
 
-## 2. Modello dati (evento = oggetto piatto, `id` client-side, `t` epoch ms, `k` tipo, `who` chi, `_updated` ISO UTC dell'ultima modifica)
+## 2. Modello dati (evento = oggetto piatto, `id` client-side, `t` epoch ms, `k` tipo, `who` chi ha registrato, `_updated` ISO UTC dell'ultima modifica)
+`who` = nome dal profilo dell'utente loggato (`user_metadata.name`, blocco 7 dello schema; altrimenti la parte locale dell'email), non selezionabile; senza account resta "Io".
 | k | campi | note |
 |---|---|---|
 | feed | prep (ml preparati), ml (ml bevuti, scelti a tap a passi di 10, 0 ≤ ml ≤ prep; 0 = biberon rifiutato) | una pappa con ml = 0 non conta come ultima pappa, non entra nel tipico e non etichetta un pianto |
 | diaper | pipi (no/poca/tanta), cacca (no/poca/tanta) | |
 | sleep / wake | — | stato sonno = ultimo dei due |
 | other | what (ruttino/massaggio/ciuccio/coccole/passeggiata/bagnetto) | mappa su causa aria o contatto |
-| cry | dur (s), label (fame/sonno/cambio/aria/contatto/solo/null), bins {f,a,h}, ctx (snapshot), feat {vec[12], meanF0, sdF0, meanRms, bursts10, meanBurst, meanPause, voiced, cent, durS}, audio (bool, **solo locale**), mime, cloud (nome oggetto nel bucket, es. `<id>.m4a`) | audio in IndexedDB, chiave = id, valore `{buf: ArrayBuffer, mime}` (i Blob in IndexedDB su iOS sono fragili; i vecchi Blob restano leggibili) |
+| cry | dur (s), label (fame/sonno/cambio/aria/contatto/solo/null), bins {f,a,h}, ctx (snapshot), feat {vec[12], meanF0, sdF0, meanRms, bursts10, meanBurst, meanPause, voiced, cent, durS}, audio (bool, **solo locale**), mime, audioPath (percorso nel bucket, `<family_id>/<id>.<ext>`), rec {mime, bytes, frames, err} (esito della registrazione, mostrato nel dettaglio del pianto) | audio in IndexedDB, chiave = id, valore `{buf: ArrayBuffer, mime}` (i Blob in IndexedDB su iOS sono fragili; i vecchi Blob restano leggibili) |
 
 Impostazioni: `settings {name, birth (YYYY-MM-DD), _updated}`.
 
@@ -32,10 +33,10 @@ Remoto (opzionale, `supabase/schema.sql`):
   `updated_at` (last-writer-wins). La cancellazione porta `updated_at` = momento della cancellazione, così il pull incrementale
   dell'altro telefono la vede anche se ha perso il messaggio realtime.
 - tabella `family_settings`: una riga per famiglia (name, birth, updated_at), stesso last-writer-wins; se il server è vuoto vincono le impostazioni locali.
-- bucket privato `cries`: un oggetto per pianto in `<family_id>/<id>.<ext>`; upload subito dopo il salvataggio (o alla prossima
+- bucket privato `cries` (file fino a 10 MB): un oggetto per pianto in `<family_id>/<id>.<ext>`; upload subito dopo il salvataggio (o alla prossima
   rete), download al primo ascolto sull'altro telefono (poi resta in IndexedDB), rimozione quando il pianto è cancellato.
 - Sync (`js/sync.js`, supabase-js 2.49.4 UMD): pull incrementale per `updated_at` a pagine da 1000; canale realtime
-  `family-<id>` con `postgres_changes` su events e family_settings + presence (chi è collegato adesso); risottoscrizione con
+  `family-<id>` con `postgres_changes` su events e family_settings + presence (payload `{name}`: l'intestazione mostra una pillola per genitore, verde se ha l'app aperta); risottoscrizione con
   backoff e al ritorno in primo piano. I timestamp di Postgres (`+00:00`, microsecondi) sono normalizzati a ISO UTC con
   millisecondi prima di ogni confronto. Auth: email + password (utenti creati in dashboard), nessun flusso email; il callback
   di `onAuthStateChange` non fa chiamate dirette (deadlock del lock auth), rimanda a un tick dopo.
@@ -86,6 +87,7 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
 - Precisione = leave-one-out su tutti i pianti etichettati: contesto, suono, insieme, e baseline "causa più frequente".
 
 ## 5. UI
+- Intestazione: nome ed età a sinistra, a destra le pillole di presenza (nessun selettore di chi registra).
 - Font Atkinson Hyperlegible; palette light/dark via `prefers-color-scheme`; tap target ≥ 44 px su ogni controllo (verificato a 390 px, chiaro e scuro); percorsi a schermo intero; toast su più righe, mai troncato.
 - Colori causa: fame #D9962A, sonno #5B73D9, cambio #2E9E6E, aria #B266A6, contatto #D96A5C; accento #F0B040. In dark mode le etichette causa usano inchiostro scuro.
 - I pulsanti che aspettano la rete (Accedi, Sincronizza adesso, Esci, Prova il microfono, ▶ che scarica) mostrano uno stato di attesa e non accettano un secondo tocco.

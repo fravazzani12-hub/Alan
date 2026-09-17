@@ -8,6 +8,7 @@ Online su https://fravazzani12-hub.github.io/Alan/ (GitHub Pages dalla root del 
 - ES5-style (function, var) nel codice app: gira anche su Safari vecchiotti. Niente moduli ESM, niente TypeScript.
 - Dipendenze esterne solo via CDN già presenti in index.html (supabase-js 2.49.4 UMD, fissato; Google Fonts). Non aggiungerne senza motivo.
 - Dati locali: IndexedDB (`js/app.js`, funzioni idbGet/idbPut/idbDel) con mirror localStorage. Non cambiare le chiavi (`alan-v2`, `alan.v2`) senza migrazione. L'audio sta nello store `audio` come `{buf,mime}`; `audioGet` legge anche i vecchi Blob.
+- Chi registra (`who`) è il nome del profilo dell'utente loggato (`AlanSync.status().name`), mai un selettore in UI; l'audio remoto è `e.audioPath` (percorso completo nel bucket), `e.audio` resta locale.
 - Sync: `js/sync.js` (Supabase). Ogni mutazione locale passa da `touched(e)` / `removed(e)` in app.js; le modifiche remote entrano da `mergeRemote(list)` e `mergeRemoteSettings(row)`. Mantieni questo contratto. Timestamp sempre ISO UTC con millisecondi (`_updated`).
 - Segreti: nessuno nel repo. `js/config.js` contiene solo URL e chiave anon (pubblica); la sicurezza è nelle policy RLS di `supabase/schema.sql` (tabelle e bucket `cries`).
 

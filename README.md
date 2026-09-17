@@ -22,18 +22,19 @@ Online su https://fravazzani12-hub.github.io/Alan/ (GitHub Pages, branch `main`,
 3. Authentication → Users → Add user → Create new user: email e password di Fabio, spunta **Auto Confirm User** → Create. Ripeti per Ilaria.
    Nessuna email viene inviata: il mailer integrato di Supabase non serve e non va configurato.
 4. Settings → API Keys: copia **Project URL** e la chiave **anon** in `js/config.js`. Committa.
-5. SQL Editor: esegui il blocco 6 in fondo a `supabase/schema.sql` (mette i due utenti nella stessa famiglia).
+5. SQL Editor: esegui il blocco 6 in fondo a `supabase/schema.sql` (mette i due utenti nella stessa famiglia) e il blocco 7 con i vostri nomi ed email: è il nome che l'app mostra in alto e scrive su ogni voce ("chi ha registrato"). Senza, usa la parte dell'email prima della @.
 
 ### 3. Primo accesso
 1. Sul telefono di Fabio: apri l'app → Altro → Account e sync → email e password → Accedi. "Famiglia: collegata".
-2. Lo stesso sul telefono di Ilaria. Da qui ogni voce registrata compare sull'altro telefono in un secondo; la card
-   Account mostra anche se l'altro telefono è collegato adesso.
+2. Lo stesso sul telefono di Ilaria. Da qui ogni voce registrata compare sull'altro telefono in un secondo. In alto a destra
+   c'è una pillola per genitore con il pallino verde se ha l'app aperta in quel momento; non c'è più nulla da selezionare,
+   chi registra è chi ha fatto l'accesso.
 
 ### 4. Icona in Home
 Safari → Condividi → "Aggiungi alla schermata Home". Da quel momento aprila sempre da lì (i dati locali vivono in quel browser).
 
 ## Cosa fa (in breve)
-- **Home**: tre timer (ultima pappa, sveglio/dorme da, ultimo cambio), pulsante "Piange", quattro riquadri: Pappa, Pannolino, Nanna, Altro.
+- **Home**: intestazione con nome, età e presenza dei genitori; tre timer (ultima pappa, sveglio/dorme da, ultimo cambio), pulsante "Piange", quattro riquadri: Pappa, Pannolino, Nanna, Altro.
 - **Percorsi a tap**: Pappa → quanto preparato → quanto bevuto (ml precisi, da 0 al preparato). Pannolino → pipì → cacca. Nanna → un tap. Altro → ruttino, massaggio, ciuccio, coccole, passeggiata, bagnetto. Ogni percorso ha "quando": adesso / 15 / 30 / 60 min fa.
 - **Piange**: registra fino a 30 s, calcola l'impronta acustica (tono, variazione, intensità, raffiche/pause, voce, timbro, andamento) e mostra le ipotesi in tempo reale. La prossima azione registrata entro 45 minuti spiega il pianto, da qualunque dei due telefoni.
 - **Pianti**: precisione misurata a posteriori (solo contesto, solo suono, insieme, caso), elenco dei pianti con riascolto (▶ scarica l'audio registrato dall'altro telefono al primo tocco), cambio spiegazione.
@@ -50,6 +51,7 @@ Safari → Microfono, oppure apri l'app in Safari, concedi il permesso e reinsta
 `audio/mp4` su Safari e in `webm` su Chrome/Android; entrambi si riascoltano sull'altro telefono.
 
 ## Limiti noti
+- Gli audio vanno nel bucket privato `cries` di Supabase Storage (1 GB gratis, circa 5.000 pianti; file fino a 10 MB) e si scaricano on-demand sull'altro telefono; se un upload fallisce, l'app riprova alla prossima rete o apertura.
 - Il modello acustico è un k-NN su 12 feature: onesto e trasparente, non magico. La sezione "Quanto ci azzecca" dice se il suono aggiunge informazione rispetto al contesto. Se dopo 8 pianti non batte il caso, il suo peso va a zero da solo.
 - Senza account gli audio restano sul telefono che li ha registrati; il codice di riserva non li porta.
 - I conflitti (stessa voce modificata da entrambi) si risolvono con l'ora dell'ultima modifica, presa dall'orologio del telefono.
