@@ -21,7 +21,7 @@ per chi sviluppa (umano o Claude Code).
 | food | name (≤ 40 caratteri, spazi normalizzati), group (cereali/verdure/frutta/proteine/latticini, `altro` per i nomi scritti a mano), amount (assaggio/poco/tutto), reaction (bene/nongradito/reazione), note (≤ 120 caratteri, solo con `reaction = reazione`, altrimenti '') | `js/svezzamento.js`; alimenti distinti per nome normalizzato (minuscolo, spazi collassati); nel diario `Nome · quanto · com'è andata [· nota]` |
 | moment | kind ('first'/'photo'/'story'); prima volta: code, title (15 tappe fisse); foto/racconto: text (≤ 80), photo (bool: esiste una foto), photoPath (`<family_id>/<id>.<ext>` nel bucket `cries`), mime | `js/momenti.js`; nascosto dal diario di Home; prima volta con `t` = adesso se il giorno è oggi, altrimenti mezzogiorno del giorno scelto; la foto sta in IndexedDB store `files` come `{buf,mime}` |
 | letter | text (≤ 4000) | `js/momenti.js`; `t` = adesso, `who` = chi scrive; nascosto dal diario |
-| diaper | pipi (si/no), cacca (si/no); le voci vecchie con poca/tanta si leggono come sì | |
+| diaper | pipi (no/poca/normale/tanta), cacca (no/poca/normale/tanta) | il valore `si` della v12 si legge come normale (`lvlKey`); conta come "con pipì/cacca" tutto ciò che non è `no` |
 | sleep / wake | — | stato sonno = ultimo dei due |
 | other | what (ruttino/rigurgito/massaggio/ciuccio/coccole/passeggiata/bagnetto) | ruttino e rigurgito → aria, il resto → contatto |
 | measure | w (g), l (cm); uno o entrambi | `t` = mezzogiorno del giorno scelto (oggi/ieri/…/altra data); percentile OMS calcolato al volo dall'età |
@@ -206,7 +206,7 @@ testo, tutta la Home se compare o sparisce una riga; mai durante un percorso). L
 
 ### 9.4 Statistiche della settimana (`js/stats.js`)
 Slot `stats`, in fondo a Pattern. Nessun dato proprio: calcoli sugli eventi, esposti su `AlanExt.stats` = {nights(now),
-milkPerDay(now), feedTimes(now)} e ridisegnati a ogni `renderStats`. Tre schede, ognuna con titolo, grafico SVG inline (viewBox
+milkPerDay(now), feedTimes(now), diapersPerDay(now)} e ridisegnati a ogni `renderStats`. Quattro schede, ognuna con titolo, grafico SVG inline (viewBox
 largo 360, classi `.gc .grid .lbl` del grafico di crescita, colori dai token via `--hc`) e una riga di lettura fattuale, mai un
 giudizio; senza dati ogni scheda mostra un testo di attesa. I tre grafici condividono l'ordine cronologico (da sinistra a
 destra, dall'alto in basso).
@@ -221,6 +221,11 @@ destra, dall'alto in basso).
 3. **Quando mangia**: 7 righe (dal più vecchio a oggi) sull'asse delle 24 ore, un pallino per pappa, i pianti come tacche rosse, la notte 22–7 in ombra, un segno tratteggiato sull'ora attuale nella riga di oggi; lettura
    "in media 6,5 pappe al giorno · una ogni 3 h 10 · N pianti in 7 giorni" (intervallo medio fra pappe consecutive fra 30 min e
    8 h, stessa regola di Pattern). Pappe con ml = 0 non contano.
+4. **Pannolini**: due grafici a barre impilate (pipì e cacca), una barra per giorno con i cambi in cui c'era, divisa per
+   quantità (poca chiara, normale media, tanta piena; i valori si normalizzano con `lvlKey`, il vecchio `si` conta come
+   normale); il totale sopra la barra, oggi in corso più chiaro e fuori dalla media; media tratteggiata sui giorni interi con
+   almeno un cambio. Letture: "in media 3,2 cambi al giorno, su N giorni" e per ciascun grafico "3,2 al giorno · 6 poca · 9
+   normale · 6 tanta in 7 giorni". Solo conteggi, nessuna soglia: quanto è giusto lo dice il pediatra.
 Decimali in italiano con la virgola; l'unità dell'asse è scritta una volta sola sopra l'asse; le etichette dei valori hanno un
 alone del colore della superficie (`paint-order:stroke`) per restare leggibili sopra le barre.
 

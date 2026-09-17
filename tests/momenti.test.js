@@ -74,7 +74,7 @@ const DAY=864e5,H=36e5;
   // --- questa settimana in numeri (notti = 22–7): la notte tra l'altro ieri e ieri è sempre tutta passata
   const d=new Date(),y7=new Date(d.getFullYear(),d.getMonth(),d.getDate()-1,7,0,0).getTime(),now=Date.now();
   add({k:'sleep',t:y7-8*H,who:'Ilaria'});add({k:'wake',t:y7-2*H,who:'Ilaria'});
-  add({k:'feed',prep:120,ml:90,t:y7-5*H,who:'Fabio'});add({k:'diaper',pipi:'si',cacca:'no',t:y7-4*H,who:'Fabio'});add({k:'feed',prep:120,ml:100,t:y7-3*H,who:'Ilaria'});
+  add({k:'feed',prep:120,ml:90,t:y7-5*H,who:'Fabio'});add({k:'diaper',pipi:'normale',cacca:'no',t:y7-4*H,who:'Fabio'});add({k:'feed',prep:120,ml:100,t:y7-3*H,who:'Ilaria'});
   add({k:'feed',prep:120,ml:110,t:now-2*H,who:'Ilaria'});add({k:'feed',prep:120,ml:0,t:now-1*H,who:'Ilaria'});add({k:'feed',prep:120,ml:100,t:now-10*DAY,who:'Fabio'});
   add({k:'cry',dur:40,label:'fame',t:now-3*H,who:'Fabio'});add({k:'cry',dur:20,label:null,t:now-4*H,who:'Fabio'});
   add({k:'moment',kind:'story',text:'Prima volta al parco',t:now-5*H,who:'Ilaria'});

@@ -42,7 +42,7 @@ const MIN=6e4,H=36e5;
   assert.strictEqual(new Date(fe.t).getHours(),13);assert.strictEqual(new Date(fe.t).getMinutes(),20);assert.ok(fe.t<=Date.now()+5*MIN);
   A.flow('feed');A.setAt('23:50');A.setEnd('00:10');assert.ok(/20 min/.test(txt('#screenInner')),'fine oltre la mezzanotte');A.setOff(15);assert.strictEqual(app.T('flow').at,null,'un chip normale annulla l\'orario');
   A.pick('prep',120);A.finish(100);fe=S.events.filter(e=>e.k==='feed').pop();assert.strictEqual(fe.dur,undefined);
-  A.flow('diaper');A.setAt('bad');assert.strictEqual(app.T('flow').at,null);A.setAt('08:05');A.pick('pipi','si');A.finish('no');
+  A.flow('diaper');A.setAt('bad');assert.strictEqual(app.T('flow').at,null);A.setAt('08:05');A.pick('pipi','normale');A.finish('no');
   const dp=S.events.filter(e=>e.k==='diaper').pop();assert.strictEqual(new Date(dp.t).getMinutes(),5);assert.strictEqual(dp.dur,undefined,'la fine c\'è solo per la pappa');
   // i preparati includono 115 e 125
   A.flow('feed');assert.ok(/115 ml/.test(txt('#screenInner'))&&/125 ml/.test(txt('#screenInner')));A.home();

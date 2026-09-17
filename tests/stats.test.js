@@ -8,7 +8,7 @@ const count=(html,re)=>(String(html).match(re)||[]).length;
 (async()=>{
   const app=await boot({ext:['stats']});const {S,T}=app;
   const X=window.AlanExt,ST=X.stats;
-  assert.ok(ST&&typeof ST.nights==='function'&&typeof ST.milkPerDay==='function'&&typeof ST.feedTimes==='function','esposto su window.AlanExt.stats');
+  assert.ok(ST&&typeof ST.nights==='function'&&typeof ST.milkPerDay==='function'&&typeof ST.feedTimes==='function'&&typeof ST.diapersPerDay==='function','esposto su window.AlanExt.stats');
   assert.strictEqual(T('EXT.slots.stats.length'),1,'registrato nello slot stats di Pattern');
   // "adesso" fisso: oggi alle 14:00 locali
   const d0=new Date();d0.setHours(14,0,0,0);const now=d0.getTime();
@@ -24,8 +24,9 @@ const count=(html,re)=>(String(html).match(re)||[]).length;
   let mk=ST.milkPerDay(now);assert.strictEqual(mk.days.length,7);assert.strictEqual(mk.mode,null);assert.strictEqual(mk.mean,null);
   let ft=ST.feedTimes(now);assert.strictEqual(ft.days.length,7);assert.strictEqual(ft.nFeeds,0);assert.strictEqual(ft.perDay,null);
   let html=stats();
-  assert.ok(/Sonno per notte/.test(html)&&/Latte al giorno/.test(html)&&/Quando mangia/.test(html),'tre titoli');
-  assert.strictEqual(count(html,/st-wait/g),3,'tre testi di attesa');assert.strictEqual(count(html,/st-chart/g),0,'nessun grafico');
+  assert.ok(/Sonno per notte/.test(html)&&/Latte al giorno/.test(html)&&/Quando mangia/.test(html)&&/Pannolini/.test(html),'quattro titoli');
+  let dp=ST.diapersPerDay(now);assert.strictEqual(dp.days.length,7);assert.strictEqual(dp.n,0);assert.strictEqual(dp.perDay,null);
+  assert.strictEqual(count(html,/st-wait/g),4,'quattro testi di attesa');assert.strictEqual(count(html,/st-chart/g),0,'nessun grafico');
 
   // --- 7 giorni finti. Notte d (1..7): Nanna alle 22:00 + d·10 min, Sveglio alle 07:30 → nella finestra 22–7 dorme 9 h − d·10 min.
   //     Pisolino 13–14 (non conta). Biberon alle 2 (80 ml) e 8/11/14/17/20 (100 ml) → 580 ml; biberon alle 23:00 (60 ml) nei giorni dispari;
@@ -86,11 +87,32 @@ const count=(html,re)=>(String(html).match(re)||[]).length;
   assert.ok(/<b>in media 6,5 pappe<\/b> al giorno · una ogni \d+ h \d+ · 13 pianti in 7 giorni/.test(fc),fc);
   assert.ok(/st-legend/.test(fc)&&/pappa/.test(fc)&&/pianto/.test(fc));
 
+  // pannolini: giorni interi d=6..1 con 3 cambi (pipì tanta+cacca no, pipì normale+cacca poca, pipì poca+cacca normale), giorno 4 un quarto cambio
+  //     con i valori vecchi (pipi 'si' → normale, cacca 'tanta'); oggi 2 cambi (pipì normale senza cacca, entrambi normali)
+  for(let d=7;d>=1;d--){add('diaper',at(-d,7),{pipi:'tanta',cacca:'no'});add('diaper',at(-d,12),{pipi:'normale',cacca:'poca'});add('diaper',at(-d,19),{pipi:'poca',cacca:'normale'});if(d===4)add('diaper',at(-d,22),{pipi:'si',cacca:'tanta'});}
+  add('diaper',at(0,6),{pipi:'normale',cacca:'no'});add('diaper',at(0,11),{pipi:'normale',cacca:'normale'});
+  dp=ST.diapersPerDay(now);
+  assert.strictEqual(dp.days.length,7);assert.strictEqual(dp.n,21,'cambi nella finestra (giorno 7 escluso)');assert.strictEqual(dp.daysUsed,6);
+  dp.days.slice(0,6).forEach((x,j)=>{const d=6-j;assert.strictEqual(x.n,d===4?4:3,'cambi d='+d);assert.strictEqual(x.pipi.tot,d===4?4:3);assert.strictEqual(x.cacca.tot,d===4?3:2);assert.strictEqual(x.pipi.tanta,1);assert.strictEqual(x.cacca.poca,1);});
+  assert.strictEqual(dp.days[2].pipi.normale,2,'il vecchio "si" conta come normale');assert.strictEqual(dp.days[2].cacca.tanta,1);
+  assert.strictEqual(dp.days[6].label,'oggi');assert.ok(dp.days[6].partial);assert.strictEqual(dp.days[6].n,2);assert.strictEqual(dp.days[6].pipi.normale,2);assert.strictEqual(dp.days[6].cacca.tot,1);
+  near(dp.perDay,19/6,1e-9,'cambi al giorno');near(dp.wetPerDay,19/6,1e-9,'con pipì al giorno');near(dp.pooPerDay,13/6,1e-9,'con cacca al giorno');
+  assert.deepStrictEqual(dp.pipi,{poca:6,normale:9,tanta:6,tot:21});assert.deepStrictEqual(dp.cacca,{poca:6,normale:7,tanta:1,tot:14});
+  let dc=ST.diaperCard(now);
+  assert.strictEqual(count(dc,/<svg/g),2,'due grafici: pipì e cacca');assert.strictEqual(count(dc,/class="st-mean"/g),2,'una media per grafico');
+  assert.strictEqual(count(dc,/class="st-seg poca/g),6+6,'segmenti poca');assert.strictEqual(count(dc,/class="st-seg tanta/g),6+1,'segmenti tanta');assert.strictEqual(count(dc,/class="st-seg [a-z]+ part"/g),2,'oggi più chiaro');
+  assert.ok(/<b>in media 3,2 cambi<\/b> al giorno, su 6 giorni/.test(dc),dc);
+  assert.ok(/<b>3,2 al giorno<\/b> · 6 poca · 9 normale · 6 tanta in 7 giorni/.test(dc),'lettura pipì: '+dc);
+  assert.ok(/<b>2,2 al giorno<\/b> · 6 poca · 7 normale · 1 tanta in 7 giorni/.test(dc),'lettura cacca: '+dc);
+  assert.ok(/st-legend/.test(dc)&&/poca<\/span>/.test(dc)&&/tanta<\/span>/.test(dc));assert.ok(!/NaN|undefined/.test(dc));
+  assert.ok(!/bene|poco|troppo|giusto|regolare/.test(dc),'nessun giudizio');
+
   // tutto insieme in Pattern
   html=stats();
-  assert.strictEqual(count(html,/st-chart/g),3,'tre grafici');assert.strictEqual(count(html,/st-wait/g),0);
+  assert.strictEqual(count(html,/st-chart/g),5,'cinque grafici');assert.strictEqual(count(html,/st-wait/g),0);
   assert.ok(/viewBox="0 0 360 /.test(html),'viewBox 360 di larghezza');assert.ok(!/NaN|undefined/.test(html));
-  assert.ok(/in media 8 h 20/.test(html)&&/in media 610 ml/.test(html)&&/in media 6,5 pappe/.test(html));
+  assert.ok(/in media 8 h 20/.test(html)&&/in media 610 ml/.test(html)&&/in media 6,5 pappe/.test(html)&&/in media 3,2 cambi/.test(html));
+  S.events=S.events.filter(e=>e.k!=='diaper');
 
   // --- una notte senza nanne segnate: "—", esclusa dalla media
   S.events=S.events.filter(e=>!((e.k==='sleep'&&e.t===at(-3,22)+30*MIN)||(e.k==='wake'&&e.t===at(-2,7,30))));
