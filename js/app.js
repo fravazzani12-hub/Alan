@@ -534,7 +534,7 @@ A.cancelCry=function(){
   clearInterval(flow&&flow.liveT);
   if(rec){rec.stopped=true;clearInterval(rec.timer);try{if(rec.stream)rec.stream.getTracks().forEach(function(t){t.stop();});if(rec.ctx)rec.ctx.close();}catch(e){}rec=null;}
   if(flow&&flow.id){var id=flow.id,ce=byId(id);S.events=S.events.filter(function(e){return e.id!==id;});dropAudio(ce||{id:id});if(S.openCry===id)S.openCry=null;if(ce)removed(ce);save();}
-  A.home();toast('Pianto cancellato');
+  flow=null;A.home();toast('Pianto cancellato');
 };
 function dropAudio(e){
   if(!e)return;
@@ -854,7 +854,7 @@ function renderAccount(){
     h+='<p class="hint">Accedi con l\'email e la password che avete impostato su Supabase. Si fa una volta sola per telefono.</p>';
     h+='<label class="f" for="accEmail">Email</label><input class="f" id="accEmail" type="email" inputmode="email" autocomplete="username" value="'+esc(lsGet('alan.email')||'')+'">';
     h+='<label class="f" for="accPass">Password</label><input class="f" id="accPass" type="password" autocomplete="current-password"><div class="spacer"></div>';
-    h+='<button class="btn" onclick="A.login()">Accedi</button>';
+    h+='<button class="btn" onclick="A.login(this)">Accedi</button>';
   }else{
     var live=st.channel==='SUBSCRIBED'?'in ascolto':(st.channel==='off'||st.channel==='joining'?'in collegamento…':'interrotto, riprovo');
     var other=st.others&&st.others.length?st.others.map(function(o){return esc(o.who||'altro telefono');}).join(', ')+' adesso':'non collegato adesso';
@@ -864,13 +864,21 @@ function renderAccount(){
     h+='</div>';
     if(st.lastError)h+='<p class="hint">Ultimo errore ('+esc(st.lastError.where)+', '+fmtTime(st.lastError.at)+'): '+esc(st.lastError.msg)+'</p>';
     if(!st.family)h+='<p class="hint">Questo account non è ancora in una famiglia: esegui il blocco SQL finale di supabase/schema.sql e tocca "Sincronizza adesso".</p>';
-    h+='<div class="spacer"></div><button class="btn ghost" onclick="A.syncNow()">Sincronizza adesso</button><div class="spacer"></div><button class="btn ghost" onclick="A.signOut()">Esci</button>';
+    h+='<div class="spacer"></div><button class="btn ghost" onclick="A.syncNow(this)">Sincronizza adesso</button><div class="spacer"></div><button class="btn ghost" onclick="A.signOut(this)">Esci</button>';
   }
   el.innerHTML=h;
 }
-A.login=function(){var em=($('#accEmail').value||'').trim(),pw=$('#accPass').value||'';if(!em||!pw){toast('Servono email e password');return;}AlanSync.signIn(em,pw).then(function(r){if(r&&r.error)toast('Accesso rifiutato: '+r.error.message);else{lsSet('alan.email',em);toast('Accesso fatto');setTimeout(renderAccount,800);}});};
-A.syncNow=function(){AlanSync.flush().then(function(){return AlanSync.pullAll();}).then(function(ok){toast(ok?'Sincronizzato':'Sync non riuscito, riprovo più tardi');renderAccount();});};
-A.signOut=function(){AlanSync.signOut().then(function(){toast('Uscito');renderAccount();});};
+A.login=function(btn){
+  var em=($('#accEmail').value||'').trim(),pw=$('#accPass').value||'';
+  if(!em||!pw){toast('Servono email e password');return;}
+  busy(btn,true,'Accedo…');
+  AlanSync.signIn(em,pw).then(function(r){
+    if(r&&r.error){busy(btn,false);toast('Accesso rifiutato: '+(r.error.message==='Invalid login credentials'?'email o password sbagliate':r.error.message));}
+    else{lsSet('alan.email',em);toast('Accesso fatto');setTimeout(renderAccount,800);}
+  },function(err){busy(btn,false);toast('Accesso non riuscito: '+errStr(err));});
+};
+A.syncNow=function(btn){busy(btn,true,'Sincronizzo…');AlanSync.flush().then(function(){return AlanSync.pullAll();}).then(function(ok){busy(btn,false);toast(ok?'Sincronizzato':'Sync non riuscito, riprovo più tardi');renderAccount();flushAudio();},function(){busy(btn,false);toast('Sync non riuscito');});};
+A.signOut=function(btn){busy(btn,true,'Esco…');AlanSync.signOut().then(function(){toast('Uscito');renderAccount();},function(){busy(btn,false);toast('Uscita non riuscita');});};
 function renderDiag(){
   var el=$('#diag');if(!el)return;
   var h='<div class="diag">',env=[];
