@@ -336,8 +336,12 @@ spettro con le ampiezze della curva (interpolazione in log f) e fasi casuali, si
 **Volume nel file** (iOS ignora `audio.volume`): WAV 16 bit stereo con guadagno `BASE_DB` (−15 dBFS RMS, il livello misurato
 nel video) + `VOL_DB[livello−1]` = −16/−10/−5/0/+3 dB; il livello 4 è il video a parità di volume del telefono.
 **Riproduzione**: `<audio loop playsinline>` con blob URL, niente Web Audio (continua a schermo bloccato su Safari e Android;
-dall'app installata su iOS può fermarsi, la nota in schermata dice di aprire in Safari); `play()` sincrono nel tap, con la
-sintesi già pronta (`prewarm` 4 s dopo l'avvio) o fatta nel tap; Media Session con titolo e azioni play/pause/stop; timer
+dall'app installata su iOS può fermarsi, la nota in schermata dice di aprire in Safari); `play()` sincrono nel tap: se il suono lungo
+non è pronto parte un'anteprima (2^18 campioni, 5,9 s di loop, sintesi istantanea) e la versione lunga si genera 0,7 s dopo
+in sottofondo e la sostituisce con un solo cambio di file (`upgrade`, annullato da Stop o da un altro cambio); `prewarm` 4 s
+dopo l'avvio prepara il suono salvato già lungo; il tap su un suono o su un livello di volume lo fa partire subito (anteprima), il timer si
+applica al volo; sotto i livelli la riga `volText`: dB rispetto al video (−16/−10/−5/0/+3), con l'invito a misurare una volta
+con un'app fonometro perché il livello alla culla dipende dal telefono e dalla distanza; la schermata si ridisegna a ogni tap (`refresh`); Media Session con titolo e azioni play/pause/stop; timer
 (30 min, 1, 2, 8 h) controllato su `timeupdate` e ogni 15 s; cambio di suono o volume a riproduzione in corso = ripartenza.
 Stato in localStorage `alan.noise` = {type, vol, timer}, solo locale. UI: riga in Home (blocco `mid`, testo → schermata,
 Avvia/Stop) e schermata `noise` (Avvia/Stop grande, 5 suoni, 5 livelli, timer, nota AAP su distanza ≥ 2 m e ≤ 50 dB).
