@@ -327,6 +327,24 @@ textarea.nt-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 .nt-all{margin-top:0}
 /* == /note == */
 
+/* == noise == */
+/* Rumore bianco (js/noise.js): riga compatta in Home (blocco 'mid'), schermata con avvio grande, tipi di suono, volume e timer */
+.nz-card{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--c-sonno);border-radius:0 14px 14px 0;padding:6px 6px 6px 12px;min-height:56px;margin:10px 0 0}
+.nz-card.on{border-left-color:var(--c-cambio)}
+.nz-txt{flex:1;min-width:0;min-height:44px;text-align:left;border:0;background:transparent;color:var(--text);font:inherit;padding:0;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.nz-txt b{font-size:15px}.nz-txt span{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.nz-btn{min-height:44px;min-width:78px;border:0;border-radius:12px;background:var(--text);color:var(--bg);font-size:15px;font-weight:700;padding:0 14px}
+.nz-card.on .nz-btn{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.nz-main{margin-top:6px}.nz-main small{display:block;font-size:14px;font-weight:400;margin-top:4px;opacity:.85}
+.nz-main.on{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.nz-types{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.nz-type{min-height:64px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--text);text-align:left;padding:8px 12px;font:inherit}
+.nz-type b{display:block;font-size:16px}.nz-type small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.nz-type.on{background:var(--text);color:var(--bg);border-color:var(--text)}.nz-type.on small{color:var(--bg);opacity:.8}
+.nz-seg{margin:0 0 4px}.nz-seg button{padding:0 6px;white-space:nowrap}
+.nz-hint{margin:-6px 0 8px}
+/* == /noise == */
+
 /* == report == */
 /* Altro: card "Per il pediatra" */
 .rp-card .chips{margin:6px 0 12px}
