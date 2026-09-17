@@ -2,9 +2,9 @@
    A OGNI RELEASE ALZA VERSION: è l'unico numero da cambiare. Il nuovo worker si installa e resta "in attesa";
    la pagina lo vede e mostra il banner "Nuova versione, tocca per aggiornare"; al tocco riceve SKIP_WAITING,
    si attiva, e la pagina si ricarica leggendo i file freschi. Le chiamate a Supabase non passano di qui. */
-var VERSION='13';
+var VERSION='14';
 var CACHE='alan-shell-'+VERSION;
-var SHELL=['./','./index.html','./css/app.css','./js/who.js','./js/config.js','./js/sync.js','./js/app.js','./js/timer.js','./js/predict.js','./js/reminders.js','./js/stats.js','./js/report.js','./js/svezzamento.js','./js/momenti.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png'];
+var SHELL=['./','./index.html','./css/app.css','./js/who.js','./js/config.js','./js/sync.js','./js/app.js','./js/timer.js','./js/predict.js','./js/reminders.js','./js/stats.js','./js/report.js','./js/svezzamento.js','./js/momenti.js','./js/note.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png'];
 
 function fresh(u){try{return new Request(u,{cache:'reload'});}catch(e){return u;}}
 self.addEventListener('install',function(e){

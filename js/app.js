@@ -756,8 +756,8 @@ function renderDiary(){
   var h='<div class="list">';
   for(var i=vis.length-1;i>=0;i--){
     var e=vis[i],prev=null;for(var j=ev.indexOf(e)-1;j>=0;j--){if(ev[j].k==='sleep'||ev[j].k==='wake'){prev=ev[j];break;}}
-    var d=describe(e,prev);
-    h+='<div class="row"><div class="time">'+(dayKey(e.t)===dayKey(Date.now())?'':'<small>'+dayLabel(e.t)+'</small><br>')+fmtTime(e.t)+'</div><div class="what">'+d[0]+' '+d[1]+(e.who?'<span class="who">'+esc(e.who)+'</span>':'')+'</div><button class="del" aria-label="Elimina" onclick="A.del(\''+e.id+'\')">×</button></div>';
+    var d=describe(e,prev),x=extRow(e);
+    h+='<div class="row'+(x.tap?' tap':'')+'"><div class="time">'+(dayKey(e.t)===dayKey(Date.now())?'':'<small>'+dayLabel(e.t)+'</small><br>')+fmtTime(e.t)+'</div><div class="what"'+(x.tap?' role="button" tabindex="0" onclick="'+x.tap+'"':'')+'>'+d[0]+' '+d[1]+(e.who?'<span class="who">'+esc(e.who)+'</span>':'')+x.html+'</div><button class="del" aria-label="Elimina" onclick="A.del(\''+e.id+'\')">×</button></div>';
   }
   $('#diary').innerHTML=h+'</div>';
 }
@@ -1345,7 +1345,10 @@ function renderNight(){
    Contratto: le estensioni NON toccano app.js. Registrano percorsi a tap (flow), blocchi in Home (home), tab intere (tab),
    riquadri in Pattern/Salute/Altro (slot), descrizioni nel diario (describe), voci da nascondere nel diario (hide),
    e reagiscono a 'change' (ogni salvataggio o merge). Tutto ciò che serve dall'app passa da API. */
-var EXT={flows:{},home:[],tabs:{},slots:{},describe:{},hidden:{},hooks:{}},extReady=false;
+var EXT={flows:{},home:[],tabs:{},slots:{},describe:{},hidden:{},hooks:{},rows:[]},extReady=false;
+/* decorazione delle righe del diario: ogni funzione registrata con AlanExt.row torna html da aggiungere in fondo alla
+   riga e/o un onclick (tap) per tutta la descrizione; il primo tap registrato vince */
+function extRow(e){var out={html:'',tap:null};for(var i=0;i<EXT.rows.length;i++){try{var r=EXT.rows[i](e,API);if(!r)continue;if(typeof r==='string')out.html+=r;else{if(r.html)out.html+=r.html;if(r.tap&&!out.tap)out.tap=r.tap;}}catch(x){}}return out;}
 function extEmit(evt){var hs=EXT.hooks[evt]||[];for(var i=0;i<hs.length;i++){try{hs[i](API);}catch(e){}}}
 function extHtml(slot){var fs=EXT.slots[slot]||[],out='';for(var i=0;i<fs.length;i++){try{out+=fs[i](API)||'';}catch(e){}}return out;}
 function renderExtHome(){
@@ -1373,7 +1376,9 @@ window.AlanExt={
   tab:function(id,fn){EXT.tabs[id]=fn;},
   slot:function(name,fn){(EXT.slots[name]=EXT.slots[name]||[]).push(fn);},
   describe:function(k,fn){EXT.describe[k]=fn;},
+  row:function(fn){EXT.rows.push(fn);},
   hide:function(k){EXT.hidden[k]=true;},
+  isHidden:function(k){return !!EXT.hidden[k];},
   on:function(evt,fn){(EXT.hooks[evt]=EXT.hooks[evt]||[]).push(fn);},
   api:API,
   refresh:function(){if(!extReady)return;if(!flow)renderHome();if(curView==='pattern')renderStats();else if(curView==='salute')renderHealth();else if(curView==='altro')fillExtAltro();else if(EXT.tabs[curView])try{EXT.tabs[curView](API);}catch(e){}}

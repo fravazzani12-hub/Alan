@@ -23,6 +23,7 @@ per chi sviluppa (umano o Claude Code).
 | letter | text (≤ 4000) | `js/momenti.js`; `t` = adesso, `who` = chi scrive; nascosto dal diario |
 | diaper | pipi (no/poca/normale/tanta), cacca (no/poca/normale/tanta) | il valore `si` della v12 si legge come normale (`lvlKey`); conta come "con pipì/cacca" tutto ciò che non è `no` |
 | sleep / wake | — | stato sonno = ultimo dei due |
+| (ogni voce del diario) | note (testo ≤ 200), noteBy (chi l'ha scritta) | `js/note.js`; campi opzionali su qualunque voce tranne appt e le voci nascoste; viaggiano nel `data` jsonb con la voce (LWW sull'intera voce) |
 | other | what (ruttino/rigurgito/massaggio/ciuccio/coccole/passeggiata/bagnetto) | ruttino e rigurgito → aria, il resto → contatto |
 | measure | w (g), l (cm); uno o entrambi | `t` = mezzogiorno del giorno scelto (oggi/ieri/…/altra data); percentile OMS calcolato al volo dall'età |
 | temp | c (°C, un decimale) | ≥ 38 °C sotto i 90 giorni: mostra la bandiera rossa già presente in Altro, testo identico |
@@ -137,9 +138,9 @@ Ogni estensione ha la sua suite (`timer`, `predict`, `reminders`, `stats`, `repo
 
 ## 9. Estensioni
 Ogni funzione aggiuntiva vive in `js/<nome>.js`, si registra su `window.AlanExt` (percorsi a tap `flow`, blocchi Home `home`,
-tab intere `tab`, riquadri in Pattern/Salute/Altro `slot`, `describe` e `hide` per il diario, hook `on('change')` a ogni
+tab intere `tab`, riquadri in Pattern/Salute/Altro `slot`, `describe`, `hide` e `row` per il diario (html in coda alla riga e/o tap sulla descrizione), hook `on('change')` a ogni
 salvataggio o merge) e non tocca `js/app.js`: tutto ciò che le serve passa da `AlanExt.api` (sezione "estensioni" di app.js).
-Gli script si caricano in `index.html` dopo `app.js`, nell'ordine timer, predict, reminders, stats, report, svezzamento, momenti.
+Gli script si caricano in `index.html` dopo `app.js`, nell'ordine timer, predict, reminders, stats, report, svezzamento, momenti, note.
 Ogni estensione ha la sua suite `tests/<nome>.test.js` (caricata con `boot({ext:['<nome>']})`) e il suo blocco CSS delimitato da
 `/* == nome == */ … /* == /nome == */` in `css/app.css`, con i soli token di colore. Le regole di §5 valgono anche qui: solo tap,
 target ≥ 44 px, un'idea per schermata, numeri come fatti e mai come giudizi.
@@ -246,10 +247,11 @@ via `pctOf('wfa'|'lhfa')`, più "Ultimo peso: ±N g in N giorni" fra le ultime d
 leggibile in stampa); Pappe = pappe valide al giorno (`fedFeed`: ml > 0), ml al giorno e per
 biberon, intervallo medio fra pappe consecutive (solo intervalli fra 30 min e 8 h), biberon rifiutati; Sonno =
 media della notte 22–7 sulle notti con sonno segnato, pisolini al giorno (nanne iniziate fra le 7 e le 22) con durata media, sonno
-nelle 24 ore sui giorni con sonno segnato; Cambi = al giorno, con pipì, con cacca; Pianti = al giorno, durata media registrata,
+nelle 24 ore sui giorni con sonno segnato; Cambi = al giorno, con pipì, con cacca e le quantità poca / normale / tanta; Pianti = al giorno, durata media registrata,
 senza spiegazione, e le cause in % sui pianti spiegati ("passato da solo" compreso); Temperature = elenco dal primo giorno del
 periodo a adesso, più recente in alto, con la più alta; Medicine = per nome, quante volte e l'ultima; Visite e vaccini = fatte
-(done, dal primo giorno del periodo) e in programma (non fatte, da adesso, massimo 5).
+(done, dal primo giorno del periodo) e in programma (non fatte, da adesso, massimo 5); Note = le note dei genitori sulle voci
+del periodo (§9.8), in ordine di tempo, con la voce e chi le ha scritte.
 In fondo "Stampa o salva PDF" (`window.print()`; la classe `rp-print` su `<body>`, messa da `AlanExt.report.print()` e tolta ad
 `afterprint`, attiva il CSS di stampa: nero su bianco, A4 con margini 16 mm, solo `#screenInner`; stampare da un'altra schermata
 resta come prima) e "Condividi come testo" (`navigator.share` del testo, altrimenti appunti, altrimenti toast). Il riepilogo
@@ -308,3 +310,16 @@ spiegati su totali, momenti e lettere, alzate notturne per genitore presentate c
 "Lettere" (percorso `letter` con textarea, elenco per data con chi e prima riga, visore `letterview` con testo intero). Tastiera
 solo per didascalia e lettera. I percorsi sono `flow` dell'API, così indietro, chiusura e toast sono quelli dell'app;
 `resize`, `shareFile`, `objUrl`, `fileGet/filePut/fileDel`, `cloudUpload/Download/Remove` e `syncReady` si sostituiscono nei test.
+
+### 9.8 Note sulle voci (`js/note.js`)
+Una nota libera (≤ 200 caratteri, spazi e a capo normalizzati) su qualsiasi voce del diario tranne le visite e le voci nascoste;
+vive sulla voce (`note`, `noteBy` = nome del profilo di chi scrive) e passa da `touched` + `save`, quindi si sincronizza come
+la voce. Dove: in Oggi ogni riga del diario è toccabile sulla descrizione (`row` dell'API: `.row.tap`, target ≥ 44 px) e mostra
+la nota sotto, con "— nome" solo se chi ha scritto è diverso da chi ha registrato; finché non esiste nessuna nota un
+suggerimento in fondo al diario (`home` in `#extBottom`). In Salute la scheda "Note" elenca le ultime 20 note dalla più
+recente ("e altre N" oltre) e il pulsante "Scrivi una nota" apre il percorso `notepick`: le voci delle ultime 3 giornate,
+dalla più recente, tap → percorso `note`. Il percorso `note` mostra la voce, una textarea con contatore, "Salva la nota" e,
+se esiste, "Togli la nota"; salva con `A.finish('save'|'clear')` (il `finish` dell'estensione aggiorna la voce e torna
+`false`, così app.js non crea una voce nuova); testo uguale → "Nessuna modifica". Il riepilogo per il pediatra (§9.5) aggiunge
+la sezione "Note" (data, ora, voce · testo, chi) con le note del periodo, riportate così come sono. Nessun consiglio.
+Esposto su `AlanExt.note` = {text, has, clean, set, all, recent, open, typed, card}.

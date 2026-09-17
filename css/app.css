@@ -306,6 +306,25 @@ button.rm-open{background:transparent;border:0;text-align:left;padding:6px 0;min
 .st-legend .lv{width:14px;height:10px;border-radius:2px;background:var(--text)}.st-legend .lv.poca{opacity:.35}.st-legend .lv.normale{opacity:.7}
 /* == /stats == */
 
+/* == note == */
+/* Note sulle voci (js/note.js): riga del diario toccabile, nota sotto la descrizione, scheda Note in Salute, percorso con textarea */
+.row.tap .what{cursor:pointer;min-height:44px;display:flex;flex-direction:column;justify-content:center;border-radius:10px;margin:-2px -6px;padding:2px 6px}
+.row.tap .what:active{background:var(--surface2)}
+.row .nt{display:block;font-weight:400;font-size:14px;color:var(--text);margin-top:3px;padding-left:10px;border-left:3px solid var(--line);white-space:pre-line;overflow-wrap:anywhere}
+.row .nt i{font-style:normal;color:var(--muted);font-size:12px}
+.nt-hint{margin:6px 4px 0}
+.nt-ev{padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--surface);margin-top:6px}
+.nt-ev .what{font-weight:700;font-size:16px;overflow-wrap:anywhere}.nt-ev .what .detail{font-weight:400;color:var(--muted)}
+textarea.nt-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line-height:1.4;resize:vertical;min-height:110px}
+.nt-count{text-align:right;margin:4px 0 0}
+.nt-list{margin:0 -4px}
+.nt-row{width:100%;text-align:left;border:0;background:transparent;color:var(--text);font:inherit;padding-right:8px;grid-template-columns:48px minmax(0,1fr) 20px}
+.nt-row:active{background:var(--surface2)}
+.nt-row .time{white-space:nowrap}
+.nt-go{color:var(--muted);font-size:22px;line-height:1}
+.nt-card .btn{margin-top:0}
+/* == /note == */
+
 /* == report == */
 /* Altro: card "Per il pediatra" */
 .rp-card .chips{margin:6px 0 12px}

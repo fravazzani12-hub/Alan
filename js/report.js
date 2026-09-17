@@ -97,6 +97,10 @@ function compute(days,now){
   causes.sort(function(a,b){return b.n-a.n;});
   var cries={n:cr.length,perDay:per(cr.length),labeled:labeled,unlabeled:cr.length-labeled,causes:causes,durMean:mean(durs)};
 
+  /* note dei genitori sulle voci del periodo (js/note.js): testo com'è, con chi l'ha scritta */
+  var notes=[];inW.forEach(function(e){if(e.k==='appt'||typeof e.note!=='string'||!e.note.trim())return;var d=API.describe(e);notes.push({t:e.t,what:(d[0]+' '+String(d[1]||'').replace(/<[^>]+>/g,'')).replace(/\s+/g,' ').trim(),text:e.note.trim(),who:e.noteBy||e.who||''});});
+  notes.sort(function(a,b){return a.t-b.t;});
+
   /* temperature e medicine: dal primo giorno del periodo fino ad adesso */
   var temps=all.filter(function(e){return e.k==='temp'&&e.t>=from;}).map(function(e){return {t:e.t,c:e.c};}).reverse();
   var tmax=null;temps.forEach(function(x){if(tmax==null||x.c>tmax)tmax=x.c;});
@@ -118,7 +122,7 @@ function compute(days,now){
 
   return {days:days,now:now,from:from,to:to,partial:partial,covered:covered,hasData:covered>0,
     head:{name:API.settings().name||'Alan',birth:birthLabel(),age:ageAt(now),date:dmy(now)+' '+API.fmtTime(now)},
-    measures:ms,wGain:wGain,feeds:feeds,sleep:sleep,diapers:diapers,cries:cries,temps:temps,tempMax:tmax,meds:meds,appts:{done:done,next:next}};
+    measures:ms,wGain:wGain,feeds:feeds,sleep:sleep,diapers:diapers,cries:cries,notes:notes,temps:temps,tempMax:tmax,meds:meds,appts:{done:done,next:next}};
 }
 
 /* ---------- modello delle sezioni: una sola fonte per html e testo ----------
@@ -179,6 +183,9 @@ function sections(r){
   if(r.appts.done.length)vblocks.push({sub:'Fatte',list:true,rows:r.appts.done.map(function(a){return [API.fmtDate(a.t),vrow(a)];})});
   if(r.appts.next.length)vblocks.push({sub:'In programma',list:true,rows:r.appts.next.map(function(a){return [API.fmtDate(a.t)+' '+API.fmtTime(a.t),vrow(a)];})});
   out.push({title:'Visite e vaccini',id:'visite',empty:'Nessuna visita registrata.',blocks:vblocks});
+  /* note */
+  var nrows=(r.notes||[]).map(function(n){return [API.fmtDate(n.t)+' '+API.fmtTime(n.t)+' · '+n.what,n.text+(n.who?' ('+n.who+')':'')];});
+  out.push({title:'Note',id:'note',note:nrows.length?'Scritte dai genitori sulle voci del diario, riportate così come sono.':null,empty:'Nessuna nota nel periodo.',blocks:nrows.length?[{list:true,rows:nrows}]:[]});
   return out;
 }
 

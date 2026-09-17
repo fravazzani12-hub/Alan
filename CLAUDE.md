@@ -14,7 +14,7 @@ Online su https://fravazzani12-hub.github.io/Alan/ (GitHub Pages dalla root del 
 
 ## Struttura
 - `index.html` markup; `css/app.css` stile (token in :root, dark via prefers-color-scheme); `js/app.js` UI + motore + audio + diagnostica + salute + aggiornamenti; `js/who.js` solo dati (LMS OMS maschi, non modificare a mano); `js/sync.js` sync; `sw.js` cache shell + aggiornamento con banner (a ogni release alza `VERSION` in sw.js, è l'unico numero da toccare: senza bump i telefoni restano sulla versione vecchia; niente `?v=` sugli asset); `supabase/schema.sql` schema (rieseguibile).
-- Estensioni: js/timer.js, predict.js, reminders.js, stats.js, report.js, svezzamento.js, momenti.js si registrano su window.AlanExt (API in app.js, sezione estensioni) e non toccano app.js; ogni estensione ha la sua suite tests/<nome>.test.js e il suo blocco CSS delimitato in css/app.css.
+- Estensioni: js/timer.js, predict.js, reminders.js, stats.js, report.js, svezzamento.js, momenti.js, note.js si registrano su window.AlanExt (API in app.js, sezione estensioni) e non toccano app.js; ogni estensione ha la sua suite tests/<nome>.test.js e il suo blocco CSS delimitato in css/app.css.
 - `SPEC.md` è la fonte di verità su requisiti, dati, motore, sync e aggiornamenti: aggiornalo quando cambi formule, dati o flussi.
 
 ## Regole di lavoro
