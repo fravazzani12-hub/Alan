@@ -18,15 +18,22 @@ const MIN=6e4,H=36e5;
   // percentile → valore → percentile chiude il cerchio
   for(const p of [3,15,50,85,97]){const v=xOfZ('wfa',60,T('ZP')[p]);assert.strictEqual(pctOf('wfa',60,v),p);}
   assert.deepStrictEqual(niceTicks(2.7,6.2,4),[3,4,5,6]);
+  assert.strictEqual(T('METRICS').w.fmt(4180),'4,18 kg');assert.strictEqual(T('METRICS').w.fmt(4183),'4,183 kg','grammi esatti visibili');
   // --- grafico: senza misure ha bande e mediana, con misure ha i punti e l'etichetta dell'ultimo
   let svg=growthChart('w');assert.ok(/class="band b1"/.test(svg)&&/class="mid"/.test(svg)&&/mesi/.test(svg));assert.ok(!/class="pt/.test(svg));
   // --- percorso misure: peso con stepper, lunghezza saltata, "ieri"
   A.flow('measure');assert.ok(/Peso\?/.test(txt('#screenInner')));
   A.hstep('w',100);A.hstep('w',-10);assert.strictEqual(app.T('flow').data.w,3590);
-  A.hdate(T('isoDay')(Date.now()-864e5));A.hkeep('w');assert.ok(/Lunghezza\?/.test(txt('#screenInner')));A.hskip('l');
-  assert.ok(/Salvo peso 3,59 kg/.test(txt('#screenInner')));assert.ok(/percentile OMS/.test(txt('#screenInner')));
+  // valore esatto scritto a mano: grammi interi, entro i limiti, decimale per la lunghezza; "quando" fino a una settimana fa
+  assert.ok(/tocca per scrivere/.test(txt('#screenInner')));A.hexact('w');assert.ok(/Peso esatto in g/.test(txt('#screenInner')));
+  A.hexactSet('w','4183');assert.strictEqual(app.T('flow').data.w,4183);A.hexactSet('w','12');assert.strictEqual(app.T('flow').data.w,4183,'fuori limite ignorato');A.hexactSet('w','abc');assert.strictEqual(app.T('flow').data.w,4183);
+  A.hexact(null);assert.ok(/4,183 kg/.test(txt('#screenInner')));A.hstep('w',-100);A.hstep('w',7);assert.strictEqual(app.T('flow').data.w,4090);A.hexactSet('w','3590');
+  assert.ok(/una settimana fa/.test(txt('#screenInner')));A.hdate(T('isoDay')(Date.now()-7*864e5));assert.strictEqual(app.T('flow').data.date,T('isoDay')(Date.now()-7*864e5));
+  A.hdate(T('isoDay')(Date.now()-864e5));A.hkeep('w');
+  A.hexact('l');A.hexactSet('l','52,5');assert.strictEqual(app.T('flow').data.l,52.5);A.hexact(null);assert.ok(/52,5 cm/.test(txt('#screenInner')));assert.ok(/Lunghezza\?/.test(txt('#screenInner')));A.hkeep('l');
+  assert.ok(/Salvo peso 3,59 kg, lunghezza 52,5 cm/.test(txt('#screenInner')),txt('#screenInner'));assert.ok(/percentile OMS/.test(txt('#screenInner')));
   A.finish(1);
-  let m=S.events.filter(e=>e.k==='measure');assert.strictEqual(m.length,1);assert.strictEqual(m[0].w,3590);assert.strictEqual(m[0].l,undefined);
+  let m=S.events.filter(e=>e.k==='measure');assert.strictEqual(m.length,1);assert.strictEqual(m[0].w,3590);assert.strictEqual(m[0].l,52.5);
   assert.strictEqual(T('dayKey')(m[0].t),T('dayKey')(Date.now()-864e5),'data = ieri');assert.ok(/percentile/.test(app.els['#toast'].textContent));
   S.events.push({id:'m0',k:'measure',t:Date.now()-8*864e5,who:'Fabio',w:3300,l:50});
   svg=growthChart('w');assert.strictEqual((svg.match(/class="pt/g)||[]).length,2);

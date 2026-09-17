@@ -1030,7 +1030,7 @@ var APPT_KINDS=[['bilancio','Bilancio di salute'],['vaccino','Vaccino'],['visita
 /* Tappe: calendario vaccinale nazionale e bilanci di salute (mesi di età). Sono suggerimenti: le date le fissano ASL e pediatra. */
 var MILESTONES=[[1,'bilancio','Bilancio di salute del 1° mese'],[3,'vaccino','Esavalente 1ª · pneumococco 1ª · rotavirus 1ª · meningococco B 1ª'],[3,'bilancio','Bilancio di salute (2–3 mesi)'],[4,'vaccino','Meningococco B 2ª · rotavirus 2ª'],[5,'vaccino','Esavalente 2ª · pneumococco 2ª'],[6,'vaccino','Meningococco B 3ª'],[6,'bilancio','Bilancio di salute (5–6 mesi)'],[9,'bilancio','Bilancio di salute (8–9 mesi)'],[11,'vaccino','Esavalente 3ª · pneumococco 3ª'],[12,'bilancio','Bilancio di salute (12 mesi)'],[13,'vaccino','MPRV · meningococco ACWY · meningococco B 4ª']];
 var METRICS={
-  w:{key:'wfa',label:'Peso',c:'var(--c-fame)',toX:function(v){return v/1000;},fmt:function(v){return (v/1000).toFixed(2).replace('.',',')+' kg';},axis:function(v){return v.toFixed(1).replace('.',',');},step:[100,10],min:1500,max:20000,start:3500,unit:'g'},
+  w:{key:'wfa',label:'Peso',c:'var(--c-fame)',toX:function(v){return v/1000;},fmt:function(v){return (v/1000).toFixed(v%10?3:2).replace('.',',')+' kg';},axis:function(v){return v.toFixed(1).replace('.',',');},step:[100,10],min:1500,max:20000,start:3500,unit:'g'},
   l:{key:'lhfa',label:'Lunghezza',c:'var(--c-sonno)',toX:function(v){return v;},fmt:function(v){return String(v).replace('.',',')+' cm';},axis:function(v){return String(Math.round(v));},step:[1,0.5],min:35,max:100,start:50,unit:'cm'}
 };
 var ZP={3:-1.8808,15:-1.0364,50:0,85:1.0364,97:1.8808};
@@ -1206,16 +1206,23 @@ A.htemp=function(v){if(!flow)return;flow.data.c=Math.round(Math.max(34,Math.min(
 A.hset=function(k,v){if(!flow)return;flow.data[k]=v;renderFlow();};
 A.hmed=function(what){if(!flow)return;flow.data.what=what;if(what==='altro'){flow.step=1;renderFlow();}else A.finish(what);};
 function dayChips(){
-  var d=flow.data.date||isoDay(Date.now()),opts=[[0,'oggi'],[1,'ieri'],[2,'2 giorni fa'],[3,'3 giorni fa']],h='<div class="when"><span>Quando</span>';
+  var d=flow.data.date||isoDay(Date.now()),opts=[[0,'oggi'],[1,'ieri'],[2,'2 giorni fa'],[3,'3 giorni fa'],[4,'4 giorni fa'],[5,'5 giorni fa'],[6,'6 giorni fa'],[7,'una settimana fa']],h='<div class="when"><span>Quando</span>';
   opts.forEach(function(o){var v=isoDay(Date.now()-o[0]*864e5);h+='<button class="'+(d===v?'on':'')+'" onclick="A.hdate(\''+v+'\')">'+o[1]+'</button>';});
   h+='<label class="datechip'+(opts.every(function(o){return isoDay(Date.now()-o[0]*864e5)!==d;})?' on':'')+'">altra<input type="date" value="'+esc(d)+'" max="'+isoDay(Date.now())+'" onchange="A.hdate(this.value)"></label></div>';
   return h;
 }
+/* stepper con valore toccabile: il tap apre un campo numerico per il valore esatto (grammi interi o cm con un decimale) */
 function stepper(key){
   var m=METRICS[key],v=flow.data[key]!=null?flow.data[key]:(lastMeasure(key)||m.start),big=m.step[0],small=m.step[1];
   var b=function(d){return '<button onclick="A.hstep(\''+key+'\','+d+')">'+(d>0?'+':'−')+Math.abs(d)+'</button>';};
-  return '<div class="stepper"><div class="col">'+b(-big)+b(-small)+'</div><div class="val">'+esc(m.fmt(v))+'</div><div class="col">'+b(small)+b(big)+'</div></div>';
+  if(flow.data.exact===key){
+    var isW=key==='w';
+    return '<div class="exact"><label class="f" for="exactIn">'+m.label+' esatt'+(isW?'o':'a')+' in '+m.unit+'</label><div class="two"><input class="f" id="exactIn" type="number" inputmode="'+(isW?'numeric':'decimal')+'" step="'+(isW?'1':'0.1')+'" min="'+m.min+'" max="'+m.max+'" value="'+(isW?Math.round(v):v)+'" onchange="A.hexactSet(\''+key+'\',this.value)" oninput="A.hexactSet(\''+key+'\',this.value,true)"><button class="btn ghost" onclick="A.hexact(null)">Fatto</button></div><p class="hint">Vale il numero scritto: '+esc(m.fmt(v))+'</p></div>';
+  }
+  return '<div class="stepper"><div class="col">'+b(-big)+b(-small)+'</div><button class="val tap" onclick="A.hexact(\''+key+'\')" aria-label="Scrivi il valore esatto">'+esc(m.fmt(v))+'<small>tocca per scrivere</small></button><div class="col">'+b(small)+b(big)+'</div></div>';
 }
+A.hexact=function(key){if(!flow)return;flow.data.exact=key||null;renderFlow();if(key){var i=$('#exactIn');if(i&&i.focus)try{i.focus();i.select&&i.select();}catch(e){}}};
+A.hexactSet=function(key,val,quiet){if(!flow)return;var m=METRICS[key],n=Number(String(val).replace(',','.'));if(!isFinite(n))return;n=key==='w'?Math.round(n):Math.round(n*10)/10;if(n<m.min||n>m.max)return;flow.data[key]=n;if(!quiet)renderFlow();else{var hint=$('#screenInner .exact .hint');if(hint)hint.textContent='Vale il numero scritto: '+m.fmt(n);}};
 function renderHealthFlow(){
   var d=flow.data,h='';
   if(flow.type==='measure'){

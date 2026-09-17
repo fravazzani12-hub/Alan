@@ -170,6 +170,9 @@ button.busy::after{content:"";position:absolute;right:12px;top:50%;width:16px;he
 .presence .pill.on i{background:var(--c-cambio);box-shadow:0 0 0 3px rgba(46,158,110,.2)}
 .presence .pill.me{border-color:var(--text)}
 /* salute */
+.stepper button.val.tap{flex:1;text-align:center;font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;border:0;background:transparent;min-height:60px;line-height:1.1;padding:4px}
+.stepper button.val.tap small{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:2px}
+.exact{margin:12px 0}.exact .two{align-items:end}.exact input.f{font-size:24px;font-weight:700;text-align:center}
 .cardhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.cardhead h3{margin:0}
 .seg.small button{min-height:44px;padding:0 10px;font-size:13px}
 .hero{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:4px 0 2px}
