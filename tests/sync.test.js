@@ -55,10 +55,15 @@ const Sync=window.AlanSync;
   // impostazioni: pull (server vuoto → null), upsert → riga con family_id, realtime → onSettings
   assert.strictEqual(settings[0],null);
   await Sync.upsertSettings({name:'Alan',birth:'2026-08-20',_updated:'2026-09-17T14:00:00.000Z'});
-  const su=calls.filter(c=>c[0]==='family_settings'&&c[1]==='upsert').pop();assert.deepStrictEqual(su[2],{name:'Alan',birth:'2026-08-20',updated_at:'2026-09-17T14:00:00.000Z',family_id:'F'});assert.deepStrictEqual(su[3],{onConflict:'family_id'});
-  await Sync.pullSettings();assert.deepStrictEqual(settings.pop(),{name:'Alan',birth:'2026-08-20',_updated:'2026-09-17T14:00:00.000Z'});
-  ch._on.family_settings({eventType:'UPDATE',new:{family_id:'F',name:'Alan Jr',birth:'2026-08-01',updated_at:'2026-09-17T15:00:00+00:00'}});
-  assert.deepStrictEqual(settings.pop(),{name:'Alan Jr',birth:'2026-08-01',_updated:'2026-09-17T15:00:00.000Z'});
+  const su=calls.filter(c=>c[0]==='family_settings'&&c[1]==='upsert').pop();assert.deepStrictEqual(su[2],{name:'Alan',birth:'2026-08-20',feed_h:null,updated_at:'2026-09-17T14:00:00.000Z',family_id:'F'});assert.deepStrictEqual(su[3],{onConflict:'family_id'});
+  await Sync.pullSettings();assert.deepStrictEqual(settings.pop(),{name:'Alan',birth:'2026-08-20',feedH:null,_updated:'2026-09-17T14:00:00.000Z'});
+  await Sync.upsertSettings({name:'Alan',birth:'2026-08-20',feedH:4,_updated:'2026-09-17T14:30:00.000Z'});
+  assert.strictEqual(calls.filter(c=>c[0]==='family_settings'&&c[1]==='upsert').pop()[2].feed_h,4);
+  await Sync.pullSettings();assert.strictEqual(settings.pop().feedH,4);
+  ch._on.family_settings({eventType:'UPDATE',new:{family_id:'F',name:'Alan Jr',birth:'2026-08-01',feed_h:'3.5',updated_at:'2026-09-17T15:00:00+00:00'}});
+  assert.deepStrictEqual(settings.pop(),{name:'Alan Jr',birth:'2026-08-01',feedH:3.5,_updated:'2026-09-17T15:00:00.000Z'});
+  ch._on.family_settings({eventType:'UPDATE',new:{family_id:'F',name:'Alan Jr',birth:'2026-08-01',updated_at:'2026-09-17T15:01:00+00:00'}});
+  assert.strictEqual(settings.pop().feedH,undefined,'senza colonna feed_h il campo non c\'è');
   // storage: percorso <family>/<nome>, contentType, download e rimozione
   const up=await Sync.uploadAudio('c1','BYTES','audio/mp4');assert.strictEqual(up.error,null);assert.strictEqual(up.path,'F/c1.m4a');assert.ok(bucket['F/c1.m4a']);assert.strictEqual(bucket['F/c1.m4a'].o.contentType,'audio/mp4');assert.strictEqual(bucket['F/c1.m4a'].o.upsert,true);
   assert.strictEqual((await Sync.uploadAudio('c2','B','audio/webm;codecs=opus')).path,'F/c2.webm');

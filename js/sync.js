@@ -86,7 +86,7 @@ window.AlanSync=(function(){
     }
     lastSync=Date.now();notify();return true;
   }
-  function settingsRowToObj(r){return r?{name:r.name,birth:r.birth,_updated:isoMs(r.updated_at)}:null;}
+  function settingsRowToObj(r){if(!r)return null;var o={name:r.name,birth:r.birth,_updated:isoMs(r.updated_at)};if(r.feed_h!==undefined)o.feedH=r.feed_h!=null?Number(r.feed_h):null;return o;}
   async function pullSettings(){
     if(!sb||!familyId||!onSettings)return;
     var r=await sb.from('family_settings').select('*').eq('family_id',familyId).maybeSingle();
@@ -94,10 +94,12 @@ window.AlanSync=(function(){
     try{onSettings(settingsRowToObj(r.data));}catch(e){}
   }
   async function upsertSettings(st){
-    var row={name:st.name||null,birth:st.birth||null,updated_at:st._updated||new Date().toISOString()};
+    var row={name:st.name||null,birth:st.birth||null,feed_h:st.feedH>0?st.feedH:null,updated_at:st._updated||new Date().toISOString()};
     if(!sb||!familyId){lsSet(SETBOX,JSON.stringify(row));return false;}
     row.family_id=familyId;
     var r=await sb.from('family_settings').upsert(row,{onConflict:'family_id'});
+    /* schema non ancora aggiornato (colonna feed_h assente): salva almeno nome e data */
+    if(r.error&&/feed_h/.test(String(r.error.message||''))){var row2={};for(var k in row)if(k!=='feed_h')row2[k]=row[k];r=await sb.from('family_settings').upsert(row2,{onConflict:'family_id'});if(!r.error)fail('impostazioni',{message:'intervallo pappe non condiviso: esegui supabase/schema.sql (colonna feed_h)'});}
     if(r.error){fail('impostazioni',r.error);lsSet(SETBOX,JSON.stringify(row));return false;}
     try{localStorage.removeItem(SETBOX);}catch(e){}
     lastSync=Date.now();notify();return true;
@@ -172,7 +174,7 @@ window.AlanSync=(function(){
       }
       outboxSet(rest);if(ob.length&&!rest.length)lastSync=Date.now();
       var pend=null;try{pend=JSON.parse(lsGet(SETBOX)||'null');}catch(e){}
-      if(pend)await upsertSettings({name:pend.name,birth:pend.birth,_updated:pend.updated_at});
+      if(pend)await upsertSettings({name:pend.name,birth:pend.birth,feedH:pend.feed_h,_updated:pend.updated_at});
     }finally{flushing=false;notify();}
   }
   function upsert(e){return send(e,false);}

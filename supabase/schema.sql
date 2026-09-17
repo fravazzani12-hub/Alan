@@ -28,9 +28,11 @@ create table if not exists public.family_settings (
   family_id   uuid primary key,
   name        text,
   birth       text,                       -- YYYY-MM-DD
+  feed_h      numeric,                    -- intervallo pappe scelto dai genitori (ore); null = norma per età
   updated_at  timestamptz not null default now(),
   updated_by  uuid default auth.uid()
 );
+alter table public.family_settings add column if not exists feed_h numeric;
 
 -- 3) Sicurezza: ogni riga è visibile e modificabile solo dai membri della sua famiglia.
 alter table public.family_members enable row level security;

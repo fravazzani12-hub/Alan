@@ -30,7 +30,7 @@ per chi sviluppa (umano o Claude Code).
 | appt | kind (bilancio/vaccino/visita/esame/altro), title, place, note, done | `t` = data e ora dell'appuntamento (futuro); non compare nel diario; esportabile in .ics |
 | cry | dur (s), label (fame/sonno/cambio/aria/contatto/solo/null), bins {f,a,h}, ctx (snapshot), feat {vec[12], meanF0, sdF0, meanRms, bursts10, meanBurst, meanPause, voiced, cent, durS}, audio (bool, **solo locale**), mime, audioPath (percorso nel bucket, `<family_id>/<id>.<ext>`), rec {mime, bytes, frames, err} (esito della registrazione, mostrato nel dettaglio del pianto) | audio in IndexedDB, chiave = id, valore `{buf: ArrayBuffer, mime}` (i Blob in IndexedDB su iOS sono fragili; i vecchi Blob restano leggibili) |
 
-Impostazioni: `settings {name, birth (YYYY-MM-DD), _updated}`.
+Impostazioni: `settings {name, birth (YYYY-MM-DD), feedH (ore | null = per età), _updated}`.
 
 Crescita (`js/who.js`): standard OMS 2006 maschi, parametri LMS di peso e lunghezza per età campionati ogni
 7 giorni da 0 a 2 anni (fonte: tabelle ufficiali WHO, via pacchetto npm `who-growth-standards`, MIT). z = ((x/M)^L − 1)/(L·S),
@@ -71,7 +71,7 @@ Remoto (opzionale, `supabase/schema.sql`):
 
 ## 4. Motore
 ### 4.1 Norme per età (settimane)
-- intervallo pappe atteso: <6 → 3 h, <12 → 3,5 h, else 4 h. Ridotto ×0,75 se l'ultima pappa < 70% della tipica; inoltre ×0,7 se ml/prep < 0,4, ×0,85 se < 0,7.
+- intervallo pappe atteso: <6 → 3 h, <12 → 3,5 h, else 4 h. Se in Impostazioni i genitori hanno scelto un intervallo (`settings.feedH`, condiviso via `family_settings.feed_h`; 3 / 3,5 / 4 / 4,5 h), vale quello ovunque: modello, riquadro "Ultima pappa", promemoria e previsioni (la pappa prevista è ultima pappa + intervallo, base "impostato"). Ridotto ×0,75 se l'ultima pappa < 70% della tipica; inoltre ×0,7 se ml/prep < 0,4, ×0,85 se < 0,7.
 - finestra di veglia: <4 → 55 min, <8 → 70, <12 → 85, else 105.
 
 ### 4.2 Modello di contesto (score → normalizzati)

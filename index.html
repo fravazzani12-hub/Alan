@@ -94,6 +94,9 @@
       <input class="f" id="sName" type="text">
       <label class="f" for="sBirth">Data di nascita</label>
       <input class="f" id="sBirth" type="date">
+      <label class="f">Intervallo tra le pappe</label>
+      <div class="seg wide" id="feedSeg"><button data-h="auto" onclick="A.setFeedH(null)">Per età</button><button data-h="3" onclick="A.setFeedH(3)">3 h</button><button data-h="3.5" onclick="A.setFeedH(3.5)">3,5 h</button><button data-h="4" onclick="A.setFeedH(4)">4 h</button><button data-h="4.5" onclick="A.setFeedH(4.5)">4,5 h</button></div>
+      <p class="hint">Il vostro ritmo: vale per la pappa prevista, il riquadro "Ultima pappa", i promemoria e le ipotesi sul pianto. Condiviso tra i telefoni. Se ha fame prima, la pappa si registra come sempre.</p>
       <div class="spacer"></div>
       <button class="btn ghost" onclick="A.saveSettings()">Salva impostazioni</button>
       <div class="spacer"></div>
