@@ -615,7 +615,21 @@ A.flow=function(type,linkId,data){
   flow={type:type,step:0,off:0,data:data||{},link:linkId||null};
   showScreen();renderFlow();
 };
-A.setOff=function(o){if(flow){flow.off=o;renderFlow();}};
+A.setOff=function(o){if(flow){flow.off=o;flow.at=null;flow.end=null;renderFlow();}};
+/* "altra ora": orario di inizio scritto con il selettore (HH:MM); se è nel futuro di oltre 5 minuti vale per ieri.
+   Solo per la Pappa anche "finita alle": la differenza diventa la durata (dur, secondi). */
+A.setAt=function(v){if(!flow)return;flow.at=/^\d{2}:\d{2}$/.test(v||'')?v:null;if(!flow.at)flow.end=null;renderFlow();};
+A.setEnd=function(v){if(!flow)return;flow.end=/^\d{2}:\d{2}$/.test(v||'')?v:null;renderFlow();};
+function atToMs(hhmm,now){
+  now=now||Date.now();var p=hhmm.split(':'),d=new Date(now);d.setHours(+p[0],+p[1],0,0);
+  var t=d.getTime();if(t>now+5*MIN)t-=864e5;return t;
+}
+function flowTime(){
+  if(!flow||!flow.at)return null;
+  var t=atToMs(flow.at),dur=null;
+  if(flow.end){var e=atToMs(flow.end,t+12*H);if(e<t)e+=864e5;dur=Math.round((e-t)/1000);if(dur<=0||dur>6*3600)dur=null;}
+  return {t:t,dur:dur};
+}
 A.pick=function(key,val){if(!flow)return;flow.data[key]=val;flow.step++;renderFlow();}
 A.stepPrep=function(d){if(!flow)return;flow.data.prepCustom=Math.max(10,Math.min(400,(flow.data.prepCustom||typicalPrep())+d));renderFlow();};
 A.home=function(){
@@ -624,8 +638,14 @@ A.home=function(){
 };
 function showScreen(){$('#screen').classList.add('on');$('#screen').scrollTop=0;}
 function whenRow(){
-  var opts=[[0,'adesso'],[15,'15 min fa'],[30,'30 min fa'],[60,'1 h fa']];
-  return '<div class="when"><span>Quando</span>'+opts.map(function(o){return '<button class="'+(flow.off===o[0]?'on':'')+'" onclick="A.setOff('+o[0]+')">'+o[1]+'</button>';}).join('')+'</div>';
+  var opts=[[0,'adesso'],[15,'15 min fa'],[30,'30 min fa'],[60,'1 h fa']],at=flow.at||null;
+  var h='<div class="when"><span>Quando</span>'+opts.map(function(o){return '<button class="'+(!at&&flow.off===o[0]?'on':'')+'" onclick="A.setOff('+o[0]+')">'+o[1]+'</button>';}).join('');
+  h+='<label class="datechip'+(at?' on':'')+'">'+(at?'alle '+esc(at):'altra ora')+'<input type="time" value="'+esc(at||fmtTime(Date.now()))+'" onchange="A.setAt(this.value)" aria-label="Orario di inizio"></label></div>';
+  if(at&&flow.type==='feed'){
+    var ft=flowTime();
+    h+='<div class="when"><span>Finita</span><label class="datechip'+(flow.end?' on':'')+'">'+(flow.end?'alle '+esc(flow.end):'quando è finita?')+'<input type="time" value="'+esc(flow.end||at)+'" onchange="A.setEnd(this.value)" aria-label="Orario di fine"></label>'+(ft&&ft.dur?'<span>'+Math.round(ft.dur/60)+' min</span>':'')+'</div>';
+  }
+  return h;
 }
 function backBtn(){return '<button class="back" onclick="A.home()" aria-label="Indietro">‹</button>';}
 function renderFlow(){
@@ -662,7 +682,8 @@ function renderFlow(){
 }
 A.finish=function(val){
   if(!flow)return;
-  var t=Date.now()-flow.off*MIN,d=flow.data,e=null,msg='';
+  var t=Date.now()-flow.off*MIN,d=flow.data,e=null,msg='',ft=flowTime();
+  if(ft)t=ft.t;
   if(flow.type==='feed'){var ml=Number(val);e={k:'feed',prep:d.prep,ml:ml};msg=ml>0?'Pappa: '+ml+' ml su '+d.prep:'Biberon rifiutato';}
   else if(flow.type==='diaper'){e={k:'diaper',pipi:d.pipi,cacca:val};msg='Cambio: pipì '+LVL[d.pipi]+', cacca '+LVL[val];}
   else if(flow.type==='sleep'){e={k:val};msg=val==='sleep'?'Buona nanna':'Si è svegliato';}
@@ -670,6 +691,7 @@ A.finish=function(val){
   else if(HEALTH_TYPES[flow.type]){var hr=healthFinish(val);if(!hr){toast('Niente da salvare');return;}e=hr.e;t=hr.t;msg=hr.msg;}
   else if(EXT.flows[flow.type]){var xr=EXT.flows[flow.type].finish(flow,val,API);if(xr===false){return;}if(!xr||!xr.e){toast('Niente da salvare');return;}e=xr.e;if(xr.t)t=xr.t;msg=xr.msg||'Salvato';}
   if(!e)return;
+  if(ft&&ft.dur&&e.k==='feed'){e.dur=ft.dur;e.src='biberon';}
   e.id=uid();e.t=t;e.who=who;S.events.push(e);touched(e);
   var linked=tryLabelOpenCry(e,flow.link);
   save();

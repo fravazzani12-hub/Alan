@@ -35,7 +35,7 @@ Safari → Condividi → "Aggiungi alla schermata Home". Da quel momento aprila 
 
 ## Cosa fa (in breve)
 - **Home**: intestazione con nome, età e presenza dei genitori; tre timer (ultima pappa, sveglio/dorme da, ultimo cambio), pulsante "Piange", quattro riquadri: Pappa, Pannolino, Nanna, Altro.
-- **Percorsi a tap**: Pappa → quanto preparato → quanto bevuto (ml precisi, da 0 al preparato). Pannolino → pipì → cacca. Nanna → un tap. Altro → ruttino, rigurgito, massaggio, ciuccio, coccole, passeggiata, bagnetto. Ogni percorso ha "quando": adesso / 15 / 30 / 60 min fa.
+- **Percorsi a tap**: Pappa → quanto preparato → quanto bevuto (ml precisi, da 0 al preparato). Pannolino → pipì → cacca. Nanna → un tap. Altro → ruttino, rigurgito, massaggio, ciuccio, coccole, passeggiata, bagnetto. Ogni percorso ha "quando": adesso / 15 / 30 / 60 min fa / "altra ora" con l'orario preciso; nella Pappa anche l'ora di fine, così la durata resta.
 - **Piange**: registra fino a 30 s, calcola l'impronta acustica (tono, variazione, intensità, raffiche/pause, voce, timbro, andamento) e mostra le ipotesi in tempo reale. La prossima azione registrata entro 45 minuti spiega il pianto, da qualunque dei due telefoni.
 - **Pianti**: precisione misurata a posteriori (solo contesto, solo suono, insieme, caso), elenco dei pianti con riascolto (▶ scarica l'audio registrato dall'altro telefono al primo tocco), cambio spiegazione.
 - **Pattern**: 24 h, medie 7 giorni contro le norme per età, perché piangeva, contesto → causa, suono → causa.

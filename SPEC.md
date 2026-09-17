@@ -103,6 +103,7 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
 - Precisione = leave-one-out su tutti i pianti etichettati: contesto, suono, insieme, e baseline "causa più frequente".
 
 ## 5. UI
+- "Quando" in ogni percorso: adesso / 15 / 30 / 60 min fa / "altra ora" (selettore HH:MM; un orario nel futuro di oltre 5 min vale per ieri). Nella Pappa anche "finita alle": la differenza diventa `dur` (secondi, ≤ 6 h) con `src 'biberon'`.
 - Intestazione: nome ed età a sinistra, a destra le pillole di presenza (nessun selettore di chi registra).
 - Tab Salute: Crescita (Peso/Lunghezza, valore grande + percentile, grafico OMS, registrazione a stepper con "quando"),
   Vitamina D e medicine (tap unico + 7 giorni), Temperatura (chip + stepper ±0,1), Visite e vaccini (prossima in evidenza con
