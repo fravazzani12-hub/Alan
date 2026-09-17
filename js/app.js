@@ -638,14 +638,20 @@ function renderAccount(){
     h+='<label class="f" for="accPass">Password</label><input class="f" id="accPass" type="password" autocomplete="current-password"><div class="spacer"></div>';
     h+='<button class="btn" onclick="A.login()">Accedi</button>';
   }else{
-    h+='<div class="kv"><div>Account</div><div>'+esc(st.email||'')+'</div><div>Famiglia</div><div>'+(st.family?'collegata':'non ancora')+'</div><div>Ultimo sync</div><div>'+(st.lastSync?fmtTime(st.lastSync):'—')+'</div></div>';
+    var live=st.channel==='SUBSCRIBED'?'in ascolto':(st.channel==='off'||st.channel==='joining'?'in collegamento…':'interrotto, riprovo');
+    var other=st.others&&st.others.length?st.others.map(function(o){return esc(o.who||'altro telefono');}).join(', ')+' adesso':'non collegato adesso';
+    h+='<div class="kv"><div>Account</div><div>'+esc(st.email||'')+'</div><div>Famiglia</div><div>'+(st.family?'collegata':'non ancora')+'</div><div>Ultimo sync</div><div>'+(st.lastSync?fmtTime(st.lastSync):'—')+'</div>';
+    h+='<div>Tempo reale</div><div>'+(st.family?live:'—')+'</div><div>Altro telefono</div><div>'+(st.family?other:'—')+'</div>';
+    if(st.pending)h+='<div>Da inviare</div><div>'+st.pending+' voci</div>';
+    h+='</div>';
+    if(st.lastError)h+='<p class="hint">Ultimo errore ('+esc(st.lastError.where)+', '+fmtTime(st.lastError.at)+'): '+esc(st.lastError.msg)+'</p>';
     if(!st.family)h+='<p class="hint">Questo account non è ancora in una famiglia: esegui il blocco SQL finale di supabase/schema.sql e tocca "Sincronizza adesso".</p>';
     h+='<div class="spacer"></div><button class="btn ghost" onclick="A.syncNow()">Sincronizza adesso</button><div class="spacer"></div><button class="btn ghost" onclick="A.signOut()">Esci</button>';
   }
   el.innerHTML=h;
 }
 A.login=function(){var em=($('#accEmail').value||'').trim(),pw=$('#accPass').value||'';if(!em||!pw){toast('Servono email e password');return;}AlanSync.signIn(em,pw).then(function(r){if(r&&r.error)toast('Accesso rifiutato: '+r.error.message);else{lsSet('alan.email',em);toast('Accesso fatto');setTimeout(renderAccount,800);}});};
-A.syncNow=function(){AlanSync.pullAll().then(function(){toast('Sincronizzato');renderAccount();});};
+A.syncNow=function(){AlanSync.flush().then(function(){return AlanSync.pullAll();}).then(function(ok){toast(ok?'Sincronizzato':'Sync non riuscito, riprovo più tardi');renderAccount();});};
 A.signOut=function(){AlanSync.signOut().then(function(){toast('Uscito');renderAccount();});};
 function renderMicInfo(){
   var el=$('#micInfo'),parts=[];
@@ -714,12 +720,12 @@ function showView(v){
   if(v==='pianti')renderCries();if(v==='pattern')renderStats();if(v==='altro')fillSettings();
   window.scrollTo(0,0);
 }
-A.setWho=function(w){who=w;lsSet(WHOKEY,w);renderHeader();};
+A.setWho=function(w){who=w;lsSet(WHOKEY,w);renderHeader();if(window.AlanSync)AlanSync.setPresence({who:who,at:Date.now()});};
 load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
   document.querySelectorAll('#whoSeg button').forEach(function(b){b.addEventListener('click',function(){A.setWho(b.getAttribute('data-w'));});});
   renderHome();
-  if(window.AlanSync)AlanSync.init({onEvents:mergeRemote,onStatus:renderAccount}).then(function(){renderAccount();});
+  if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onStatus:renderAccount}).then(function(){renderAccount();});}
   setInterval(function(){if(!flow)renderStatus();},30000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden&&!flow)renderHome();});
 });
