@@ -1,0 +1,136 @@
+// stats: sonno per notte (22–7), latte al giorno, ritmo delle pappe su 7 giorni; SVG con barre/pallini giusti; attesa senza dati.
+'use strict';
+const assert=require('assert');
+const {boot}=require('./stub');
+const MIN=6e4,H=36e5;
+const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
+const count=(html,re)=>(String(html).match(re)||[]).length;
+(async()=>{
+  const app=await boot({ext:['stats']});const {S,T}=app;
+  const X=window.AlanExt,ST=X.stats;
+  assert.ok(ST&&typeof ST.nights==='function'&&typeof ST.milkPerDay==='function'&&typeof ST.feedTimes==='function','esposto su window.AlanExt.stats');
+  assert.strictEqual(T('EXT.slots.stats.length'),1,'registrato nello slot stats di Pattern');
+  // "adesso" fisso: oggi alle 14:00 locali
+  const d0=new Date();d0.setHours(14,0,0,0);const now=d0.getTime();
+  const at=(dOff,hour,min)=>{const d=new Date(now);return new Date(d.getFullYear(),d.getMonth(),d.getDate()+dOff,hour,min||0,0,0).getTime();};
+  const realNow=Date.now;Date.now=()=>now;
+  let n=0;const add=(k,t,extra)=>{const e=Object.assign({id:'s'+(n++),k,t,who:'Fabio'},extra||{});S.events.push(e);return e;};
+  const reset=()=>{S.events.length=0;n=0;};
+  const stats=()=>{T('renderStats()');return String(app.els['#stats']._h);};
+
+  // --- senza dati: tre schede con il testo di attesa, nessun grafico
+  reset();
+  let ng=ST.nights(now);assert.strictEqual(ng.nights.length,7);assert.strictEqual(ng.recorded,0);assert.strictEqual(ng.mean,null);
+  let mk=ST.milkPerDay(now);assert.strictEqual(mk.days.length,7);assert.strictEqual(mk.mode,null);assert.strictEqual(mk.mean,null);
+  let ft=ST.feedTimes(now);assert.strictEqual(ft.days.length,7);assert.strictEqual(ft.nFeeds,0);assert.strictEqual(ft.perDay,null);
+  let html=stats();
+  assert.ok(/Sonno per notte/.test(html)&&/Latte al giorno/.test(html)&&/Quando mangia/.test(html),'tre titoli');
+  assert.strictEqual(count(html,/st-wait/g),3,'tre testi di attesa');assert.strictEqual(count(html,/st-chart/g),0,'nessun grafico');
+
+  // --- 7 giorni finti. Notte d (1..7): Nanna alle 22:00 + d·10 min, Sveglio alle 07:30 → nella finestra 22–7 dorme 9 h − d·10 min.
+  //     Pisolino 13–14 (non conta). Biberon alle 2 (80 ml) e 8/11/14/17/20 (100 ml) → 580 ml; seno 23:00 da 10 min nei giorni dispari;
+  //     giorno 2: seno di 30 s (non vale come pappa); giorno 4: biberon rifiutato (0 ml). Pianti alle 9:30 e 16:00.
+  //     Oggi (in corso, ore 14): biberon alle 2, 8, 11 → 280 ml, un pianto alle 10.
+  reset();
+  for(let d=7;d>=1;d--){
+    add('sleep',at(-d,22)+d*10*MIN);add('wake',at(-d+1,7,30));
+    add('sleep',at(-d,13));add('wake',at(-d,14));
+    [2,8,11,14,17,20].forEach(hr=>add('feed',at(-d,hr),{prep:hr===2?100:120,ml:hr===2?80:100,src:'biberon'}));
+    if(d%2)add('feed',at(-d,23),{src:'seno',dur:600,side:'sinistro'});
+    if(d===2)add('feed',at(-d,23,30),{src:'seno',dur:30,side:'destro'});
+    if(d===4)add('feed',at(-d,5),{prep:100,ml:0,src:'biberon'});
+    add('cry',at(-d,9,30),{dur:40,label:'fame'});add('cry',at(-d,16),{dur:20,label:null});
+  }
+  [2,8,11].forEach(hr=>add('feed',at(0,hr),{prep:120,ml:hr===2?80:100,src:'biberon'}));add('cry',at(0,10),{dur:30,label:null});
+
+  // sonno per notte: dalla più vecchia (d=7) all'ultima (d=1, "ieri"), media su 7 notti
+  ng=ST.nights(now);
+  assert.strictEqual(ng.nights.length,7);assert.strictEqual(ng.recorded,7);
+  ng.nights.forEach((x,j)=>{const d=7-j;near(x.sleep,9*H-d*10*MIN,1,'notte d='+d);assert.ok(x.rec);assert.strictEqual(x.start,at(-d,22));assert.strictEqual(x.end,at(-d+1,7));});
+  assert.strictEqual(ng.nights[6].label,'ieri');assert.strictEqual(ng.nights[5].label,['dom','lun','mar','mer','gio','ven','sab'][new Date(at(-2,22)).getDay()]);
+  near(ng.mean,9*H-40*MIN,1,'media 8 h 20');
+  assert.strictEqual(ng.nights[6].feeds,2,'stanotte: seno alle 23 + biberon alle 2');assert.strictEqual(ng.nights[5].feeds,1,'seno di 30 s non è una pappa');assert.strictEqual(ng.nights[6].cries,0);
+  let sc=ST.sleepCard(now);
+  assert.strictEqual(count(sc,/<rect class="st-bar/g),7,'7 barre');assert.strictEqual(count(sc,/class="st-mean"/g),1,'linea della media');
+  assert.ok(/7h50/.test(sc)&&/8h50/.test(sc),'etichette sopra le barre: '+sc);
+  assert.ok(/<b>in media 8 h 20<\/b> a notte, su 7 notti</.test(sc),'lettura fattuale: '+sc);
+  assert.ok(!/st-wait/.test(sc)&&!/NaN|undefined/.test(sc));
+
+  // latte al giorno: 6 giorni interi (d=6..1) + oggi in corso; media sui giorni interi
+  mk=ST.milkPerDay(now);
+  assert.strictEqual(mk.mode,'ml');assert.strictEqual(mk.days.length,7);assert.strictEqual(mk.daysUsed,6);
+  mk.days.slice(0,6).forEach((x,j)=>{const d=6-j;assert.strictEqual(x.ml,580,'ml giorno d='+d);assert.strictEqual(x.n,6);assert.strictEqual(x.seno,d%2?1:0,'seno d='+d);assert.ok(!x.partial);});
+  assert.strictEqual(mk.days[6].label,'oggi');assert.ok(mk.days[6].partial);assert.strictEqual(mk.days[6].ml,280);assert.strictEqual(mk.days[6].n,3);
+  assert.strictEqual(mk.meanMl,580);near(mk.meanSeno,0.5,1e-9,'poppate al seno al giorno');assert.strictEqual(mk.mean,580);
+  let mc=ST.milkCard(now);
+  assert.strictEqual(count(mc,/<rect class="st-bar/g),7,'7 barre');assert.strictEqual(count(mc,/<rect class="st-bar part"/g),1,'oggi più chiaro');
+  assert.strictEqual(count(mc,/>1 seno</g),3,'poppate al seno sotto il giorno');
+  assert.ok(/<b>in media 580 ml<\/b> al giorno al biberon, più 0,5 poppate al seno al giorno, su 6 giorni/.test(mc),mc);
+  const msvg=mc.match(/<svg[\s\S]*<\/svg>/)[0];assert.ok(/>580</.test(msvg)&&/>280</.test(msvg)&&count(msvg,/>ml</g)===1&&!/ ml</.test(msvg),'valori, unità una volta sopra l\'asse: '+msvg);
+
+  // quando mangia: 7 righe dal più vecchio a oggi, pappe e pianti nella finestra (giorno 7 escluso)
+  ft=ST.feedTimes(now);
+  assert.strictEqual(ft.days.length,7);assert.strictEqual(ft.days[6].label,'oggi');assert.ok(ft.days[6].partial);assert.strictEqual(ft.days[5].label,'ieri');
+  ft.days.slice(0,6).forEach((x,j)=>{const d=6-j;assert.strictEqual(x.feeds.length,d%2?7:6,'pappe d='+d);assert.strictEqual(x.cries.length,2);});
+  assert.strictEqual(ft.days[6].feeds.length,3);assert.strictEqual(ft.days[6].cries.length,1);
+  assert.strictEqual(ft.nFeeds,42);assert.strictEqual(ft.nCries,13);near(ft.perDay,6.5,1e-9,'pappe al giorno');
+  const seno=ft.days[5].feeds.filter(f=>f.src==='seno');assert.strictEqual(seno.length,1);assert.strictEqual(seno[0].h,23);
+  assert.strictEqual(ft.days[6].feeds[0].h,2);assert.strictEqual(ft.days[6].feeds[2].h,11);
+  // intervallo medio: stessa regola documentata (fra pappe consecutive, 30 min – 8 h)
+  const all=S.events.filter(e=>e.t>=at(-6,0)&&e.t<=now&&(e.ml>0||(e.src==='seno'&&e.dur>=60))).map(e=>e.t).sort((a,b)=>a-b);
+  const gaps=[];for(let j=1;j<all.length;j++){const g=(all[j]-all[j-1])/H;if(g>0.5&&g<8)gaps.push(g);}
+  near(ft.meanGap,gaps.reduce((s,x)=>s+x,0)/gaps.length*H,1,'intervallo medio');
+  let fc=ST.feedCard(now);
+  assert.strictEqual(count(fc,/<circle class="st-feed/g),42,'un pallino per pappa');assert.strictEqual(count(fc,/<circle class="st-feed seno"/g),3,'seno vuoto');
+  assert.strictEqual(count(fc,/class="st-cry"/g),13,'una tacca per pianto');assert.strictEqual(count(fc,/class="st-nowline"/g),1,'segno di adesso su oggi');
+  assert.strictEqual(count(fc,/class="st-night"/g),2,'notte 22–7 in ombra');
+  assert.ok(/<b>in media 6,5 pappe<\/b> al giorno · una ogni \d+ h \d+ · 13 pianti in 7 giorni/.test(fc),fc);
+  assert.ok(/st-legend/.test(fc)&&/biberon/.test(fc)&&/seno/.test(fc)&&/pianto/.test(fc));
+
+  // tutto insieme in Pattern
+  html=stats();
+  assert.strictEqual(count(html,/st-chart/g),3,'tre grafici');assert.strictEqual(count(html,/st-wait/g),0);
+  assert.ok(/viewBox="0 0 360 /.test(html),'viewBox 360 di larghezza');assert.ok(!/NaN|undefined/.test(html));
+  assert.ok(/in media 8 h 20/.test(html)&&/in media 580 ml/.test(html)&&/in media 6,5 pappe/.test(html));
+
+  // --- una notte senza nanne segnate: "—", esclusa dalla media
+  S.events=S.events.filter(e=>!((e.k==='sleep'&&e.t===at(-3,22)+30*MIN)||(e.k==='wake'&&e.t===at(-2,7,30))));
+  ng=ST.nights(now);
+  assert.strictEqual(ng.recorded,6);assert.ok(!ng.nights[4].rec,'notte d=3 non registrata');assert.strictEqual(ng.nights[4].sleep,0);
+  near(ng.mean,(63*H-280*MIN-(9*H-30*MIN))/6,1,'media senza la notte mancante');
+  sc=ST.sleepCard(now);assert.strictEqual(count(sc,/<rect class="st-bar/g),6);assert.ok(/none"[^>]*>—</.test(sc),'trattino per la notte mancante');
+  assert.ok(/su 6 notti con il sonno segnato/.test(sc),sc);
+
+  // --- nanna ancora aperta: conta fino ad adesso; prima delle 7 l'ultima notte è quella già finita
+  reset();add('sleep',at(-1,23));
+  ng=ST.nights(now);near(ng.nights[6].sleep,8*H,1,'23 → 7');assert.strictEqual(ng.recorded,1);
+  const now3=at(0,3);ng=ST.nights(now3);
+  assert.strictEqual(ng.nights[6].end,at(-1,7),'alle 3 di notte l\'ultima notte completa è finita ieri alle 7');assert.strictEqual(ng.recorded,0);
+  T('renderStats()');assert.ok(/st-wait/.test(String(app.els['#stats']._h)));
+
+  // --- solo seno: le barre contano le poppate
+  reset();
+  for(let d=3;d>=1;d--){add('feed',at(-d,8),{src:'seno',dur:900});add('feed',at(-d,12),{src:'seno',dur:700});}
+  mk=ST.milkPerDay(now);
+  assert.strictEqual(mk.mode,'seno');assert.strictEqual(mk.mean,2);assert.strictEqual(mk.meanMl,null);assert.strictEqual(mk.daysUsed,3);
+  mc=ST.milkCard(now);assert.ok(/<b>in media 2 poppate al seno<\/b> al giorno, su 3 giorni/.test(mc),mc);assert.ok(/Solo poppate al seno/.test(mc));
+  assert.strictEqual(count(mc,/<rect class="st-bar/g),7);
+  ft=ST.feedTimes(now);assert.strictEqual(ft.nFeeds,6);assert.strictEqual(ft.perDay,2);
+  fc=ST.feedCard(now);assert.strictEqual(count(fc,/<circle class="st-feed seno"/g),6);
+  // pappa rifiutata e seno sotto i 60 s non fanno pappa
+  add('feed',at(0,9),{prep:100,ml:0,src:'biberon'});add('feed',at(0,10),{src:'seno',dur:20});
+  ft=ST.feedTimes(now);assert.strictEqual(ft.nFeeds,6);mk=ST.milkPerDay(now);assert.strictEqual(mk.mode,'seno');assert.strictEqual(mk.days[6].seno,0);
+
+  // --- solo oggi: la media è su oggi
+  reset();add('feed',at(0,8),{prep:120,ml:110,src:'biberon'});add('feed',at(0,12),{prep:120,ml:90});
+  mk=ST.milkPerDay(now);assert.strictEqual(mk.mode,'ml');assert.strictEqual(mk.mean,200);assert.strictEqual(mk.daysUsed,1);
+  ft=ST.feedTimes(now);assert.strictEqual(ft.perDay,2);near(ft.meanGap,4*H,1,'un solo intervallo');
+  assert.ok(/in media 200 ml/.test(ST.milkCard(now))&&/in media 2 pappe/.test(ST.feedCard(now)));
+
+  // --- formati
+  assert.strictEqual(ST.fmtH(0),'0');assert.strictEqual(ST.fmtH(45*MIN),'45 min');assert.strictEqual(ST.fmtH(8*H),'8 h');assert.strictEqual(ST.fmtH(9*H+5*MIN),'9h05');
+  assert.strictEqual(ST.dec1(6.5),'6,5');assert.strictEqual(ST.dec1(2),'2');assert.strictEqual(ST.dec1(0.46),'0,5');
+
+  Date.now=realNow;
+  console.log('stats ok');
+})().catch(e=>{console.error(e);process.exit(1);});

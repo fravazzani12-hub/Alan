@@ -26,10 +26,12 @@
   </header>
 
   <section class="view on" id="v-oggi">
+    <div id="extTop"></div>
     <div class="status" id="status"></div>
     <div id="openCryBanner"></div>
     <div id="healthLine"></div>
     <div id="night"></div>
+    <div id="extMid"></div>
     <button class="cry" id="cryBtn" onclick="A.openCry()">Piange<small>registra e ascolta</small></button>
     <div class="home-grid">
       <button style="--tc:var(--c-fame)" onclick="A.flow('feed')">Pappa<small id="qFeed"></small></button>
@@ -39,11 +41,13 @@
     </div>
     <h2>Ultime voci</h2>
     <div id="diary"></div>
+    <div id="extBottom"></div>
   </section>
 
   <section class="view" id="v-pianti"><div id="cries"></div></section>
   <section class="view" id="v-pattern"><div id="stats"></div></section>
   <section class="view" id="v-salute"><div id="health"></div></section>
+  <section class="view" id="v-momenti"><div id="momenti"></div></section>
 
   <section class="view" id="v-altro">
     <div class="card">
@@ -81,6 +85,7 @@
       <div class="spacer"></div>
       <button class="btn ghost" onclick="A.importData()">Importa e unisci</button>
     </div>
+    <div id="extAltro"></div>
     <div class="card">
       <h3>Impostazioni</h3>
       <label class="f">Tema</label>
@@ -102,6 +107,7 @@
   <button data-v="pianti">Pianti</button>
   <button data-v="pattern">Pattern</button>
   <button data-v="salute">Salute</button>
+  <button data-v="momenti">Momenti</button>
   <button data-v="altro">Altro</button>
 </nav>
 
@@ -112,5 +118,12 @@
 <script src="./js/config.js"></script>
 <script src="./js/sync.js"></script>
 <script src="./js/app.js"></script>
+<script src="./js/timer.js"></script>
+<script src="./js/predict.js"></script>
+<script src="./js/reminders.js"></script>
+<script src="./js/stats.js"></script>
+<script src="./js/report.js"></script>
+<script src="./js/svezzamento.js"></script>
+<script src="./js/momenti.js"></script>
 </body>
 </html>

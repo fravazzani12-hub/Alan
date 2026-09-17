@@ -17,6 +17,11 @@ per chi sviluppa (umano o Claude Code).
 | k | campi | note |
 |---|---|---|
 | feed | prep (ml preparati), ml (ml bevuti, scelti a tap a passi di 10, 0 ≤ ml ≤ prep; 0 = biberon rifiutato) | una pappa con ml = 0 non conta come ultima pappa, non entra nel tipico e non etichetta un pianto |
+| feed (dal cronometro, `js/timer.js`) | src ('seno'/'biberon'), dur (s), side (sinistro/destro/entrambi), sides [{side,dur}] (segmenti del seno in ordine) | `t` = inizio della poppata; il seno vale come pappa (`fedFeed`, etichettatura di §3) da 60 s in su; `ml`/`prep` restano quelli del biberon |
+| pump | ml, dur (s, null senza cronometro), side (sinistro/destro/entrambi) | `js/timer.js`; `t` = inizio della sessione; nel diario "Tiralatte 80 ml · 15 min · sinistro" |
+| food | name (≤ 40 caratteri, spazi normalizzati), group (cereali/verdure/frutta/proteine/latticini, `altro` per i nomi scritti a mano), amount (assaggio/poco/tutto), reaction (bene/nongradito/reazione), note (≤ 120 caratteri, solo con `reaction = reazione`, altrimenti '') | `js/svezzamento.js`; alimenti distinti per nome normalizzato (minuscolo, spazi collassati); nel diario `Nome · quanto · com'è andata [· nota]` |
+| moment | kind ('first'/'photo'/'story'); prima volta: code, title (15 tappe fisse); foto/racconto: text (≤ 80), photo (bool: esiste una foto), photoPath (`<family_id>/<id>.<ext>` nel bucket `cries`), mime | `js/momenti.js`; nascosto dal diario di Home; prima volta con `t` = adesso se il giorno è oggi, altrimenti mezzogiorno del giorno scelto; la foto sta in IndexedDB store `files` come `{buf,mime}` |
+| letter | text (≤ 4000) | `js/momenti.js`; `t` = adesso, `who` = chi scrive; nascosto dal diario |
 | diaper | pipi (no/poca/tanta), cacca (no/poca/tanta) | |
 | sleep / wake | — | stato sonno = ultimo dei due |
 | other | what (ruttino/rigurgito/massaggio/ciuccio/coccole/passeggiata/bagnetto) | ruttino e rigurgito → aria, il resto → contatto |
@@ -104,6 +109,8 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
   Vitamina D e medicine (tap unico + 7 giorni), Temperatura (chip + stepper ±0,1), Visite e vaccini (prossima in evidenza con
   conto alla rovescia, "Nel calendario" = file .ics con promemoria il giorno prima, "Fatta", tappe in arrivo con "Programma").
 - Home: sotto i riquadri di stato, la riga salute (Vitamina D di oggi, visita entro 14 giorni) e, dalle 5 alle 13, il riepilogo
+- Tab Momenti (`js/momenti.js`, §9.7): intestazione con l'età di oggi e la frase del giorno, Prime volte, Album (griglia 3 colonne, visore a schermo intero), Racconta un momento, Questa settimana in numeri, Lettere.
+- Home, blocchi delle estensioni (§9): in `#extTop`, sopra i riquadri di stato, il cronometro (`timer`) e le due righe delle previsioni (`predict`); in `#extMid`, sotto il riepilogo della notte e sopra "Piange", i promemoria (`reminders`). Gli altri riquadri delle estensioni stanno in coda a Pattern (slot `stats`: Allattamento, Ritmo, statistiche della settimana), in fondo a Salute (slot `salute`: Svezzamento) e in Altro sopra Impostazioni (slot `altro`: Promemoria, Per il pediatra).
   della notte (22–7: pappe e ml, cambi, pianti, sonno, chi si è alzato; tocca per l'elenco).
 - Tema: Altro → Impostazioni, Automatico/Chiaro/Scuro (`alan.theme` in localStorage, `data-theme` su `<html>` applicato da uno script inline prima del primo disegno; senza scelta vale il sistema).
 - Font Atkinson Hyperlegible; palette light/dark via `prefers-color-scheme`; tap target ≥ 44 px su ogni controllo (verificato a 390 px, chiaro e scuro); percorsi a schermo intero; toast su più righe, mai troncato.
@@ -120,9 +127,194 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
 `sh tests/check.sh`: sintassi + suite in Node con stub DOM (`tests/stub.js`): motore e percorsi (`engine`), etichettatura (`labeling`),
 `mergeRemote` e impostazioni (`merge`), pappa rifiutata (`feed`), estrattore su frame sintetici (`features`), `js/sync.js` contro un
 client Supabase simulato (`sync`). Qualsiasi cambio al modello deve restare valutabile in "Quanto ci azzecca" (LOO).
+Ogni estensione ha la sua suite (`timer`, `predict`, `reminders`, `stats`, `report`, `svezzamento`, `momenti`), che carica `js/<nome>.js` dopo app.js con `boot({ext:['<nome>']})`; le regole con l'ora prendono un istante finto dove l'API lo permette (`compute(now)`, `open(days, now)`).
 
 ## 8. Roadmap
 1. Pulsante "Piange" anche dalla lock screen: shortcut iOS che apre l'URL `?cry=1` → l'app parte già in registrazione.
 2. Notifica "è ora della pappa?" quando sinceFeed supera l'atteso (Web Push richiede iOS 16.4+ e PWA installata).
 3. Esportazione CSV del diario.
 4. Se il suono si dimostra informativo: sostituire il k-NN con regressione logistica sui 12 feature + contesto (sempre con LOO).
+
+## 9. Estensioni
+Ogni funzione aggiuntiva vive in `js/<nome>.js`, si registra su `window.AlanExt` (percorsi a tap `flow`, blocchi Home `home`,
+tab intere `tab`, riquadri in Pattern/Salute/Altro `slot`, `describe` e `hide` per il diario, hook `on('change')` a ogni
+salvataggio o merge) e non tocca `js/app.js`: tutto ciò che le serve passa da `AlanExt.api` (sezione "estensioni" di app.js).
+Gli script si caricano in `index.html` dopo `app.js`, nell'ordine timer, predict, reminders, stats, report, svezzamento, momenti.
+Ogni estensione ha la sua suite `tests/<nome>.test.js` (caricata con `boot({ext:['<nome>']})`) e il suo blocco CSS delimitato da
+`/* == nome == */ … /* == /nome == */` in `css/app.css`, con i soli token di colore. Le regole di §5 valgono anche qui: solo tap,
+target ≥ 44 px, un'idea per schermata, numeri come fatti e mai come giudizi.
+
+### 9.1 Cronometro (`js/timer.js`)
+In Home, sopra i riquadri di stato (`#extTop`), la riga "Cronometro" con Seno, Biberon, Tiralatte; Seno chiede subito il lato
+(Sinistro/Destro, con "l'ultima volta" sul lato con cui è finita la poppata precedente). Lo stato del cronometro è volatile e
+locale al telefono (non sincronizzato: l'altro genitore vede la poppata solo quando è salvata): localStorage `alan.timer` =
+`{kind ('seno'|'biberon'|'tiralatte'), side, start (epoch ms), sides:[{side,start,end}]}`; il tempo mostrato si calcola sempre
+dai timestamp, quindi sopravvive alla chiusura dell'app e al cambio di tab (ogni secondo si aggiornano solo i testi
+`#tmClock`/`#tmSides`, mai tutta la Home; l'intervallo parte solo con un cronometro attivo e si spegne alla fine).
+Il riquadro attivo mostra etichetta (Biberon / Seno sinistro / Seno destro / Tiralatte), ora d'inizio, cronometro, per il seno i
+totali per lato e "Cambia lato" (chiude il segmento aperto e ne apre uno sull'altro lato), poi "Fine" e "Annulla senza salvare"
+(con conferma). Fine:
+- **seno** → `feed {src:'seno', dur (s totali), side ('sinistro'|'destro'|'entrambi'), sides:[{side,dur}]}` con `t` = inizio,
+  salvato dal percorso interno `seno` così passa da `A.finish` (id, chi, etichettatura del pianto aperto: da 60 s vale come pappa, §3);
+- **biberon** → apre il percorso Pappa con `flow.data.src='biberon'`, `flow.data.dur` e "quando" = minuti dall'inizio; la voce
+  salvata riceve `src` e `dur` dall'hook `change` (localStorage `alan.timer.pending` finché la voce non compare, scade dopo 6 h);
+  se si esce dal percorso Pappa con "‹" la durata si perde, il cronometro è già chiuso;
+- **tiralatte** → percorso `pump`: lato a chip (Sinistro/Destro/Entrambi, default Entrambi), sei valori rapidi (40–150 ml,
+  evidenziato il tipico = mediana delle ultime 6 sessioni, 60 senza storia) che salvano al tap, oppure stepper ±10 (0–300) e
+  "Salva N ml"; salva `pump {ml, dur (s) | null, side}` con `t` = inizio (senza cronometro chiede il "quando"). Nel diario:
+  "Tiralatte 80 ml · 15 min · sinistro".
+Pattern, in coda: riquadro "Allattamento" solo se negli ultimi 7 giorni ci sono poppate al seno con durata, biberon con durata o
+sessioni di tiralatte: minuti di seno per ciascuno dei 7 giorni (barre), numero di poppate, media per poppata, ripartizione
+sinistro/destro in % (dai `sides`, o da `side` se singolo), biberon al cronometro (durata media), tiralatte (ml totali, sessioni,
+durata media). Colori: seno e biberon `--c-fame`, tiralatte `--c-aria`. Nessuna notifica e nessun lock screen per il cronometro.
+
+### 9.2 Previsioni (`js/predict.js`)
+Nessun dato nuovo: le previsioni sono calcolate al volo dagli eventi `sleep`/`wake`/`feed`. Osservazioni degli ultimi 7 giorni
+(fino a `now`): **veglie** = da un `wake` alla `sleep` successiva (5–240 min); **pisolini** = da una `sleep` al `wake` successivo
+(5–600 min), "di giorno" se la nanna è iniziata tra le 7 e le 19, altrimenti "di notte"; **intervalli pappe** = tra due pappe
+valide consecutive (`fedFeed`: ml > 0 oppure seno ≥ 60 s), 0,5–8 h. Una `sleep` dopo un'altra `sleep` (o un `wake` dopo un
+`wake`) non produce osservazioni. Valore atteso di ogni grandezza: con meno di 4 osservazioni vale la norma per età
+(`norms(ageDays())`: `awakeMin`, `feedH`, senza le riduzioni del modello di §4.1), da 4 a 10 osservazioni 70 % media di Alan +
+30 % norma (basis `misto`), oltre 10 la sola media di Alan (basis `alan`); soglie e pesi sono costanti in cima al file.
+Prossima nanna = ultimo risveglio + veglia attesa (solo se è sveglio e c'è un risveglio registrato); prossima pappa = ultima pappa
+valida + intervallo atteso; prossimo risveglio (solo se dorme) = inizio nanna + durata attesa del pisolino, sul pool dei pisolini
+dello stesso tipo: di giorno con la norma di ripiego di 45 min, di notte senza ripiego (sotto le 4 tratte di notte non si prevede
+nulla). `AlanExt.predict.{nextNap,nextFeed,nextWake}(now)` restituiscono `{at, minutes, basis:'alan'|'misto'|'norma', n, expected}`
+o `null`; `observations(now)`, `expected(vals,norm)`, `rel`, `phrase` sono esposti per i test.
+UI. Home, in `#extTop` dopo il cronometro: una riga per il sonno (`--c-sonno`: "Probabile nanna tra 25 min · verso le 14:40",
+oppure "Probabile risveglio tra 20 min · verso le 15:00" mentre dorme) e una per la pappa (`--c-fame`: "Pappa prevista tra 1 h 10 ·
+verso le 15:10"). Sotto i 5 minuti "tra poco"; se il momento è passato la frase diventa "Nanna attesa da 12 min" / "Pappa attesa
+da 12 min" / "Risveglio atteso da…", senza colori di allarme. Ogni riga è un pulsante (≥ 48 px) che apre il percorso Nanna o
+Pappa. Le righe si ridisegnano a ogni salvataggio/merge (app.js ridisegna i blocchi Home) e da sole ogni minuto (solo in Home,
+fuori dai percorsi). Finché non esiste nessuna pappa né nanna compare un accenno ("Dopo la prima pappa e la prima nanna qui
+compare…"). Pattern, in coda: riquadro "Ritmo di <nome>" con veglia media, intervallo medio tra le pappe, pisolino di giorno e
+sonno di notte degli ultimi 7 giorni, ciascuno con la norma per età e il numero di osservazioni; una riga dice su che base
+poggiano le previsioni (norma per età / ritmo e norma / ritmo) e la differenza in minuti rispetto alla norma, come fatto, mai
+come giudizio. Limite: sono medie, non modelli per fascia oraria; con nanne mai chiuse da un risveglio le veglie non si contano
+e si cade sulla norma.
+
+### 9.3 Promemoria (`js/reminders.js`)
+Promemoria interni, senza notifiche push: compaiono in Home quando l'app è aperta. Nessun dato nuovo nel diario: l'unica
+scrittura è il tap «Segna» sulla vitamina D, che registra un normale evento `med` (`what` = vitd, `name` = Vitamina D, `who` dal
+profilo) tramite `A.quickMed`, quindi passa da `touched()` e viaggia in sync come gli altri. Stato solo locale, in localStorage:
+`alan.rem.cfg` = `{vitd, appt, feed}` booleani (interruttori, tutti accesi se assenti o non validi) e `alan.rem.dismissed` =
+`{chiave: 'YYYY-MM-DD'}` (righe nascoste con «Ok»; le voci di giorni diversi da oggi decadono da sole). Le chiavi sono `fever`,
+`appt:<id>`, `feed:<t ultima pappa>`, `vitd`: una nuova pappa o una nuova visita cambiano la chiave, quindi il promemoria
+ritorna anche se il precedente era stato nascosto.
+UI in Home (blocco `#home-reminders` in `#extMid`, sotto il riepilogo della notte e sopra «Piange»): al massimo due righe con
+bordo colorato, in quest'ordine di priorità: (1) **febbre** — temperatura ≥ 38 °C registrata nelle ultime 6 ore sotto i 90
+giorni: ripete testualmente la prima bandiera rossa di Altro (`FEVER_TXT`, identica a index.html), colore `--danger`, senza
+pulsanti e senza «Ok» (non ha interruttore e non si nasconde); (2) **visita** oggi o domani non ancora fatta (stessa regola di
+`nextAppt`: anche passata da meno di 2 ore) con «Oggi/Domani alle HH:MM · titolo (o tipo) · luogo», colore `--c-sonno`, il testo
+porta in Salute, «Ok» nasconde per oggi; (3) **pappa in ritardo** — `sinceFeedH − n.feedH > 0,5 h` (norma per età di §4.1,
+senza le riduzioni del modello), informazione neutra «Ultima pappa 4 h 10 fa, di solito ogni 3 h», colore `--c-fame`; non
+compare oltre 12 h dall'ultima pappa (più probabile una registrazione mancante); il seno ≥ 60 s vale come pappa, il biberon
+rifiutato no; (4) **vitamina D** non ancora data oggi, dalle 10:00, solo se è stata data almeno una volta nei 7 giorni
+precedenti, colore `--c-cambio`, con «Segna» e «Ok» (dalle 10 in poi dice la stessa cosa della pillola «Vitamina D · non ancora
+oggi» della riga salute: per evitare il doppione basta spegnere l'interruttore). Le regole si ricalcolano a ogni `renderHome` e
+sull'hook `change`; un `setInterval` di 60 s ridisegna solo se il testo delle righe cambierebbe (solo il blocco se cambia il
+testo, tutta la Home se compare o sparisce una riga; mai durante un percorso). L'ora è iniettabile per i test:
+`AlanExt.reminders.compute(now)` restituisce le righe per quell'istante. In Altro (slot `altro`, sopra Impostazioni) la card
+«Promemoria» ha tre interruttori a tap (`role="switch"`, `aria-checked`): Vitamina D, Visite, Pappa in ritardo.
+
+### 9.4 Statistiche della settimana (`js/stats.js`)
+Slot `stats`, in fondo a Pattern. Nessun dato proprio: calcoli sugli eventi, esposti su `AlanExt.stats` = {nights(now),
+milkPerDay(now), feedTimes(now)} e ridisegnati a ogni `renderStats`. Tre schede, ognuna con titolo, grafico SVG inline (viewBox
+largo 360, classi `.gc .grid .lbl` del grafico di crescita, colori dai token via `--hc`) e una riga di lettura fattuale, mai un
+giudizio; senza dati ogni scheda mostra un testo di attesa. I tre grafici condividono l'ordine cronologico (da sinistra a
+destra, dall'alto in basso).
+1. **Sonno per notte**: barre delle ultime 7 notti complete dalle 22 alle 7 (dalla più vecchia a "ieri", etichetta = giorno in
+   cui la notte è cominciata; la notte in corso non compare, la riassume la Home), ore dormite = sovrapposizione degli intervalli
+   Nanna→Sveglio con la finestra (una nanna aperta arriva fino ad adesso); una notte senza sonno segnato si vede come "—" e non
+   entra nella media (uno zero sarebbe falso: il sonno non era tracciato); linea tratteggiata = media, lettura "in media 9 h 20 a
+   notte, su N notti".
+2. **Latte al giorno**: ml dei biberon (feed non seno con ml > 0) per ciascuno degli ultimi 7 giorni, oggi in corso più chiaro e
+   fuori dalla media; sotto il giorno, il numero di poppate al seno (feed `src:'seno'` con `dur ≥ 60 s`, come `fedFeed`); se nella
+   settimana c'è solo seno le barre contano le poppate; media sui giorni interi con almeno una pappa (o su oggi se è l'unico),
+   lettura "in media 640 ml al giorno al biberon, più 2,5 poppate al seno al giorno, su N giorni".
+3. **Quando mangia**: 7 righe (dal più vecchio a oggi) sull'asse delle 24 ore, un pallino per pappa (pieno = biberon, vuoto =
+   seno), i pianti come tacche rosse, la notte 22–7 in ombra, un segno tratteggiato sull'ora attuale nella riga di oggi; lettura
+   "in media 6,5 pappe al giorno · una ogni 3 h 10 · N pianti in 7 giorni" (intervallo medio fra pappe consecutive fra 30 min e
+   8 h, stessa regola di Pattern). Pappe con ml = 0 e seno sotto i 60 s non contano.
+Decimali in italiano con la virgola; l'unità dell'asse è scritta una volta sola sopra l'asse; le etichette dei valori hanno un
+alone del colore della superficie (`paint-order:stroke`) per restare leggibili sopra le barre.
+
+### 9.5 Riepilogo per il pediatra (`js/report.js`)
+In Altro la card "Per il pediatra" ha le chip 7/30/90 giorni (scelta in localStorage `alan.report.days`, default 30, non
+sincronizzata: è una preferenza del telefono) e il pulsante "Prepara il riepilogo (N giorni)", che apre il percorso a schermo
+intero `report` (render in `#screenInner`, `finish` ritorna sempre `false`: non crea eventi). Nessun dato nuovo: il riepilogo è
+un calcolo sugli eventi esistenti, `AlanExt.report.compute(days, now)`, e lo stesso modello di sezioni produce l'html e il testo
+(`AlanExt.report.text(days, now)`), così i due non divergono. Periodo = gli ultimi N giorni **completi** (da N giorni fa alle
+00:00 a oggi alle 00:00: oggi non entra nelle medie, così i numeri non cambiano con l'ora in cui si prepara il riepilogo); se il
+diario è cominciato oggi vale la sola giornata in corso (`partial`, dichiarato nell'intestazione). Le medie al giorno dividono
+per i giorni del periodo con almeno una voce di diario (feed/diaper/sleep/wake/other/cry/temp/med; misure e visite non contano),
+mai per giorni vuoti, e il numero di giorni usato è scritto nell'intestazione ("N giorni con il diario" quando N < periodo). Gli
+elenchi (misure, temperature, medicine, visite) arrivano invece fino ad adesso.
+Sezioni: intestazione (nome, data di nascita gg/mm/aaaa, età in settimane e giorni, data e ora del riepilogo, periodo); Misure =
+ultime 5 misure di sempre in tabella (data, età in settimane, peso e lunghezza con il percentile OMS calcolato all'età della misura
+via `pctOf('wfa'|'lhfa')`, più "Ultimo peso: ±N g in N giorni" fra le ultime due pesate; tabella al posto del grafico perché più
+leggibile in stampa); Pappe = pappe valide al giorno (`fedFeed`: biberon con ml > 0 o seno ≥ 60 s), ml al biberon al giorno e per
+biberon, poppate al seno, intervallo medio fra pappe consecutive (solo intervalli fra 30 min e 8 h), biberon rifiutati; Sonno =
+media della notte 22–7 sulle notti con sonno segnato, pisolini al giorno (nanne iniziate fra le 7 e le 22) con durata media, sonno
+nelle 24 ore sui giorni con sonno segnato; Cambi = al giorno, con pipì, con cacca; Pianti = al giorno, durata media registrata,
+senza spiegazione, e le cause in % sui pianti spiegati ("passato da solo" compreso); Temperature = elenco dal primo giorno del
+periodo a adesso, più recente in alto, con la più alta; Medicine = per nome, quante volte e l'ultima; Visite e vaccini = fatte
+(done, dal primo giorno del periodo) e in programma (non fatte, da adesso, massimo 5).
+In fondo "Stampa o salva PDF" (`window.print()`; la classe `rp-print` su `<body>`, messa da `AlanExt.report.print()` e tolta ad
+`afterprint`, attiva il CSS di stampa: nero su bianco, A4 con margini 16 mm, solo `#screenInner`; stampare da un'altra schermata
+resta come prima) e "Condividi come testo" (`navigator.share` del testo, altrimenti appunti, altrimenti toast). Il riepilogo
+aperto si ridisegna a ogni `change` (salvataggio o merge dall'altro telefono). `open(days, now)` accetta un istante facoltativo
+solo per i test. Nessun giudizio: i numeri sono quelli del diario, e la nota a piè di pagina lo dice. Limiti: nella PWA
+installata su iPhone `window.print()` può non aprire nulla (il pulsante mostra un toast che rimanda a "Condividi come testo"); da
+Safari la stampa funziona e da lì si sceglie "Salva in File"/PDF; stampando dal menu di Safari senza passare dal pulsante il CSS
+di stampa non si attiva. Le curve OMS restano quelle dei maschi (`js/who.js`).
+
+### 9.6 Svezzamento (`js/svezzamento.js`)
+Dati: evento `food` (riga in §2); per ogni alimento contano l'ultima prova (data e reazione) e il numero di prove; la grafia
+mostrata è quella dell'elenco dei suggeriti se il nome vi corrisponde, altrimenti l'ultima scritta. Vive tutto in Salute (slot
+`salute`, in fondo alla tab): nessun blocco Home e nessun riquadro Pattern, per rispettare "un'idea per schermata".
+Sotto i 120 giorni di età e senza voci `food` una card discreta: "Svezzamento — Si attiva verso i 4 mesi: qui segnerai gli
+alimenti provati e com'è andata, uno alla volta." Dai 120 giorni, o appena esiste una voce `food` (anche arrivata dall'altro
+telefono o dopo una correzione della data di nascita), la card piena: riepilogo "N alimenti provati, K da riprovare, J con
+reazione" (da riprovare = ultima prova "non gradito", con reazione = ultima prova "reazione": conteggi, non giudizi), gli ultimi
+tre assaggi (data, nome, quanto, etichetta colorata della reazione, nota, chi, ×: elimina con `A.del` e ridisegna), il pulsante
+"Nuovo alimento", da quattro alimenti in su il riquadro a scomparsa "Tutti gli alimenti provati (N)" (per alimento: ultima data,
+quante volte, ultima reazione, nota, gruppo), poi i suggeriti a gruppi (Cereali e creme, Verdure, Frutta, Carne pesce uova e
+legumi, Latticini) come chip con un bordo del colore del gruppo, senza quelli già provati e con il contatore "k su n provati";
+ogni gruppo mostra al massimo sei chip più un chip "+N" che apre il percorso con l'elenco completo; un gruppo esaurito dice
+"Tutti provati.". In chiusura il promemoria neutro "un alimento nuovo alla volta". Nessuna data, ordine o consiglio: gli elenchi
+sono solo nomi comuni della cucina italiana, raggruppati.
+Percorso `food` a tre passi con la riga "Quando" (adesso/15/30/60 min fa): 1) alimento — chip dei suggeriti a gruppi (esclusi i
+provati), "Già provati · tocca per riprovare" con i nomi già registrati, "Altro: scrivo io il nome" (unico campo a tastiera, Invio
+= Avanti; entrando in questo passo un nome venuto da un chip si azzera, un nome scritto a mano resta se si torna indietro);
+toccando un chip in Salute si parte già dal passo 2; 2) "Quanto ne ha mangiato?" Assaggio/Poco/Tutto; 3) "Com'è andata?"
+Bene/Non gradito (salvano subito) o Reazione, che apre "Cosa hai notato?" con una nota breve facoltativa e "Salva". Ogni passo ha
+"Indietro"/"Cambia alimento". I nomi degli alimenti non passano mai da `onclick` (i chip chiamano `start(gruppo, indice)` /
+`pick(indice)` su un array ricostruito a ogni render) e nel diario e nella card tutto passa da `esc`. La card si ridisegna su
+`change` solo se cambia la firma (numero di voci `food`, ultima voce e suo `_updated`, età), solo in Salute e senza percorso aperto.
+
+### 9.7 Momenti (`js/momenti.js`, tab "Momenti")
+Due tipi di evento, `moment` e `letter` (righe in §2), piatti e sincronizzati come gli altri, nascosti dal diario di Home
+(`AlanExt.hide`). Prima volta: 15 tappe fisse (sorriso, risata, notte5, pancia, bagnetto, passeggiata, vocalizzo, presa,
+cucchiaio, dentino, gira, seduto, gattona, parole, passi); `t` = adesso se il giorno scelto è oggi, altrimenti mezzogiorno del
+giorno (oggi/ieri/…/altra data, come le misure); l'età alla tappa è calcolata da `t` e dalla nascita ("a 6 settimane e 2
+giorni"), nessun range atteso e nessun confronto. Foto: ridimensionate sul telefono con canvas (lato lungo ≤ 1280 px, JPEG
+qualità 0,82), salvate in IndexedDB store `files` come `{buf, mime}` (mai in localStorage) dopo che `A.finish` ha assegnato
+l'id, caricate nel bucket `cries` con lo stesso giro dell'audio (`AlanSync.uploadAudio`; l'oggetto finisce come
+`<family_id>/<id>.bin` con contentType image/jpeg perché `extFor` conosce solo i formati audio): coda `alan.momenti.outbox` (id)
+in localStorage, ritentata su `change`, al ritorno della rete, in primo piano e 1,5 s dopo l'apertura; a upload riuscito l'evento
+riceve `photoPath` e passa da `touched`. Sull'altro telefono la griglia controlla con `fileGet` quali foto sono sul telefono:
+quelle assenti con `photoPath` mostrano "tocca per scaricare" (download al tap, poi restano in `files`), quelle assenti senza
+`photoPath` mostrano "in arrivo dall'altro telefono". Eliminare un momento con foto rimuove evento, file locale, oggetto nel
+bucket e voce in coda. L'orientamento EXIF è quello applicato dal browser, senza correzione manuale.
+UI della tab: intestazione "<nome> oggi ha N settimane e M giorni" e una frase del giorno scelta in modo deterministico dal
+giorno dell'anno (20 frasi, `dayOfYear % 20`, uguale sui due telefoni); "Prime volte" (fatte in cima in ordine di data con età,
+data e chi, una per tappa: se registrata da entrambi resta la più vecchia; poi le altre con "È successo!"); "Album" (griglia 3
+colonne quadrata, tap → visore a schermo intero `momentview` con didascalia, età, chi l'ha scattata, Condividi via
+`navigator.share` con File se accettato, altrimenti download, ed Elimina; sotto gli ultimi 5 racconti senza foto); "Racconta un
+momento" (percorso `moment`: Scatta con `capture=environment` o Dalla galleria, didascalia, quando); "Questa settimana in numeri"
+(ultimi 7 giorni: pappe bevute, sonno medio per notte sulle finestre 22–7 con almeno un sonno, "media su N notti", pianti
+spiegati su totali, momenti e lettere, alzate notturne per genitore presentate come squadra, escluso `who='Io'` come in Home);
+"Lettere" (percorso `letter` con textarea, elenco per data con chi e prima riga, visore `letterview` con testo intero). Tastiera
+solo per didascalia e lettera. I percorsi sono `flow` dell'API, così indietro, chiusura e toast sono quelli dell'app;
+`resize`, `shareFile`, `objUrl`, `fileGet/filePut/fileDel`, `cloudUpload/Download/Remove` e `syncReady` si sostituiscono nei test.
