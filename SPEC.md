@@ -21,7 +21,7 @@ per chi sviluppa (umano o Claude Code).
 | food | name (≤ 40 caratteri, spazi normalizzati), group (cereali/verdure/frutta/proteine/latticini, `altro` per i nomi scritti a mano), amount (assaggio/poco/tutto), reaction (bene/nongradito/reazione), note (≤ 120 caratteri, solo con `reaction = reazione`, altrimenti '') | `js/svezzamento.js`; alimenti distinti per nome normalizzato (minuscolo, spazi collassati); nel diario `Nome · quanto · com'è andata [· nota]` |
 | moment | kind ('first'/'photo'/'story'); prima volta: code, title (15 tappe fisse); foto/racconto: text (≤ 80), photo (bool: esiste una foto), photoPath (`<family_id>/<id>.<ext>` nel bucket `cries`), mime | `js/momenti.js`; nascosto dal diario di Home; prima volta con `t` = adesso se il giorno è oggi, altrimenti mezzogiorno del giorno scelto; la foto sta in IndexedDB store `files` come `{buf,mime}` |
 | letter | text (≤ 4000) | `js/momenti.js`; `t` = adesso, `who` = chi scrive; nascosto dal diario |
-| diaper | pipi (no/poca/tanta), cacca (no/poca/tanta) | |
+| diaper | pipi (si/no), cacca (si/no); le voci vecchie con poca/tanta si leggono come sì | |
 | sleep / wake | — | stato sonno = ultimo dei due |
 | other | what (ruttino/rigurgito/massaggio/ciuccio/coccole/passeggiata/bagnetto) | ruttino e rigurgito → aria, il resto → contatto |
 | measure | w (g), l (cm); uno o entrambi | `t` = mezzogiorno del giorno scelto (oggi/ieri/…/altra data); percentile OMS calcolato al volo dall'età |

@@ -19,7 +19,7 @@ const MIN=6e4,H=36e5;
   assert.strictEqual(P.nextNap(now),null);assert.strictEqual(P.nextFeed(now),null);assert.strictEqual(P.nextWake(now),null);
   const realNow=Date.now;Date.now=()=>now;
   T('renderHome()');assert.strictEqual(app.els['#home-predict']._h,'','vuoto senza voci');
-  add('diaper',now-H,{pipi:'poca',cacca:'no'});T('renderHome()');assert.ok(/pd-empty/.test(app.els['#home-predict']._h),'con voci ma senza pappe né nanne: un accenno');
+  add('diaper',now-H,{pipi:'si',cacca:'no'});T('renderHome()');assert.ok(/pd-empty/.test(app.els['#home-predict']._h),'con voci ma senza pappe né nanne: un accenno');
 
   // --- pochi dati (1 veglia, 1 pappa): la norma per età
   reset();
