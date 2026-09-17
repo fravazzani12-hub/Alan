@@ -43,28 +43,43 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   NZ.setType('rosa');NZ.setVol(2);NZ.setTimer(60);assert.deepStrictEqual(JSON.parse(app.store['alan.noise']),{type:'rosa',vol:2,timer:60});
   NZ.setType('x');NZ.setVol(9);NZ.setTimer(7);assert.deepStrictEqual(NZ.state(),{type:'rosa',vol:2,timer:60});
   assert.strictEqual(NZ.summary(),'Rosa · volume 2 · spegne dopo 1 h');
-  // --- Home: riga con riassunto e Avvia; schermata con suoni, volumi, timer e nota
-  T('renderHome()');let home=String(app.els['#home-noise']._h);
+  // --- Home: riga con riassunto e Avvia (da fermo: il tap sul suono ha avviato l'anteprima, qui la fermiamo); schermata con suoni, volumi, timer e nota
+  assert.ok(NZ.isPlaying(),'setType da fermo avvia l\'anteprima');NZ.stop();T('renderHome()');let home=String(app.els['#home-noise']._h);
   assert.ok(/Rumore bianco/.test(home)&&/Rosa · volume 2/.test(home)&&/>Avvia</.test(home)&&!/nz-card on/.test(home),home);
   NZ.open();let sc=String(app.els['#screenInner']._h);
   assert.ok(/<div class="title">Rumore bianco<\/div>/.test(sc)&&/nz-main/.test(sc)&&/>Avvia</.test(sc),sc.slice(0,300));
   assert.strictEqual((sc.match(/class="nz-type( on)?"/g)||[]).length,5,'cinque suoni');assert.ok(/nz-type on"[^>]*setType\('rosa'\)/.test(sc),'rosa selezionato');
   assert.ok(/American Academy of Pediatrics/.test(sc)&&/2 metri/.test(sc),'nota su distanza e volume');
   assert.ok(/class="on" onclick="AlanExt.noise.setVol\('2'\)/.test(sc)&&/class="on" onclick="AlanExt.noise.setTimer\('60'\)/.test(sc),'volume e timer evidenziati');
-  // --- avvio: sintesi 2^LOG_N (una volta), riproduzione, timer; stop
-  assert.strictEqual(NZ.LOG_N,21);
-  NZ.setType('video');NZ.setTimer(30);
-  const t0=Date.now();NZ.start();const dt=Date.now()-t0;
-  assert.ok(NZ.isPlaying(),'in riproduzione');assert.ok(NZ.buffers().type==='video'&&NZ.buffers().L.length===(1<<21),'buffer 2^21');
-  assert.ok(dt<6000,'sintesi entro pochi secondi: '+dt+' ms');console.log('  sintesi 2×2^21 in '+dt+' ms');
-  near(NZ.endAt()-Date.now(),30*60e3,2000,'timer 30 min');assert.ok(/In riproduzione · si spegne alle/.test(NZ.status()));
+  // --- tap su un suono da fermo: parte subito in anteprima (2^PREVIEW_LOG_N) e la schermata si ridisegna con la scelta
+  assert.strictEqual(NZ.LOG_N,21);assert.strictEqual(NZ.PREVIEW_LOG_N,18);
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  const t1=Date.now();NZ.setType('marrone');const dtp=Date.now()-t1;
+  assert.ok(NZ.isPlaying(),'anteprima in riproduzione');assert.ok(NZ.buffers().type==='marrone'&&!NZ.buffers().full&&NZ.buffers().L.length===(1<<18),'buffer di anteprima');
+  assert.ok(dtp<800,'anteprima quasi istantanea: '+dtp+' ms');console.log('  anteprima 2×2^18 in '+dtp+' ms');
+  assert.ok(/anteprima/.test(NZ.status()));
+  sc=String(app.els['#screenInner']._h);assert.ok(/nz-type on"[^>]*setType\('marrone'\)/.test(sc)&&/>Stop</.test(sc),'schermata ridisegnata subito con Marrone e Stop');
+  NZ.setVol(3);sc=String(app.els['#screenInner']._h);assert.ok(/class="on" onclick="AlanExt.noise.setVol\('3'\)/.test(sc),'volume ridisegnato');assert.ok(NZ.isPlaying());
+  assert.ok(/Livello 3: −5 dB rispetto al video/.test(sc),'dB relativi: '+sc.match(/Livello[^<]*/));
+  NZ.stop();NZ.setVol(5);assert.ok(NZ.isPlaying(),'tap sul volume da fermo: anteprima');assert.ok(/Livello 5: \+3 dB rispetto al video/.test(String(app.els['#screenInner']._h)));NZ.setVol(4);assert.ok(/Livello 4: come il video/.test(String(app.els['#screenInner']._h)));assert.strictEqual(NZ.volText(1),'Livello 1: −16 dB rispetto al video');
+  NZ.setTimer(120);sc=String(app.els['#screenInner']._h);assert.ok(/class="on" onclick="AlanExt.noise.setTimer\('120'\)/.test(sc),'timer ridisegnato');
+  // --- upgrade in sottofondo: dopo un attimo arriva la versione lunga dello stesso suono, senza fermarsi
+  const t0=Date.now();await wait(800);let spin=0;while(!NZ.buffers().full&&spin++<40)await wait(100);const dt=Date.now()-t0;
+  assert.ok(NZ.buffers().full&&NZ.buffers().type==='marrone'&&NZ.buffers().L.length===(1<<21),'buffer lungo 2^21 dopo l\'upgrade');assert.ok(NZ.isPlaying());assert.ok(!/anteprima/.test(NZ.status()));
+  console.log('  upgrade a 2×2^21 in '+dt+' ms');
+  // cambio suono a riproduzione in corso: di nuovo anteprima, poi upgrade; stop prima dell'upgrade lo annulla
+  NZ.prewarm(-1);NZ.setType('video');assert.ok(!NZ.buffers().full&&NZ.buffers().type==='video');NZ.stop();await wait(3000);assert.ok(!NZ.buffers().full,'fermo: niente upgrade');assert.ok(!NZ.isPlaying());
+  // --- avvio con timer
+  NZ.setType('video');NZ.setTimer(30);NZ.stop();NZ.start();
+  assert.ok(NZ.isPlaying(),'in riproduzione');near(NZ.endAt()-Date.now(),30*60e3,2000,'timer 30 min');assert.ok(/In riproduzione · si spegne alle/.test(NZ.status()));
   T('renderHome()');home=String(app.els['#home-noise']._h);assert.ok(/nz-card on/.test(home)&&/>Stop</.test(home)&&/si spegne alle/.test(home));
   const B=NZ.buffers().L;NZ.setVol(4);assert.strictEqual(NZ.buffers().L,B,'cambio volume: stessi campioni, nuovo file');assert.ok(NZ.isPlaying());
+  await wait(3000);assert.ok(NZ.buffers().full&&NZ.buffers().L.length===(1<<21),'upgrade anche dopo Avvia');
   NZ.setTimer(0);assert.strictEqual(NZ.endAt(),null,'sempre acceso');NZ.setTimer(60);assert.ok(NZ.endAt()>Date.now());
   NZ.check();assert.ok(NZ.isPlaying(),'prima della scadenza resta acceso');
   // scadenza simulata
   const realNow=Date.now;Date.now=()=>realNow()+61*60e3;NZ.check();Date.now=realNow;assert.ok(!NZ.isPlaying(),'alla scadenza si spegne');assert.strictEqual(NZ.endAt(),null);
-  NZ.start();NZ.stop();assert.ok(!NZ.isPlaying());NZ.toggle();assert.ok(NZ.isPlaying());NZ.toggle();assert.ok(!NZ.isPlaying());
+  NZ.start();NZ.stop();assert.ok(!NZ.isPlaying());NZ.toggle();assert.ok(NZ.isPlaying());assert.ok(NZ.buffers().full,'suono lungo già pronto: parte diretto');NZ.toggle();assert.ok(!NZ.isPlaying());
   A.home();
   console.log('noise ok');
 })().catch(e=>{console.error(e);process.exit(1);});

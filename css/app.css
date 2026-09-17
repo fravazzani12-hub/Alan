@@ -342,7 +342,7 @@ textarea.nt-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 .nz-type b{display:block;font-size:16px}.nz-type small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 .nz-type.on{background:var(--text);color:var(--bg);border-color:var(--text)}.nz-type.on small{color:var(--bg);opacity:.8}
 .nz-seg{margin:0 0 4px}.nz-seg button{padding:0 6px;white-space:nowrap}
-.nz-hint{margin:-6px 0 8px}
+.nz-hint{margin:6px 0 4px}
 /* == /noise == */
 
 /* == report == */
