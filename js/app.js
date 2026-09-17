@@ -14,7 +14,8 @@ var CAUSES=[
 ];
 var LABELS={fame:'fame',sonno:'sonno',cambio:'pannolino',aria:'aria / pancia',contatto:'contatto',solo:'passato da solo'};
 var OTHER=[['ruttino','Ruttino','aria'],['rigurgito','Rigurgito','aria'],['massaggio','Massaggio pancia','aria'],['ciuccio','Ciuccio','contatto'],['coccole','Coccole','contatto'],['passeggiata','Passeggiata','contatto'],['bagnetto','Bagnetto','contatto']];
-var LVL={no:'no',poca:'poca',tanta:'tanta'};
+/* pipì/cacca: sì o no. 'poca'/'tanta' sono valori delle versioni precedenti e si leggono come sì. */
+var LVL={no:'no',si:'sì',poca:'sì',tanta:'sì'};
 
 /* ---------- storage: IndexedDB with localStorage fallback ---------- */
 var db=null;
@@ -54,7 +55,7 @@ function migrateV1(){
       if(!e||!e.id||!e.t)return;
       var n={id:e.id,t:e.t,who:e.who||''};
       if(e.k==='feed'){n.k='feed';n.prep=e.ml||null;n.ml=e.ml||null;}
-      else if(e.k==='diaper'){n.k='diaper';n.pipi=(e.kind==='pipi'||e.kind==='entrambi')?'tanta':'no';n.cacca=(e.kind==='cacca'||e.kind==='entrambi')?'tanta':'no';}
+      else if(e.k==='diaper'){n.k='diaper';n.pipi=(e.kind==='pipi'||e.kind==='entrambi')?'si':'no';n.cacca=(e.kind==='cacca'||e.kind==='entrambi')?'si':'no';}
       else if(e.k==='sleep'||e.k==='wake'){n.k=e.k;}
       else if(e.k==='burp'){n.k='other';n.what='ruttino';}
       else if(e.k==='cry'){n.k='cry';n.dur=e.end?(e.end-e.t)/1000:null;n.label=e.out==='coccole'?'contatto':(e.out||null);n.bins=e.bins||null;n.ctx=e.ctx||null;n.feat=null;n.audio=false;}
@@ -666,8 +667,8 @@ function renderFlow(){
     }
   }else if(flow.type==='diaper'){
     h+='<div class="bar">'+backBtn()+'<div class="title">Pannolino</div></div>'+whenRow();
-    if(flow.step===0)h+='<h2>Pipì?</h2><div class="grid3">'+['no','poca','tanta'].map(function(o){return '<button onclick="A.pick(\'pipi\',\''+o+'\')">'+LVL[o].charAt(0).toUpperCase()+LVL[o].slice(1)+'</button>';}).join('')+'</div>';
-    else h+='<h2>Cacca?</h2><div class="grid3">'+['no','poca','tanta'].map(function(o){return '<button onclick="A.finish(\''+o+'\')">'+LVL[o].charAt(0).toUpperCase()+LVL[o].slice(1)+'</button>';}).join('')+'</div>';
+    if(flow.step===0)h+='<h2>Pipì?</h2><div class="grid2">'+['si','no'].map(function(o){return '<button onclick="A.pick(\'pipi\',\''+o+'\')">'+LVL[o].charAt(0).toUpperCase()+LVL[o].slice(1)+'</button>';}).join('')+'</div>';
+    else h+='<h2>Cacca?</h2><div class="grid2">'+['si','no'].map(function(o){return '<button onclick="A.finish(\''+o+'\')">'+LVL[o].charAt(0).toUpperCase()+LVL[o].slice(1)+'</button>';}).join('')+'</div>';
   }else if(flow.type==='sleep'){
     var c=context(Date.now());
     h+='<div class="bar">'+backBtn()+'<div class="title">Nanna</div></div>'+whenRow();
@@ -1032,7 +1033,7 @@ A.importData=function(){
     var added=0,upd=0;
     o.events.forEach(function(e){
       if(!e||!e.id||!e.k||!e.t)return;
-      if(o.v===1){var n={id:e.id,t:e.t,who:e.who||''};if(e.k==='feed'){n.k='feed';n.prep=e.ml;n.ml=e.ml;}else if(e.k==='diaper'){n.k='diaper';n.pipi=(e.kind!=='cacca')?'tanta':'no';n.cacca=(e.kind==='cacca'||e.kind==='entrambi')?'tanta':'no';}else if(e.k==='sleep'||e.k==='wake'){n.k=e.k;}else if(e.k==='burp'){n.k='other';n.what='ruttino';}else if(e.k==='cry'){n.k='cry';n.label=e.out==='coccole'?'contatto':(e.out||null);n.bins=e.bins;n.ctx=e.ctx;n.dur=e.end?(e.end-e.t)/1000:null;}else return;e=n;}
+      if(o.v===1){var n={id:e.id,t:e.t,who:e.who||''};if(e.k==='feed'){n.k='feed';n.prep=e.ml;n.ml=e.ml;}else if(e.k==='diaper'){n.k='diaper';n.pipi=(e.kind!=='cacca')?'si':'no';n.cacca=(e.kind==='cacca'||e.kind==='entrambi')?'si':'no';}else if(e.k==='sleep'||e.k==='wake'){n.k=e.k;}else if(e.k==='burp'){n.k='other';n.what='ruttino';}else if(e.k==='cry'){n.k='cry';n.label=e.out==='coccole'?'contatto':(e.out||null);n.bins=e.bins;n.ctx=e.ctx;n.dur=e.end?(e.end-e.t)/1000:null;}else return;e=n;}
       var cur=have[e.id];
       if(!cur){if(e.k==='cry')e.audio=false;S.events.push(e);have[e.id]=e;added++;}
       else if(e.k==='cry'&&e.label&&!cur.label){cur.label=e.label;upd++;}
