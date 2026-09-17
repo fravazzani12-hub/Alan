@@ -11,7 +11,8 @@ window.AlanSync=(function(){
   var OUTBOX='alan.outbox',SINCE='alan.sync.since',PAGE=1000;
   var SKIP=['id','t','k','who','audio','_deleted','_updated'];
 
-  function available(){return !!(window.supabase&&CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY&&CFG.SUPABASE_URL.indexOf('INSERISCI')<0);}
+  function configured(){return !!(CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY&&CFG.SUPABASE_URL.indexOf('INSERISCI')<0);}
+  function available(){return !!(window.supabase&&configured());}
   function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
   function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
   function outboxGet(){try{return JSON.parse(lsGet(OUTBOX)||'[]');}catch(e){return [];}}
@@ -148,6 +149,24 @@ window.AlanSync=(function(){
   }
   function upsert(e){return send(e,false);}
   function remove(e){return send(e,true);}
+  /* Storage: name è "<id>.<ext>" (salvato nell'evento come e.cloud), il prefisso di famiglia lo mette qui. */
+  function audioPath(name){return familyId+'/'+name;}
+  async function uploadAudio(name,body,mime){
+    if(!sb||!familyId)return {data:null,error:{message:'non collegato'}};
+    var r=await sb.storage.from('cries').upload(audioPath(name),body,{contentType:mime||'application/octet-stream',upsert:true});
+    if(r.error)fail('audio',r.error);
+    return r;
+  }
+  async function downloadAudio(name){
+    if(!sb||!familyId)return {data:null,error:{message:'non collegato'}};
+    var r=await sb.storage.from('cries').download(audioPath(name));
+    if(r.error)fail('audio',r.error);
+    return r;
+  }
+  async function removeAudio(name){
+    if(!sb||!familyId)return {data:null,error:{message:'non collegato'}};
+    return sb.storage.from('cries').remove([audioPath(name)]);
+  }
   async function signIn(email,password){
     if(!sb)return {error:{message:'sync non configurato'}};
     var r=await sb.auth.signInWithPassword({email:email,password:password});
@@ -156,7 +175,7 @@ window.AlanSync=(function(){
   }
   async function signOut(){if(!sb)return;stopChannel();return sb.auth.signOut();}
   function status(){
-    return {available:available(),signedIn:!!session,email:session&&session.user?session.user.email:null,userId:session&&session.user?session.user.id:null,
+    return {available:available(),configured:configured(),lib:!!window.supabase,signedIn:!!session,email:session&&session.user?session.user.email:null,userId:session&&session.user?session.user.id:null,
       family:familyId,lastSync:lastSync,pending:outboxGet().length,channel:chanStatus,channelState:channel?channel.state:null,others:others,lastError:lastError};
   }
   function wake(){
@@ -170,5 +189,6 @@ window.AlanSync=(function(){
     document.addEventListener('visibilitychange',function(){if(!document.hidden)wake();});
   }
   return {init:init,upsert:upsert,remove:remove,pullAll:pullAll,flush:flush,signIn:signIn,signOut:signOut,status:status,setPresence:setPresence,wake:wake,
+    uploadAudio:uploadAudio,downloadAudio:downloadAudio,removeAudio:removeAudio,
     _rowToEvent:rowToEvent,_eventToRow:eventToRow};
 })();

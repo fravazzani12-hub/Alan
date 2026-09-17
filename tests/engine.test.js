@@ -5,7 +5,7 @@ global.localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=v},remov
 const els={};
 function mk(){return {classList:{add(){},remove(){},toggle(){},contains(){return false}},querySelectorAll:()=>[],style:{},_h:'',set innerHTML(v){this._h=v},get innerHTML(){return this._h},textContent:'',value:'',scrollTop:0,set outerHTML(v){this._h=v}};}
 global.document={querySelector:s=>els[s]||(els[s]=mk()),querySelectorAll:()=>[],addEventListener(){}};
-global.window={confirm:()=>true,scrollTo(){},indexedDB:undefined};
+global.window={confirm:()=>true,scrollTo(){},indexedDB:undefined,addEventListener(){}};
 global.navigator={};
 global.TextEncoder=require('util').TextEncoder; global.TextDecoder=require('util').TextDecoder;
 global.btoa=s=>Buffer.from(s,'binary').toString('base64'); global.atob=s=>Buffer.from(s,'base64').toString('binary');

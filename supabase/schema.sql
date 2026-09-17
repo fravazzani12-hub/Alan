@@ -52,7 +52,27 @@ begin
   end if;
 end $$;
 
--- 5) DOPO aver creato i due utenti in Authentication → Users (Add user, Auto Confirm),
+-- 5) Audio dei pianti: bucket privato "cries", un oggetto per pianto in <family_id>/<id>.<ext>.
+--    Le policy leggono la cartella (primo segmento del nome) e la confrontano con la famiglia dell'utente.
+insert into storage.buckets (id, name, public) values ('cries', 'cries', false) on conflict (id) do nothing;
+
+drop policy if exists "cries: family read" on storage.objects;
+create policy "cries: family read" on storage.objects
+  for select using (bucket_id = 'cries' and (storage.foldername(name))[1] in (select family_id::text from public.family_members where user_id = auth.uid()));
+
+drop policy if exists "cries: family insert" on storage.objects;
+create policy "cries: family insert" on storage.objects
+  for insert with check (bucket_id = 'cries' and (storage.foldername(name))[1] in (select family_id::text from public.family_members where user_id = auth.uid()));
+
+drop policy if exists "cries: family update" on storage.objects;
+create policy "cries: family update" on storage.objects
+  for update using (bucket_id = 'cries' and (storage.foldername(name))[1] in (select family_id::text from public.family_members where user_id = auth.uid()));
+
+drop policy if exists "cries: family delete" on storage.objects;
+create policy "cries: family delete" on storage.objects
+  for delete using (bucket_id = 'cries' and (storage.foldername(name))[1] in (select family_id::text from public.family_members where user_id = auth.uid()));
+
+-- 6) DOPO aver creato i due utenti in Authentication → Users (Add user, Auto Confirm),
 --    eseguire questo per metterli nella stessa famiglia (l'uuid è arbitrario, basta che sia lo stesso per entrambi):
 -- insert into public.family_members (family_id, user_id)
 -- select '11111111-1111-4111-8111-111111111111', id from auth.users

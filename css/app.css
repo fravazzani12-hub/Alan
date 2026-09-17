@@ -135,3 +135,14 @@ textarea.f{min-height:90px;font-size:13px;font-family:ui-monospace,Menlo,Consola
 .chips button{min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);font-size:15px;font-weight:700}
 .chips button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
 .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;background:var(--hc);vertical-align:middle}
+/* diagnostica */
+.diag h4{font-size:14px;margin:12px 0 4px;color:var(--muted);font-weight:400}
+.kv.small{font-size:14px}.kv.small div:nth-child(even){font-weight:400;text-align:right;color:var(--text)}
+.diag .it{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px;align-items:start}
+.diag .it:last-child{border-bottom:0}
+.diag .sym{font-weight:700;font-size:16px;line-height:1.2}
+.diag .ok .sym{color:var(--c-cambio)}.diag .ko .sym{color:var(--danger)}.diag .na .sym{color:var(--muted)}
+.diag .ko{color:var(--text)}.diag .na{color:var(--muted)}
+.diag .d{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.row .play.cloud{color:var(--muted)}
+button.busy{opacity:.6;pointer-events:none}
