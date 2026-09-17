@@ -20,6 +20,7 @@ function boot(opts){
   global.btoa=s=>Buffer.from(s,'binary').toString('base64');global.atob=s=>Buffer.from(s,'base64').toString('binary');
   global.setInterval=()=>1;global.clearInterval=()=>{};
   global.Blob=class{constructor(parts,o){this.parts=parts;this.type=(o&&o.type)||'';this.size=parts.reduce((s,p)=>s+(p.byteLength||p.length||0),0);}};
+  eval(fs.readFileSync(__dirname+'/../js/who.js','utf8'));
   const src=fs.readFileSync(__dirname+'/../js/app.js','utf8').replace('window.A=A;','window.A=A;window.__T=function(n){return eval(n);};');
   eval(src);
   return new Promise(res=>setTimeout(()=>{

@@ -19,10 +19,22 @@ per chi sviluppa (umano o Claude Code).
 | feed | prep (ml preparati), ml (ml bevuti, scelti a tap a passi di 10, 0 ≤ ml ≤ prep; 0 = biberon rifiutato) | una pappa con ml = 0 non conta come ultima pappa, non entra nel tipico e non etichetta un pianto |
 | diaper | pipi (no/poca/tanta), cacca (no/poca/tanta) | |
 | sleep / wake | — | stato sonno = ultimo dei due |
-| other | what (ruttino/massaggio/ciuccio/coccole/passeggiata/bagnetto) | mappa su causa aria o contatto |
+| other | what (ruttino/rigurgito/massaggio/ciuccio/coccole/passeggiata/bagnetto) | ruttino e rigurgito → aria, il resto → contatto |
+| measure | w (g), l (cm), hc (cm, cranio); qualunque sottoinsieme | `t` = mezzogiorno del giorno scelto (oggi/ieri/…/altra data); percentile OMS calcolato al volo dall'età |
+| temp | c (°C, un decimale) | ≥ 38 °C sotto i 90 giorni: mostra la bandiera rossa già presente in Altro, testo identico |
+| med | what (vitd/probiotico/simeticone/paracetamolo/altro), name | "Vitamina D" ha il tap rapido in Salute e in Home (solo dopo il primo uso) |
+| appt | kind (bilancio/vaccino/visita/esame/altro), title, place, note, done | `t` = data e ora dell'appuntamento (futuro); non compare nel diario; esportabile in .ics |
 | cry | dur (s), label (fame/sonno/cambio/aria/contatto/solo/null), bins {f,a,h}, ctx (snapshot), feat {vec[12], meanF0, sdF0, meanRms, bursts10, meanBurst, meanPause, voiced, cent, durS}, audio (bool, **solo locale**), mime, audioPath (percorso nel bucket, `<family_id>/<id>.<ext>`), rec {mime, bytes, frames, err} (esito della registrazione, mostrato nel dettaglio del pianto) | audio in IndexedDB, chiave = id, valore `{buf: ArrayBuffer, mime}` (i Blob in IndexedDB su iOS sono fragili; i vecchi Blob restano leggibili) |
 
 Impostazioni: `settings {name, birth (YYYY-MM-DD), _updated}`.
+
+Crescita (`js/who.js`): standard OMS 2006 maschi, parametri LMS di peso, lunghezza e circonferenza cranica per età campionati ogni
+7 giorni da 0 a 2 anni (fonte: tabelle ufficiali WHO, via pacchetto npm `who-growth-standards`, MIT). z = ((x/M)^L − 1)/(L·S),
+percentile = Φ(z), interpolazione lineare fra i campioni. Il grafico disegna le bande 3°–97° e 15°–85°, la mediana e la
+traiettoria di Alan; il percentile mostrato è un calcolo, la lettura la fa il pediatra.
+
+Tappe (`MILESTONES`): bilanci di salute e calendario vaccinale nazionale per mese di età; sono suggerimenti, spariscono quando
+esiste una visita dello stesso tipo entro ±45 giorni o quando la tappa è passata da oltre 45 giorni.
 
 Locale: IndexedDB `alan-v2` (store `kv` → `state` JSON, store `audio` → `{buf,mime}`), mirror in localStorage `alan.v2`.
 Code offline in localStorage: `alan.outbox` (voci), `alan.audio.outbox` (id dei pianti con audio da caricare), `alan.settings.outbox`.
@@ -88,6 +100,11 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
 
 ## 5. UI
 - Intestazione: nome ed età a sinistra, a destra le pillole di presenza (nessun selettore di chi registra).
+- Tab Salute: Crescita (Peso/Lunghezza/Cranio, valore grande + percentile, grafico OMS, registrazione a stepper con "quando"),
+  Vitamina D e medicine (tap unico + 7 giorni), Temperatura (chip + stepper ±0,1), Visite e vaccini (prossima in evidenza con
+  conto alla rovescia, "Nel calendario" = file .ics con promemoria il giorno prima, "Fatta", tappe in arrivo con "Programma").
+- Home: sotto i riquadri di stato, la riga salute (Vitamina D di oggi, visita entro 14 giorni) e, dalle 5 alle 13, il riepilogo
+  della notte (22–7: pappe e ml, cambi, pianti, sonno, chi si è alzato; tocca per l'elenco).
 - Font Atkinson Hyperlegible; palette light/dark via `prefers-color-scheme`; tap target ≥ 44 px su ogni controllo (verificato a 390 px, chiaro e scuro); percorsi a schermo intero; toast su più righe, mai troncato.
 - Colori causa: fame #D9962A, sonno #5B73D9, cambio #2E9E6E, aria #B266A6, contatto #D96A5C; accento #F0B040. In dark mode le etichette causa usano inchiostro scuro.
 - I pulsanti che aspettano la rete (Accedi, Sincronizza adesso, Esci, Prova il microfono, ▶ che scarica) mostrano uno stato di attesa e non accettano un secondo tocco.

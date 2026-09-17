@@ -27,6 +27,8 @@
   <section class="view on" id="v-oggi">
     <div class="status" id="status"></div>
     <div id="openCryBanner"></div>
+    <div id="healthLine"></div>
+    <div id="night"></div>
     <button class="cry" id="cryBtn" onclick="A.openCry()">Piange<small>registra e ascolta</small></button>
     <div class="home-grid">
       <button style="--tc:var(--c-fame)" onclick="A.flow('feed')">Pappa<small id="qFeed"></small></button>
@@ -40,6 +42,7 @@
 
   <section class="view" id="v-pianti"><div id="cries"></div></section>
   <section class="view" id="v-pattern"><div id="stats"></div></section>
+  <section class="view" id="v-salute"><div id="health"></div></section>
 
   <section class="view" id="v-altro">
     <div class="card">
@@ -95,12 +98,14 @@
   <button class="on" data-v="oggi">Oggi</button>
   <button data-v="pianti">Pianti</button>
   <button data-v="pattern">Pattern</button>
+  <button data-v="salute">Salute</button>
   <button data-v="altro">Altro</button>
 </nav>
 
 <div class="screen" id="screen"><div class="inner" id="screenInner"></div></div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+<script src="./js/who.js"></script>
 <script src="./js/config.js"></script>
 <script src="./js/sync.js"></script>
 <script src="./js/app.js"></script>

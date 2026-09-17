@@ -35,10 +35,12 @@ Safari → Condividi → "Aggiungi alla schermata Home". Da quel momento aprila 
 
 ## Cosa fa (in breve)
 - **Home**: intestazione con nome, età e presenza dei genitori; tre timer (ultima pappa, sveglio/dorme da, ultimo cambio), pulsante "Piange", quattro riquadri: Pappa, Pannolino, Nanna, Altro.
-- **Percorsi a tap**: Pappa → quanto preparato → quanto bevuto (ml precisi, da 0 al preparato). Pannolino → pipì → cacca. Nanna → un tap. Altro → ruttino, massaggio, ciuccio, coccole, passeggiata, bagnetto. Ogni percorso ha "quando": adesso / 15 / 30 / 60 min fa.
+- **Percorsi a tap**: Pappa → quanto preparato → quanto bevuto (ml precisi, da 0 al preparato). Pannolino → pipì → cacca. Nanna → un tap. Altro → ruttino, rigurgito, massaggio, ciuccio, coccole, passeggiata, bagnetto. Ogni percorso ha "quando": adesso / 15 / 30 / 60 min fa.
 - **Piange**: registra fino a 30 s, calcola l'impronta acustica (tono, variazione, intensità, raffiche/pause, voce, timbro, andamento) e mostra le ipotesi in tempo reale. La prossima azione registrata entro 45 minuti spiega il pianto, da qualunque dei due telefoni.
 - **Pianti**: precisione misurata a posteriori (solo contesto, solo suono, insieme, caso), elenco dei pianti con riascolto (▶ scarica l'audio registrato dall'altro telefono al primo tocco), cambio spiegazione.
 - **Pattern**: 24 h, medie 7 giorni contro le norme per età, perché piangeva, contesto → causa, suono → causa.
+- **Salute**: crescita con il grafico dei percentili OMS (peso, lunghezza, cranio) e il percentile di Alan, vitamina D con un tap e gli ultimi sette giorni, temperatura, visite e vaccini con "Nel calendario" (file .ics, si apre in Calendario) e le tappe del calendario vaccinale suggerite in base all'età.
+- **Home, in più**: la vitamina D di oggi e la prossima visita sotto i riquadri, e la mattina il riepilogo della notte (pappe, cambi, pianti, sonno, chi si è alzato).
 - **Altro**: bandiere rosse pediatriche, **Diagnostica** (cosa è riuscito e cosa no nell'ultima registrazione, passo per passo, con "Condividi la diagnostica" per mandare il testo), account e sync, codice di riserva per unire i diari, impostazioni (nome e data di nascita, condivise tra i telefoni).
 - **Aggiornamenti**: quando esce una versione nuova compare in alto il banner "Nuova versione, tocca per aggiornare", anche nell'app installata.
 
