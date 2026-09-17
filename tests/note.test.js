@@ -11,7 +11,7 @@ const H=36e5,MIN=6e4;
   const diary=()=>String(app.els['#diary']._h);
   assert.ok(N&&typeof N.set==='function'&&typeof N.all==='function','namespace AlanExt.note');
   assert.strictEqual(T('EXT.rows.length'),1,'decoratore delle righe registrato');
-  assert.ok(T('EXT.flows.note')&&T('EXT.flows.notepick'),'percorsi registrati');
+  assert.ok(T('EXT.flows.note')&&T('EXT.flows.diario'),'percorsi registrati');
   assert.strictEqual(T('EXT.slots.salute.length'),1,'scheda in Salute');
   // --- pulizia del testo: spazi, a capo, limite
   assert.strictEqual(N.clean('  ciao   mondo \n\n  seconda  '),'ciao mondo\nseconda');
@@ -23,10 +23,10 @@ const H=36e5,MIN=6e4;
   add({k:'appt',t:now+3*864e5,kind:'vaccino',title:'Vaccino'});add({k:'sleep',t:now-4*864e5});
   T('renderHome()');
   assert.ok(/class="row tap"/.test(diary()),'righe toccabili');assert.ok(new RegExp("onclick=\"AlanExt.note.open\\('"+f.id+"'\\)\"").test(diary()),'tap apre la nota');
-  assert.ok(/nt-hint/.test(String(app.els['#home-note']._h)),'suggerimento finché non c\'è nessuna nota');
+  assert.ok(/nt-hint/.test(String(app.els['#home-note']._h))&&/Tutto il diario/.test(String(app.els['#home-note']._h)),'suggerimento finché non c\'è nessuna nota, più Tutto il diario');
   assert.ok(!/class="nt"/.test(diary()),'nessuna nota mostrata');
   T('renderHealth()');const sal=String(app.els['#health']._h);
-  assert.ok(/<h3>Note<\/h3>/.test(sal)&&/riepilogo per il pediatra/.test(sal)&&/Scrivi una nota/.test(sal),'scheda vuota con il pulsante');
+  assert.ok(/<h3>Note<\/h3>/.test(sal)&&/riepilogo per il pediatra/.test(sal)&&/Scrivi una nota nel diario/.test(sal),'scheda vuota con il pulsante');
   assert.strictEqual(N.all().length,0);
   // --- percorso: apre sulla voce, salva, la voce ha nota e autore, _updated fresco, diario aggiornato
   N.open(f.id);
@@ -40,7 +40,7 @@ const H=36e5,MIN=6e4;
   assert.strictEqual(app.T('flow'),null,'schermata chiusa');
   assert.ok(/class="nt">ha bevuto piano, sembrava stanco/.test(diary()),'nota sotto la voce: '+diary());
   assert.ok(/— Io</.test(diary()),'autore diverso da chi ha registrato');
-  assert.strictEqual(String(app.els['#home-note']._h),'','suggerimento sparito');
+  assert.ok(!/nt-hint/.test(String(app.els['#home-note']._h))&&/Tutto il diario/.test(String(app.els['#home-note']._h)),'suggerimento sparito, pulsante resta');
   assert.deepStrictEqual(N.all().map(e=>e.id),[f.id]);
   // --- stesso testo: nessuna modifica; modifica; togli
   const u1=f._updated;assert.strictEqual(N.set(f.id,'ha bevuto piano, sembrava stanco'),null);assert.strictEqual(f._updated,u1);
@@ -52,13 +52,19 @@ const H=36e5,MIN=6e4;
   assert.strictEqual(N.set(d.id,'y'.repeat(500)),true);assert.strictEqual(d.note.length,200);
   assert.strictEqual(N.set('nope','x'),false);
   N.open('nope');assert.ok(/non c'è più/.test(screen()));
-  // --- scelta della voce: ultime 3 giornate, dalla più recente, senza visite e senza voci vecchie
+  // --- tutto il diario: 7 giornate alla volta, dal più recente, per giorno, senza visite; "Giorni precedenti" se c'è altro
   N.set(d.id,'cacca verde e liquida');
-  let rec=N.recent(now);assert.deepStrictEqual(rec.map(e=>e.id),[d.id,f.id],'recenti dal più nuovo, senza visita e senza la nanna di 4 giorni fa');
-  A.flow('notepick');assert.ok(/Su quale voce\?/.test(screen())&&/Scrivi una nota/.test(screen()),screen());
-  assert.strictEqual((screen().match(/class="row nt-row"/g)||[]).length,2,'due voci scegliibili');
-  assert.ok(/class="nt">cacca verde e liquida/.test(screen()),'la nota esistente si vede nella scelta');
-  A.home();S.events.length=0;A.flow('notepick');assert.ok(/Nessuna voce negli ultimi 3 giorni/.test(screen()));A.home();
+  let rec=N.recent(now,3);assert.deepStrictEqual(rec.map(e=>e.id),[d.id,f.id],'ultime 3 giornate dal più nuovo, senza visita e senza la nanna di 4 giorni fa');
+  assert.strictEqual(N.recent(now).length,3,'7 giornate: anche la nanna di 4 giorni fa');assert.strictEqual(N.recent(now,7).length,3);
+  add({k:'feed',t:now-20*864e5,prep:120,ml:80});
+  assert.ok(N.older(now,7)&&!N.older(now,30),'c\'è una voce prima di 7 giorni, non prima di 30');
+  N.openDiary();assert.ok(/<div class="title">Tutto il diario<\/div>/.test(screen())&&/anche a distanza di giorni/.test(screen()),screen());
+  assert.strictEqual((screen().match(/class="row nt-row"/g)||[]).length,3,'tre voci nelle 7 giornate');
+  assert.ok(/<h4 class="nt-day">Oggi<\/h4>/.test(screen()),'intestazione del giorno');assert.strictEqual((screen().match(/nt-day/g)||[]).length,2,'due giornate');
+  assert.ok(/class="nt">cacca verde e liquida/.test(screen()),'la nota esistente si vede');assert.ok(/Giorni precedenti/.test(screen()),'c\'è altro prima');
+  N.more();assert.strictEqual(app.T('flow').data.days,14);assert.ok(/Giorni precedenti/.test(screen()),'ancora una voce oltre i 14 giorni');
+  N.more();assert.strictEqual(app.T('flow').data.days,21);assert.strictEqual((screen().match(/class="row nt-row"/g)||[]).length,4,'a 21 giorni c\'è anche la pappa vecchia');assert.ok(!/Giorni precedenti/.test(screen()),'niente più da caricare');
+  A.home();S.events.length=0;N.openDiary();assert.ok(/ancora vuoto/.test(screen()));A.home();
   // --- scheda Salute con le note, dalla più recente, al massimo 20 più "altre"
   for(let i=0;i<23;i++)add({k:'feed',t:now-(i+1)*H,prep:120,ml:90,note:'nota '+i,noteBy:'Fabio'});
   assert.strictEqual(N.all().length,23);assert.strictEqual(N.all()[0].note,'nota 0');

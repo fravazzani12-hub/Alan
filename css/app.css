@@ -323,6 +323,8 @@ textarea.nt-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 .nt-row .time{white-space:nowrap}
 .nt-go{color:var(--muted);font-size:22px;line-height:1}
 .nt-card .btn{margin-top:0}
+.nt-day{margin:14px 0 4px;font-size:14px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.nt-all{margin-top:0}
 /* == /note == */
 
 /* == report == */
