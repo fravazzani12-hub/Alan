@@ -326,24 +326,27 @@ la sezione "Note" (data, ora, voce · testo, chi) con le note del periodo, ripor
 Esposto su `AlanExt.note` = {text, has, clean, set, all, recent(now, days), older, open, openDiary, more, typed, card}.
 
 ### 9.9 Rumore bianco (`js/noise.js`)
-Suono per la nanna generato nel telefono, senza file e senza rete. **Curva "Come il video"**: `CURVE_VIDEO`, livello in dB a
-1/6 di ottava da 20 Hz a 20 kHz, misurato dalla registrazione del video usato da Fabio e Ilaria (rumore gaussiano stazionario,
-due canali indipendenti, piatto fino a ~1 kHz con una gobba a 500–800 Hz, taglio netto sopra 1 kHz e discesa fino a 16 kHz);
-la risintesi differisce dal video di meno di 0,2 dB per terzo d'ottava. Varianti: Più scuro (−3 dB/ott sopra 200 Hz), Più
-chiaro (+4 dB/ott sopra 1 kHz), Rosa (−3 dB/ott) e Marrone (−6 dB/ott) con la stessa chiusura sopra 16 kHz. **Sintesi**:
-spettro con le ampiezze della curva (interpolazione in log f) e fasi casuali, simmetria hermitiana, IFFT radix-2 in place su
-2^21 campioni a 44,1 kHz (47,6 s): rumore gaussiano con loop circolare perfetto, RMS normalizzato; un canale per lato.
-**Volume nel file** (iOS ignora `audio.volume`): WAV 16 bit stereo con guadagno `BASE_DB` (−15 dBFS RMS, il livello misurato
-nel video) + `VOL_DB[livello−1]` = −16/−10/−5/0/+3 dB; il livello 4 è il video a parità di volume del telefono.
-**Riproduzione**: `<audio loop playsinline>` con blob URL, niente Web Audio (continua a schermo bloccato su Safari e Android;
-dall'app installata su iOS può fermarsi, la nota in schermata dice di aprire in Safari); `play()` sincrono nel tap: se il suono lungo
-non è pronto parte un'anteprima (2^18 campioni, 5,9 s di loop, sintesi istantanea) e la versione lunga si genera 0,7 s dopo
-in sottofondo e la sostituisce con un solo cambio di file (`upgrade`, annullato da Stop o da un altro cambio); `prewarm` 4 s
-dopo l'avvio prepara il suono salvato già lungo; il tap su un suono o su un livello di volume lo fa partire subito (anteprima), il timer si
-applica al volo; sotto i livelli la riga `volText`: dB rispetto al video (−16/−10/−5/0/+3), con l'invito a misurare una volta
-con un'app fonometro perché il livello alla culla dipende dal telefono e dalla distanza; la schermata si ridisegna a ogni tap (`refresh`); Media Session con titolo e azioni play/pause/stop; timer
-(30 min, 1, 2, 8 h) controllato su `timeupdate` e ogni 15 s; cambio di suono o volume a riproduzione in corso = ripartenza.
+Suono per la nanna generato nel telefono, senza file e senza rete. **Curva "Ventilatore"** (id `video`): `CURVE_VIDEO`, livello
+in dB a 1/6 di ottava da 20 Hz a 20 kHz, misurato dalla registrazione del video usato da Fabio e Ilaria (rumore gaussiano
+stazionario, due canali indipendenti, piatto fino a ~1 kHz con una gobba a 500–800 Hz, taglio netto sopra 1 kHz e discesa
+fino a 16 kHz); la risintesi differisce dal video di meno di 0,2 dB per terzo d'ottava. Varianti: Ventilatore scuro (−3 dB/ott
+sopra 200 Hz), Ventilatore chiaro (+4 dB/ott sopra 1 kHz), Rosa (−3 dB/ott) e Marrone (−6 dB/ott) con la stessa chiusura
+sopra 16 kHz. **Sintesi**: spettro con le ampiezze della curva (interpolazione in log f) e fasi casuali, simmetria hermitiana,
+IFFT radix-2 in place; versione lunga 2^21 campioni a 44,1 kHz (47,6 s) e anteprima 2^18 (5,9 s, sintesi istantanea): rumore
+gaussiano con loop circolare perfetto, RMS normalizzato; un canale per lato.
+**Riproduzione (Web Audio)**: un solo `AudioContext` creato nel tap; `master` (GainNode, volume) → uscita; ogni suono è una
+"voce" = `AudioBufferSourceNode` in loop (gapless per costruzione) con il suo GainNode. Cambio di voce (anteprima → lunga,
+suono → suono) in dissolvenza incrociata di 0,4 s, la vecchia si ferma dopo; volume con `setTargetAtTime` sul master, senza
+ricodifiche né riavvii; Stop = dissolvenza di 0,15 s. **Livelli**: `BASE_DB` −15 dBFS RMS (il livello misurato nel video) +
+`VOL_DB[livello−1]` = −16/−10/−5/0/+3 dB; il livello 4 è l'originale a parità di volume del telefono; sotto i livelli la riga
+`volText` (dB rispetto all'originale) con l'invito a misurare una volta con un'app fonometro. **Sessione a schermo bloccato**:
+un `<audio loop playsinline>` silenzioso (1 s di zeri da `wav`, blob URL) avviato nel tap tiene viva la sessione audio e porta
+la Media Session (titolo, play/pause/stop, `playbackState`); la sua pausa dal sistema ferma tutto; su `visibilitychange` e
+`statechange` il contesto sospeso viene ripreso. Timer (30 min, 1, 2, 8 h) controllato ogni 15 s e su `timeupdate` del
+keepalive. `play()` e il contesto nascono nel tap: il tap su un suono o su un livello lo fa partire subito (anteprima), la
+versione lunga si genera 0,7 s dopo in sottofondo (`upgrade`, annullato da Stop o da un altro cambio); `prewarm` 4 s dopo
+l'avvio prepara il suono salvato già lungo; la schermata si ridisegna a ogni tap (`refresh`). Senza `AudioContext` un toast.
 Stato in localStorage `alan.noise` = {type, vol, timer}, solo locale. UI: riga in Home (blocco `mid`, testo → schermata,
 Avvia/Stop) e schermata `noise` (Avvia/Stop grande, 5 suoni, 5 livelli, timer, nota AAP su distanza ≥ 2 m e ≤ 50 dB).
-Esposto su `AlanExt.noise` = {curveOf, fft, synth(type, logN, fs, rand), wav, gainDb, state, setType, setVol, setTimer,
-start, stop, toggle, isPlaying, endAt, check, render, summary, status, prewarm, ensure}.
+Esposto su `AlanExt.noise` = {curveOf, fft, synth(type, logN, fs, rand), wav, gainDb, gainLin, state, setType, setVol, setTimer,
+start, stop, toggle, isPlaying, endAt, check, render, refresh, summary, status, volText, prewarm, ensure, context, voice, keep}.
