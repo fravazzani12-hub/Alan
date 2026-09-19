@@ -849,31 +849,14 @@ A.cryDetail=function(id){
 };
 
 /* ---------- pattern tab ---------- */
+/* Pattern: prima le schede delle estensioni (La settimana, Pappa, Nanna, Pannolini, Ritmo, cronometro), poi "Perché piangeva"
+   con le tabelle di dettaglio (fasce orarie, contesto → causa, suono → causa) a scomparsa. */
+var statsDetailsOpen=false;
+A.statsDetails=function(){statsDetailsOpen=!statsDetailsOpen;renderStats();};
 function renderStats(){
-  var now=Date.now(),ev=sorted(),h='';
-  var d1=ev.filter(function(e){return e.t>=now-864e5;}),d7=ev.filter(function(e){return e.t>=now-7*864e5;});
-  var feeds1=d1.filter(function(e){return e.k==='feed';}),ml1=feeds1.reduce(function(s,e){return s+(e.ml||0);},0);
-  var diap1=d1.filter(function(e){return e.k==='diaper';}),poop1=diap1.filter(function(e){return e.cacca&&e.cacca!=='no';}).length,wet1=diap1.filter(function(e){return e.pipi&&e.pipi!=='no';}).length;
-  var cries1=d1.filter(function(e){return e.k==='cry';}).length;
-  var sleep1=0,curS=null;
-  ev.forEach(function(e){if(e.k==='sleep')curS=e.t;else if(e.k==='wake'&&curS!=null){var a=Math.max(curS,now-864e5),b=Math.min(e.t,now);if(b>a)sleep1+=b-a;curS=null;}});
-  if(curS!=null){var a2=Math.max(curS,now-864e5);if(now>a2)sleep1+=now-a2;}
-  h+='<div class="card"><h3>Ultime 24 ore</h3><div class="kv"><div>Pappe</div><div>'+feeds1.length+' <span class="m">'+ml1+' ml</span></div><div>Sonno totale</div><div>'+fmtDur(sleep1)+'</div><div>Cambi</div><div>'+diap1.length+' <span class="m">'+wet1+' pipì · '+poop1+' cacca</span></div><div>Pianti registrati</div><div>'+cries1+'</div></div></div>';
-  var feeds7=d7.filter(function(e){return e.k==='feed';}),ints=[];for(var i=1;i<feeds7.length;i++){var g=(feeds7[i].t-feeds7[i-1].t)/H;if(g>0.5&&g<8)ints.push(g);}
-  var mls=feeds7.filter(function(e){return e.ml;}).map(function(e){return e.ml;});
-  var days7=Math.min(7,Math.max(1,(now-(ev.length?ev[0].t:now))/864e5));
-  var awakes=[],naps=[],ls=null,lw=null;
-  d7.forEach(function(e){if(e.k==='sleep'){if(lw!=null){var aw=(e.t-lw)/MIN;if(aw>5&&aw<240)awakes.push(aw);}ls=e.t;}else if(e.k==='wake'){if(ls!=null){var np=(e.t-ls)/MIN;if(np>5&&np<600)naps.push(np);}lw=e.t;}});
+  var now=Date.now(),h='';
   var n=norms(ageDays());
-  h+='<div class="card"><h3>Ultimi 7 giorni</h3><div class="kv">';
-  h+='<div>Tra una pappa e l\'altra</div><div>'+(mean(ints)!=null?fmtDur(mean(ints)*H):'—')+' <span class="m">atteso ~'+n.feedH+' h</span></div>';
-  h+='<div>Per pappa</div><div>'+(mean(mls)!=null?Math.round(mean(mls))+' ml':'—')+'</div>';
-  h+='<div>Al giorno</div><div>'+(mls.length?Math.round(mls.reduce(function(s,x){return s+x;},0)/days7)+' ml':'—')+'</div>';
-  h+='<div>Veglia media</div><div>'+(mean(awakes)!=null?fmtDur(mean(awakes)*MIN):'—')+' <span class="m">finestra ~'+n.awakeMin+' min</span></div>';
-  h+='<div>Pisolino medio</div><div>'+(mean(naps)!=null?fmtDur(mean(naps)*MIN):'—')+'</div>';
-  var rig=d7.filter(function(e){return e.k==='other'&&e.what==='rigurgito';}),rigFeed=rig.filter(function(r){return d7.some(function(f){return f.k==='feed'&&r.t-f.t>=0&&r.t-f.t<=30*MIN;});}).length;
-  if(rig.length)h+='<div>Rigurgiti</div><div>'+rig.length+' <span class="m">'+rigFeed+' entro 30 min da una pappa</span></div>';
-  h+='<div>Pianti al giorno</div><div>'+(Math.round(d7.filter(function(e){return e.k==='cry';}).length/days7*10)/10)+'</div></div></div>';
+  h+=extHtml('stats');
   var g2=outcomeCounts(null);
   h+='<div class="card"><h3>Perché piangeva</h3>';
   if(!g2.n)h+='<p class="hint">Nessun pianto spiegato ancora. Registra il pianto, poi fai la cosa giusta: la registrazione dell\'azione lo spiega.</p>';
@@ -881,6 +864,7 @@ function renderStats(){
     var mx=0;CAUSES.forEach(function(c){mx=Math.max(mx,g2.c[c.id]);});
     CAUSES.forEach(function(c){h+='<div class="obar" style="--hc:'+c.c+'"><div class="l">'+c.label+'</div><div class="b"><i style="width:'+(mx?Math.round(g2.c[c.id]/mx*100):0)+'%"></i></div><div class="n">'+g2.c[c.id]+'</div></div>';});
     var solo=S.events.filter(function(e){return e.k==='cry'&&e.label==='solo';}).length;if(solo)h+='<p class="hint">Più '+solo+' passati da soli.</p>';
+    h+='<button class="st-more" aria-expanded="'+(statsDetailsOpen?'true':'false')+'" onclick="A.statsDetails()">'+(statsDetailsOpen?'Nascondi i dettagli':'Dettagli: fasce orarie, contesto e suono')+'</button><div class="st-details"'+(statsDetailsOpen?'':' hidden')+'>';
     var bands=['notte 0–6','mattina 6–12','pomeriggio 12–17','sera 17–24'];
     h+='<h3 style="margin-top:14px">Per fascia oraria</h3><table><tr><th>Fascia</th><th class="n">Ep.</th><th>Più frequente</th></tr>';
     for(var bi=0;bi<4;bi++){var oc=outcomeCounts(function(e){return e.bins&&e.bins.h===bi;});if(!oc.n)continue;var best=argmax(oc.c);h+='<tr><td>'+bands[bi]+'</td><td class="n">'+oc.n+'</td><td>'+cause(best).label+' ('+oc.c[best]+'/'+oc.n+')</td></tr>';}
@@ -897,9 +881,9 @@ function renderStats(){
       CAUSES.forEach(function(c){var s=withF.filter(function(e){return e.label===c.id;});if(!s.length)return;h+='<tr><td>'+c.label+'</td><td class="n">'+s.length+'</td><td class="n">'+Math.round(mean(s.map(function(e){return e.feat.meanF0;})))+'</td><td class="n">'+(Math.round(mean(s.map(function(e){return e.feat.bursts10;}))*10)/10)+'</td><td class="n">'+Math.round(mean(s.map(function(e){return e.feat.voiced;}))*100)+'</td></tr>';});
       h+='</table>';
     }
+    h+='</div>';
   }
   h+='</div>';
-  h+=extHtml('stats');
   $('#stats').innerHTML=h;
 }
 
@@ -1350,7 +1334,7 @@ var EXT={flows:{},home:[],tabs:{},slots:{},describe:{},hidden:{},hooks:{},rows:[
    riga e/o un onclick (tap) per tutta la descrizione; il primo tap registrato vince */
 function extRow(e){var out={html:'',tap:null};for(var i=0;i<EXT.rows.length;i++){try{var r=EXT.rows[i](e,API);if(!r)continue;if(typeof r==='string')out.html+=r;else{if(r.html)out.html+=r.html;if(r.tap&&!out.tap)out.tap=r.tap;}}catch(x){}}return out;}
 function extEmit(evt){var hs=EXT.hooks[evt]||[];for(var i=0;i<hs.length;i++){try{hs[i](API);}catch(e){}}}
-function extHtml(slot){var fs=EXT.slots[slot]||[],out='';for(var i=0;i<fs.length;i++){try{out+=fs[i](API)||'';}catch(e){}}return out;}
+function extHtml(slot){var fs=(EXT.slots[slot]||[]).slice().sort(function(a,b){return (a.prio||0)-(b.prio||0);}),out='';for(var i=0;i<fs.length;i++){try{out+=fs[i].fn(API)||'';}catch(e){}}return out;}
 function renderExtHome(){
   for(var i=0;i<EXT.home.length;i++){var b=EXT.home[i],host=$('#'+(b.where==='top'?'extTop':(b.where==='bottom'?'extBottom':'extMid')));if(!host)continue;
     var el=document.getElementById?document.getElementById('home-'+b.id):null;
@@ -1374,7 +1358,7 @@ window.AlanExt={
   flow:function(type,def){EXT.flows[type]=def;},
   home:function(id,fn,where){EXT.home.push({id:id,fn:fn,where:where||'mid'});},
   tab:function(id,fn){EXT.tabs[id]=fn;},
-  slot:function(name,fn){(EXT.slots[name]=EXT.slots[name]||[]).push(fn);},
+  slot:function(name,fn,prio){(EXT.slots[name]=EXT.slots[name]||[]).push({fn:fn,prio:prio||0});},
   describe:function(k,fn){EXT.describe[k]=fn;},
   row:function(fn){EXT.rows.push(fn);},
   hide:function(k){EXT.hidden[k]=true;},

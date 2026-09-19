@@ -72,7 +72,9 @@ const DAY=864e5,H=36e5;
   const bag=fs_.done[0].e.id;assert.strictEqual(M.del(bag),true);
   assert.ok(!S.events.some(x=>x.id===bag));assert.strictEqual(M.firsts().done.length,2);
   // --- questa settimana in numeri (notti = 22–7): la notte tra l'altro ieri e ieri è sempre tutta passata
-  const d=new Date(),y7=new Date(d.getFullYear(),d.getMonth(),d.getDate()-1,7,0,0).getTime(),now=Date.now();
+  // "adesso" fisso alle 14 di oggi: così le voci di poche ore fa non finiscono mai nella finestra di notte 22–7
+  const d=new Date(),y7=new Date(d.getFullYear(),d.getMonth(),d.getDate()-1,7,0,0).getTime(),now=new Date(d.getFullYear(),d.getMonth(),d.getDate(),14,0,0).getTime();
+  const realNow=Date.now;Date.now=()=>now;
   add({k:'sleep',t:y7-8*H,who:'Ilaria'});add({k:'wake',t:y7-2*H,who:'Ilaria'});
   add({k:'feed',prep:120,ml:90,t:y7-5*H,who:'Fabio'});add({k:'diaper',pipi:'normale',cacca:'no',t:y7-4*H,who:'Fabio'});add({k:'feed',prep:120,ml:100,t:y7-3*H,who:'Ilaria'});
   add({k:'feed',prep:120,ml:110,t:now-2*H,who:'Ilaria'});add({k:'feed',prep:120,ml:0,t:now-1*H,who:'Ilaria'});add({k:'feed',prep:120,ml:100,t:now-10*DAY,who:'Fabio'});
@@ -93,6 +95,7 @@ const DAY=864e5,H=36e5;
   assert.ok(/<b>3<\/b><span>pappe/.test(h)&&/<b>6 h<\/b><span>di sonno a notte/.test(h)&&/<b>1 su 2<\/b><span>pianti spiegati/.test(h),h.match(/mo-nums[\s\S]*?<\/div><p/));
   assert.ok(/Squadra\./.test(h)&&!/classifica|meglio|peggio/.test(h),'squadra, non classifica');
   assert.ok(/mo-story/.test(h)&&/Prima volta al parco/.test(h),'i racconti senza foto restano visibili');
+  Date.now=realNow;
   // --- lettera: tastiera ammessa, salvata con chi, elenco e apertura
   T('who="Ilaria"');
   M.write();f=T('flow');assert.ok(f&&f.type==='letter');

@@ -4,7 +4,7 @@ const assert=require('assert');
 const {boot}=require('./stub');
 const MIN=6e4,H=36e5;
 (async()=>{
-  const app=await boot();const {A,S,T,txt}=app;
+  const app=await boot({ext:['stats']});const {A,S,T,txt}=app;
   const pctOf=T('pctOf'),xOfZ=T('xOfZ'),lmsAt=T('lmsAt'),niceTicks=T('niceTicks'),growthChart=T('growthChart'),nightSummary=T('nightSummary'),icsFor=T('icsFor'),milestonesDue=T('milestonesDue'),nextAppt=T('nextAppt'),describe=T('describe');
   S.settings.birth='2026-08-20';
   // --- OMS: valori noti delle tabelle (maschi): mediana a 0 giorni 3,35 kg, a 365 giorni 9,65 kg, lunghezza 49,9 → 75,7 cm
@@ -76,7 +76,7 @@ const MIN=6e4,H=36e5;
   S.events.push({id:'f9',k:'feed',t:Date.now()-10*MIN,who:'Fabio',prep:120,ml:100});
   A.flow('other');assert.ok(/Rigurgito/.test(txt('#screenInner')));A.finish('rigurgito');
   assert.strictEqual(S.events.find(e=>e.id==='cr').label,'aria');
-  T('renderStats()');assert.ok(/Rigurgiti 1 1 entro 30 min da una pappa/.test(txt('#stats')),txt('#stats').slice(0,300));
+  T('renderStats()');assert.ok(/Rigurgiti: 1 in 7 giorni, 1 entro 30 min da una pappa/.test(txt('#stats')),txt('#stats').match(/Rigurgiti[^.]*|Pappa[^.]{0,120}/g));
   // --- pannello: si disegna con tutto dentro, nessun errore
   T('renderHealth()');const hh=txt('#health');assert.ok(/Crescita/.test(hh)&&/Vitamina D data/.test(hh)&&/38,2 °C/.test(hh)&&/Tappe in arrivo/.test(hh)&&/1 visita fatta/.test(hh));
   console.log('health ok');
