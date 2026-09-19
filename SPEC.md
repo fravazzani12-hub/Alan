@@ -23,7 +23,7 @@ per chi sviluppa (umano o Claude Code).
 | letter | text (≤ 4000) | `js/momenti.js`; `t` = adesso, `who` = chi scrive; nascosto dal diario |
 | diaper | pipi (no/poca/normale/tanta), cacca (no/poca/normale/tanta) | il valore `si` della v12 si legge come normale (`lvlKey`); conta come "con pipì/cacca" tutto ciò che non è `no` |
 | sleep / wake | — | stato sonno = ultimo dei due |
-| (ogni voce del diario) | note (testo ≤ 200), noteBy (chi l'ha scritta) | `js/note.js`; campi opzionali su qualunque voce tranne appt e le voci nascoste; viaggiano nel `data` jsonb con la voce (LWW sull'intera voce) |
+| (ogni voce del diario) | note (testo ≤ 200, `noteClean`), noteBy (chi l'ha scritta) | scritti dalla schermata di modifica (`A.edit`, app.js), mostrati da `js/note.js`; campi opzionali su qualunque voce tranne appt e le voci nascoste; viaggiano nel `data` jsonb con la voce (LWW sull'intera voce) |
 | other | what (ruttino/rigurgito/massaggio/ciuccio/coccole/passeggiata/bagnetto) | ruttino e rigurgito → aria, il resto → contatto |
 | measure | w (g), l (cm); uno o entrambi | `t` = mezzogiorno del giorno scelto (oggi/ieri/…/altra data); percentile OMS calcolato al volo dall'età |
 | temp | c (°C, un decimale) | ≥ 38 °C sotto i 90 giorni: mostra la bandiera rossa già presente in Altro, testo identico |
@@ -109,10 +109,29 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
 - Tab Salute: Crescita (Peso/Lunghezza, valore grande + percentile, grafico OMS, registrazione a stepper con "quando"),
   Vitamina D e medicine (tap unico + 7 giorni), Temperatura (chip + stepper ±0,1), Visite e vaccini (prossima in evidenza con
   conto alla rovescia, "Nel calendario" = file .ics con promemoria il giorno prima, "Fatta", tappe in arrivo con "Programma").
-- Home: sotto i riquadri di stato, la riga salute (Vitamina D di oggi, visita entro 14 giorni) e, dalle 5 alle 13, il riepilogo
+- Home, ordine: intestazione, cronometro (`#extTop`), i tre riquadri di stato, l'eventuale banner del pianto aperto,
+  la scheda **"Prossime tappe"** (`#next`), il riepilogo della notte, il rumore bianco (`#extMid`), "Piange", i quattro
+  riquadri e "Ultime voci".
+- **"Prossime tappe"** (`renderNext`): una sola scheda per tutto ciò che sta per succedere. Le righe hanno lo stesso
+  formato (`nextRow`: pallino del colore della cosa, testo, quando a destra, un'azione facoltativa) e arrivano dallo slot
+  `next` delle estensioni — previsioni (`predict`, priorità −20) e promemoria (`reminders`, 0) — più la riga della
+  vitamina D di oggi con "Segna" (app.js). Le visite di oggi e domani le annuncia il promemoria, quelle più in là stanno
+  in Salute: qui non si ripetono. Senza righe la scheda non compare.
+- **Riepilogo della notte** (22–7, dalle 5 alle 13): chiuso mostra la finestra e i numeri in una riga; al tocco si apre con
+  il resoconto in frasi (`nightStory`: quanto ha dormito e il tratto più lungo, risvegli, pappe e ml, cambi e quanti con
+  cacca, pianti con le cause, alzate per genitore — nomi senza genere), quattro riquadri di numeri, le note scritte di
+  notte e l'elenco delle voci, ognuna toccabile per la modifica. Serve a chi la notte non l'ha vissuta.
+- **Ultime voci**: le ultime 12 voci raggruppate per giornata (Oggi, Ieri, poi la data). Ogni riga è un pulsante: ora,
+  pallino del colore del tipo, descrizione (con la nota sotto, §9.8), chi ha registrato e il chevron. Il tocco apre la
+  **modifica** (`A.edit`): la voce, "Quando" (giorno e ora, con i selettori nativi; una data impossibile viene rifiutata),
+  i campi del tipo (pappa: preparato e bevuto a ±50/±10 ml, con il preparato che si allinea se i ml lo superano;
+  pannolino: pipì e cacca fra poca/normale/tanta/no, e un valore vecchio si normalizza al salvataggio; altro: cosa;
+  temperatura ±1/±0,1; medicina; misure ±100/±10 g e ±1/±0,5 cm con "Togli"), la nota (≤ 200) e "Elimina la voce".
+  Le voci delle estensioni cambiano qui solo ora e nota; un pianto apre la sua schermata (`crydetail`). Salvando passa da
+  `touched` + `save`, quindi la modifica si sincronizza; senza cambiamenti non tocca il timestamp. Il vecchio riepilogo
 - Tab Momenti (`js/momenti.js`, §9.7): intestazione con l'età di oggi e la frase del giorno, Prime volte, Album (griglia 3 colonne, visore a schermo intero), Racconta un momento, Questa settimana in numeri, Lettere.
-- Home, blocchi delle estensioni (§9): in `#extTop`, sopra i riquadri di stato, il cronometro (`timer`) e le due righe delle previsioni (`predict`); in `#extMid`, sotto il riepilogo della notte e sopra "Piange", i promemoria (`reminders`). Gli altri riquadri delle estensioni stanno in coda a Pattern (slot `stats`: Allattamento, Ritmo, statistiche della settimana), in fondo a Salute (slot `salute`: Svezzamento) e in Altro sopra Impostazioni (slot `altro`: Promemoria, Per il pediatra).
-  della notte (22–7: pappe e ml, cambi, pianti, sonno, chi si è alzato; tocca per l'elenco).
+- Home, blocchi delle estensioni (§9): in `#extTop`, sopra i riquadri di stato, il cronometro (`timer`); in `#extMid`, sotto il riepilogo della notte e sopra "Piange", il rumore bianco (`noise`). Previsioni e promemoria non hanno più un blocco proprio: le loro righe stanno nella scheda "Prossime tappe" (slot `next`). Gli altri riquadri delle estensioni stanno in coda a Pattern (slot `stats`: Allattamento, Ritmo, statistiche della settimana), in fondo a Salute (slot `salute`: Svezzamento) e in Altro sopra Impostazioni (slot `altro`: Promemoria, Per il pediatra).
+  in fondo alla Home resta come elenco di sola lettura del resto della giornata.
 - Tema: Altro → Impostazioni, Automatico/Chiaro/Scuro (`alan.theme` in localStorage, `data-theme` su `<html>` applicato da uno script inline prima del primo disegno; senza scelta vale il sistema).
 - Font Atkinson Hyperlegible; palette light/dark via `prefers-color-scheme`; tap target ≥ 44 px su ogni controllo (verificato a 390 px, chiaro e scuro); percorsi a schermo intero; toast su più righe, mai troncato.
 - Colori causa: fame #D9962A, sonno #5B73D9, cambio #2E9E6E, aria #B266A6, contatto #D96A5C; accento #F0B040. In dark mode le etichette causa usano inchiostro scuro.
@@ -138,7 +157,7 @@ Ogni estensione ha la sua suite (`timer`, `predict`, `reminders`, `stats`, `repo
 
 ## 9. Estensioni
 Ogni funzione aggiuntiva vive in `js/<nome>.js`, si registra su `window.AlanExt` (percorsi a tap `flow`, blocchi Home `home`,
-tab intere `tab`, riquadri in Pattern/Salute/Altro `slot` (con priorità opzionale: più bassa = più in alto), `describe`, `hide` e `row` per il diario (html in coda alla riga e/o tap sulla descrizione), hook `on('change')` a ogni
+tab intere `tab`, riquadri in Pattern/Salute/Altro `slot` (con priorità opzionale: più bassa = più in alto), `describe`, `hide` e `row` per il diario (html in coda alla riga; il tocco della riga è sempre la modifica), righe della scheda "Prossime tappe" con lo slot `next` (markup condiviso `API.nextRow`, ridisegno con `API.renderNext`), sulla descrizione), hook `on('change')` a ogni
 salvataggio o merge) e non tocca `js/app.js`: tutto ciò che le serve passa da `AlanExt.api` (sezione "estensioni" di app.js).
 Gli script si caricano in `index.html` dopo `app.js`, nell'ordine timer, predict, reminders, stats, report, svezzamento, momenti, note, noise.
 Ogni estensione ha la sua suite `tests/<nome>.test.js` (caricata con `boot({ext:['<nome>']})`) e il suo blocco CSS delimitato da
@@ -183,27 +202,24 @@ come giudizio. Limite: sono medie, non modelli per fascia oraria; con nanne mai 
 e si cade sulla norma.
 
 ### 9.3 Promemoria (`js/reminders.js`)
-Promemoria interni, senza notifiche push: compaiono in Home quando l'app è aperta. Nessun dato nuovo nel diario: l'unica
-scrittura è il tap «Segna» sulla vitamina D, che registra un normale evento `med` (`what` = vitd, `name` = Vitamina D, `who` dal
-profilo) tramite `A.quickMed`, quindi passa da `touched()` e viaggia in sync come gli altri. Stato solo locale, in localStorage:
-`alan.rem.cfg` = `{vitd, appt, feed}` booleani (interruttori, tutti accesi se assenti o non validi) e `alan.rem.dismissed` =
-`{chiave: 'YYYY-MM-DD'}` (righe nascoste con «Ok»; le voci di giorni diversi da oggi decadono da sole). Le chiavi sono `fever`,
-`appt:<id>`, `feed:<t ultima pappa>`, `vitd`: una nuova pappa o una nuova visita cambiano la chiave, quindi il promemoria
-ritorna anche se il precedente era stato nascosto.
-UI in Home (blocco `#home-reminders` in `#extMid`, sotto il riepilogo della notte e sopra «Piange»): al massimo due righe con
-bordo colorato, in quest'ordine di priorità: (1) **febbre** — temperatura ≥ 38 °C registrata nelle ultime 6 ore sotto i 90
+Promemoria interni, senza notifiche push: compaiono nella scheda "Prossime tappe" di Home quando l'app è aperta. Nessun dato
+nuovo nel diario: l'estensione non scrive eventi. Stato solo locale, in localStorage: `alan.rem.cfg` = `{appt, feed}` booleani
+(interruttori, accesi se assenti o non validi) e `alan.rem.dismissed` = `{chiave: 'YYYY-MM-DD'}` (righe nascoste con «Ok»; le
+voci di giorni diversi da oggi decadono da sole). Le chiavi sono `fever`, `appt:<id>`, `feed:<t ultima pappa>`: una nuova pappa
+o una nuova visita cambiano la chiave, quindi il promemoria ritorna anche se il precedente era stato nascosto.
+Al massimo due righe, in quest'ordine di priorità: (1) **febbre** — temperatura ≥ 38 °C registrata nelle ultime 6 ore sotto i 90
 giorni: ripete testualmente la prima bandiera rossa di Altro (`FEVER_TXT`, identica a index.html), colore `--danger`, senza
 pulsanti e senza «Ok» (non ha interruttore e non si nasconde); (2) **visita** oggi o domani non ancora fatta (stessa regola di
-`nextAppt`: anche passata da meno di 2 ore) con «Oggi/Domani alle HH:MM · titolo (o tipo) · luogo», colore `--c-sonno`, il testo
-porta in Salute, «Ok» nasconde per oggi; (3) **pappa in ritardo** — `sinceFeedH − n.feedH > 0,5 h` (norma per età di §4.1,
+`nextAppt`: anche passata da meno di 2 ore) con il titolo, il luogo e «Oggi/Domani alle HH:MM» a destra, colore `--c-sonno`, il
+testo porta in Salute, «Ok» nasconde per oggi; (3) **pappa in ritardo** — `sinceFeedH − n.feedH > 0,5 h` (norma per età di §4.1,
 senza le riduzioni del modello), informazione neutra «Ultima pappa 4 h 10 fa, di solito ogni 3 h», colore `--c-fame`; non
-compare oltre 12 h dall'ultima pappa (più probabile una registrazione mancante); il biberon rifiutato non vale come pappa; (4) **vitamina D** non ancora data oggi, dalle 10:00, solo se è stata data almeno una volta nei 7 giorni
-precedenti, colore `--c-cambio`, con «Segna» e «Ok» (dalle 10 in poi dice la stessa cosa della pillola «Vitamina D · non ancora
-oggi» della riga salute: per evitare il doppione basta spegnere l'interruttore). Le regole si ricalcolano a ogni `renderHome` e
-sull'hook `change`; un `setInterval` di 60 s ridisegna solo se il testo delle righe cambierebbe (solo il blocco se cambia il
-testo, tutta la Home se compare o sparisce una riga; mai durante un percorso). L'ora è iniettabile per i test:
-`AlanExt.reminders.compute(now)` restituisce le righe per quell'istante. In Altro (slot `altro`, sopra Impostazioni) la card
-«Promemoria» ha tre interruttori a tap (`role="switch"`, `aria-checked`): Vitamina D, Visite, Pappa in ritardo.
+compare oltre 12 h dall'ultima pappa (più probabile una registrazione mancante); il biberon rifiutato non vale come pappa.
+La vitamina D non è più un promemoria: la sua riga sta sempre nella stessa scheda ed è di casa (app.js, §5), con «Segna».
+Le regole si ricalcolano a ogni `renderHome` e sull'hook `change`; un `setInterval` di 60 s ridisegna solo se il testo delle
+righe cambierebbe (solo la scheda con `API.renderNext` se cambia il testo, tutta la Home se compare o sparisce una riga; mai
+durante un percorso). L'ora è iniettabile per i test: `AlanExt.reminders.compute(now)` restituisce le righe per quell'istante.
+In Altro (slot `altro`, sopra Impostazioni) la card «Promemoria» ha due interruttori a tap (`role="switch"`, `aria-checked`):
+Visite e Pappa in ritardo.
 
 ### 9.4 Pattern: la settimana, pappa, nanna, pannolini (`js/stats.js`)
 Slot `stats` con priorità −10: le schede stanno **prima** di "Perché piangeva" (in `renderStats`, app.js), che ora tiene solo

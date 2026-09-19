@@ -18,8 +18,8 @@ const MIN=6e4,H=36e5;
   reset();
   assert.strictEqual(P.nextNap(now),null);assert.strictEqual(P.nextFeed(now),null);assert.strictEqual(P.nextWake(now),null);
   const realNow=Date.now;Date.now=()=>now;
-  T('renderHome()');assert.strictEqual(app.els['#home-predict']._h,'','vuoto senza voci');
-  add('diaper',now-H,{pipi:'normale',cacca:'no'});T('renderHome()');assert.ok(/pd-empty/.test(app.els['#home-predict']._h),'con voci ma senza pappe né nanne: un accenno');
+  T('renderHome()');assert.strictEqual(app.els['#next']._h,'','vuoto senza voci');
+  add('diaper',now-H,{pipi:'normale',cacca:'no'});T('renderHome()');assert.ok(/pd-empty/.test(app.els['#next']._h),'con voci ma senza pappe né nanne: un accenno');
 
   // --- pochi dati (1 veglia, 1 pappa): la norma per età
   reset();
@@ -56,8 +56,8 @@ const MIN=6e4,H=36e5;
   assert.strictEqual(f.basis,'alan');assert.strictEqual(f.n,11);
   assert.strictEqual(f.minutes,110,'ultima pappa 40 min fa, ogni 2,5 h → tra 110');assert.strictEqual(T('fmtTime')(f.at),'15:50');
   // Home: due righe, colori per causa, orari
-  T('renderHome()');let h=app.els['#home-predict']._h;
-  assert.ok(/pd-row pd-sonno/.test(h)&&/pd-row pd-fame/.test(h),'due righe');
+  T('renderHome()');let h=app.els['#next']._h;
+  assert.ok(/nx-row pd-sonno/.test(h)&&/nx-row pd-fame/.test(h),'due righe');
   assert.ok(/Probabile nanna tra 1 h 05/.test(h)&&/verso le 15:05/.test(h),h);
   assert.ok(/Pappa prevista tra 1 h 50/.test(h)&&/verso le 15:50/.test(h),h);
   assert.ok(/A\.flow\('sleep'\)/.test(h)&&/A\.flow\('feed'\)/.test(h),'tap → percorso');
@@ -102,7 +102,7 @@ const MIN=6e4,H=36e5;
   assert.strictEqual(P.phrase('nanna',np,now),'Probabile nanna tra poco');
   f=P.nextFeed(now);assert.strictEqual(f.minutes,-12);assert.strictEqual(P.rel(f,now),'da 12 min');
   assert.strictEqual(P.phrase('pappa',f,now),'Pappa attesa da 12 min');
-  T('renderHome()');h=app.els['#home-predict']._h;
+  T('renderHome()');h=app.els['#next']._h;
   assert.ok(/Probabile nanna tra poco/.test(h)&&/Pappa attesa da 12 min/.test(h),h);assert.ok(!/warn|danger/.test(h));
   assert.strictEqual(P.rel({at:now+125*MIN},now),'tra 2 h 05');
 
@@ -112,7 +112,7 @@ const MIN=6e4,H=36e5;
   let w=P.nextWake(now);
   assert.strictEqual(w.basis,'norma');assert.strictEqual(w.n,0);assert.strictEqual(w.minutes,25,'45 min di pisolino − 20 dormiti');
   assert.strictEqual(P.nextNap(now),null,'dorme: niente nanna');
-  T('renderHome()');h=app.els['#home-predict']._h;
+  T('renderHome()');h=app.els['#next']._h;
   assert.ok(/Probabile risveglio tra 25 min/.test(h)&&/verso le 14:25/.test(h),h);assert.ok(/Pappa prevista/.test(h));
   // 12 pisolini di giorno da 40 min negli ultimi giorni → ritmo di Alan
   reset();

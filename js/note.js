@@ -1,17 +1,17 @@
 /* Estensione "note": una nota libera (fino a 200 caratteri) su qualsiasi voce del diario: pappa, cambio, nanna, pianto,
    misura, temperatura, medicina, altro. La nota vive sulla voce stessa (e.note, e.noteBy = chi l'ha scritta) e viaggia
-   con la voce nel sync (data jsonb, LWW sull'intera voce). Dove si scrive: tap sulla descrizione di una riga del diario
-   in Oggi (ultime voci), oppure da "Tutto il diario" (percorso `diario`: tutte le voci giorno per giorno, 7 giorni alla
-   volta, tap su una voce anche a distanza di giorni), raggiungibile da Oggi sotto le ultime voci e dalla scheda "Note" in
-   Salute (elenco delle note). Il riepilogo per il pediatra riporta le note del periodo (js/report.js). Nessun consiglio. */
+   con la voce nel sync (data jsonb, LWW sull'intera voce). La nota si scrive nella schermata di modifica della voce
+   (A.edit in app.js, che cambia anche ora e valori); questa estensione la mostra: sotto la voce nel diario, nell'elenco
+   "Note" in Salute, in "Tutto il diario" (percorso `diario`: tutte le voci giorno per giorno, 7 giorni alla volta, anche
+   a distanza di giorni) e nel riepilogo per il pediatra (js/report.js). Nessun consiglio. */
 (function(){
 'use strict';
 var X=window.AlanExt,API=X.api;
-var MAX=200,PICK_DAYS=7,LIST_MAX=20;
+var MAX=API.NOTE_MAX,PICK_DAYS=7,LIST_MAX=20;
 
 function text(e){return (e&&typeof e.note==='string')?e.note.trim():'';}
 function has(e){return !!text(e);}
-function clean(s){return String(s==null?'':s).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').trim().slice(0,MAX);}
+function clean(s){return API.noteClean(s);}
 function by(e){return e.noteBy||'';}
 /* voci del diario che si possono annotare: come in Home, senza visite e senza le voci nascoste delle estensioni */
 function notable(e){return !!e&&e.k!=='appt'&&!X.isHidden(e.k);}
@@ -41,31 +41,8 @@ function older(now,days){
 
 /* ---------- percorso "note": una voce, una casella di testo, Salva / Togli ---------- */
 function bar(title){return '<div class="bar">'+API.backBtn()+'<div class="title">'+title+'</div></div>';}
-function renderNote(flow){
-  var e=API.byId(flow.data.id);
-  if(!e)return bar('Nota')+'<p class="hint">Questa voce non c\'è più.</p>';
-  var d=API.describe(e),val=flow.data.text!=null?flow.data.text:text(e);
-  var h=bar('Nota');
-  h+='<div class="nt-ev"><div class="what">'+d[0]+' '+d[1]+'</div><div class="hint">'+API.esc(when(e))+(e.who?' · '+API.esc(e.who):'')+'</div></div>';
-  h+='<h2>'+(has(e)?'Modifica la nota':'Aggiungi una nota')+'</h2>';
-  h+='<textarea class="f nt-ta" id="ntTxt" maxlength="'+MAX+'" rows="4" placeholder="es. cacca verde e liquida · sembrava infastidito · ha bevuto piano" oninput="AlanExt.note.typed(this.value)">'+API.esc(val)+'</textarea>';
-  h+='<p class="hint nt-count"><span id="ntCount">'+val.length+'</span>/'+MAX+'</p>';
-  if(has(e)&&by(e))h+='<p class="hint">Scritta da '+API.esc(by(e))+'.</p>';
-  h+='<div class="spacer"></div><button class="btn" onclick="A.finish(\'save\')">Salva la nota</button>';
-  if(has(e))h+='<button class="btn warn" onclick="A.finish(\'clear\')">Togli la nota</button>';
-  return h;
-}
-function finishNote(flow,val){
-  var id=flow.data.id,v;
-  if(val==='clear')v='';else{var ta=API.q('#ntTxt');v=flow.data.text!=null?flow.data.text:(ta&&ta.value!=null?ta.value:text(API.byId(id)));}
-  var r=set(id,v);
-  if(r===false){API.toast('Questa voce non c\'è più');API.home();return false;}
-  API.home();X.refresh();
-  API.toast(r===null?'Nessuna modifica':(v?'Nota salvata':'Nota tolta'));
-  return false;
-}
-function typed(v){var f=API.flow();if(f&&f.type==='note')f.data.text=v;var c=API.q('#ntCount');if(c)c.textContent=String(clean(v).length);}
-function open(id){window.A.flow('note',null,{id:id});}
+/* la nota si scrive nella schermata di modifica della voce (A.edit), che ha anche ora, valori ed elimina */
+function open(id){window.A.edit(id);}
 
 /* ---------- percorso "diario": tutte le voci giorno per giorno, tap su una voce per la nota ---------- */
 function rowHtml(e,showDay){
@@ -91,14 +68,13 @@ function renderDiary(flow){
 function openDiary(){window.A.flow('diario',null,{days:PICK_DAYS});}
 /* altri 7 giorni: riapre il percorso con la finestra più ampia mantenendo lo scorrimento */
 function more(){var f=API.flow(),days=(f&&f.type==='diario'&&f.data.days||PICK_DAYS)+PICK_DAYS,sc=API.q('#screen'),top=sc?sc.scrollTop:0;window.A.flow('diario',null,{days:days});if(sc)sc.scrollTop=top;}
-X.flow('note',{render:renderNote,finish:finishNote});
 X.flow('diario',{render:renderDiary,finish:function(){return false;}});
 
 /* ---------- diario in Oggi: tap sulla riga, nota sotto la descrizione ---------- */
 X.row(function(e){
   if(!notable(e))return null;
   var t=text(e);
-  return {tap:"AlanExt.note.open('"+e.id+"')",html:t?'<span class="nt">'+API.esc(t)+(by(e)&&by(e)!==e.who?' <i>— '+API.esc(by(e))+'</i>':'')+'</span>':''};
+  return t?'<span class="nt">'+API.esc(t)+(by(e)&&by(e)!==e.who?' <i>— '+API.esc(by(e))+'</i>':'')+'</span>':'';
 });
 /* sotto le ultime voci: suggerimento finché non esiste nessuna nota, e "Tutto il diario" per le voci più vecchie */
 X.home('note',function(){
@@ -121,6 +97,6 @@ function card(){
 }
 X.slot('salute',function(){return card();});
 
-X.note={MAX:MAX,PICK_DAYS:PICK_DAYS,LIST_MAX:LIST_MAX,text:text,has:has,clean:clean,set:set,all:all,recent:recent,older:older,open:open,openDiary:openDiary,more:more,typed:typed,card:card,plainDesc:plainDesc};
+X.note={MAX:MAX,PICK_DAYS:PICK_DAYS,LIST_MAX:LIST_MAX,text:text,has:has,clean:clean,set:set,all:all,recent:recent,older:older,open:open,openDiary:openDiary,more:more,card:card,plainDesc:plainDesc};
 X.refresh();
 })();
