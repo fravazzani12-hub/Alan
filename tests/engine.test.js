@@ -31,6 +31,8 @@ const {boot,synth}=require('./stub');
   A.flow('feed');assert.ok(/Quanto hai preparato/.test(txt('#screenInner')));
   A.pick('prep',90);assert.ok(/Quanto ne ha bevuto/.test(txt('#screenInner')));assert.ok(/Niente rifiutato/.test(txt('#screenInner')));
   A.finish(80);assert.ok(/Pappa 80 ml su 90/.test(txt('#diary')));
+  assert.ok(/<h4 class="dy-head">Oggi<\/h4>/.test(String(app.els['#diary']._h)),'diario raggruppato per giornata');
+  assert.ok(/<button class="row tap" onclick="A.edit\(/.test(String(app.els['#diary']._h)),'la riga apre la modifica');
   A.flow('diaper');let dh=app.els['#screenInner']._h;assert.ok(/Pipì\?/.test(dh)&&/>Poca</.test(dh)&&/>Normale</.test(dh)&&/>Tanta</.test(dh)&&/>No</.test(dh)&&!/>Sì</.test(dh),'quattro scelte: poca, normale, tanta, no');A.pick('pipi','normale');assert.ok(/Cacca\?/.test(txt('#screenInner')));A.finish('no');assert.ok(/Cambio pipì normale, cacca no/.test(txt('#diary')));
   S.events.push({id:'dold',k:'diaper',t:Date.now()-2*60000,who:'Ilaria',pipi:'si',cacca:'tanta'});T('renderDiary()');assert.ok(/Cambio pipì normale, cacca tanta/.test(txt('#diary')),'il vecchio sì si legge come normale');
   assert.strictEqual(T('lvlKey')('si'),'normale');assert.strictEqual(T('lvlKey')('poca'),'poca');assert.strictEqual(T('lvlKey')(undefined),'no');

@@ -17,6 +17,9 @@ var OTHER=[['ruttino','Ruttino','aria'],['rigurgito','Rigurgito','aria'],['massa
 /* pipì/cacca: no, poca, normale, tanta. 'si' è il valore della versione 12 e si legge come normale. */
 var LVL={no:'no',poca:'poca',normale:'normale',tanta:'tanta',si:'normale'};
 var LVL_ORDER=['poca','normale','tanta'];
+/* nota libera su una voce del diario: la scrive la schermata di modifica, la mostra js/note.js */
+var NOTE_MAX=200;
+function noteClean(s){return String(s==null?'':s).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').replace(/^\s+|\s+$/g,'').slice(0,NOTE_MAX);}
 function lvlKey(v){return v==='si'?'normale':(LVL[v]?v:'no');}
 
 /* ---------- storage: IndexedDB with localStorage fallback ---------- */
@@ -682,11 +685,13 @@ function renderFlow(){
     h+='<h2>Cosa hai fatto?</h2><div class="grid2">'+OTHER.map(function(o){return '<button style="border-bottom:4px solid var(--c-'+o[2]+')" onclick="A.finish(\''+o[0]+'\')">'+o[1]+'</button>';}).join('')+'</div>';
   }
   if(HEALTH_TYPES[flow.type])h=renderHealthFlow();
+  else if(flow.type==='edit')h=renderEdit();
   if(EXT.flows[flow.type])h=EXT.flows[flow.type].render(flow,API);
   el.innerHTML=h;
 }
 A.finish=function(val){
   if(!flow)return;
+  if(flow.type==='edit'){editSave(val);return;}
   var t=Date.now()-flow.off*MIN,d=flow.data,e=null,msg='',ft=flowTime();
   if(ft)t=ft.t;
   if(flow.type==='feed'){var ml=Number(val);e={k:'feed',prep:d.prep,ml:ml};msg=ml>0?'Pappa: '+ml+' ml su '+d.prep:'Biberon rifiutato';}
@@ -750,16 +755,135 @@ function describe(e,prev){
   if(e.k==='appt')return ['Visita','<span class="detail">'+esc(e.title||apptKind(e.kind))+'</span>'];
   return [e.k,''];
 }
+/* colore della voce nel diario: lo stesso dei riquadri di Home */
+function kindDot(e){
+  if(e.k==='feed')return 'var(--c-fame)';
+  if(e.k==='diaper')return 'var(--c-cambio)';
+  if(e.k==='sleep'||e.k==='wake')return 'var(--c-sonno)';
+  if(e.k==='cry')return 'var(--danger)';
+  if(e.k==='other'){var o=OTHER.filter(function(x){return x[0]===e.what;})[0];return o&&o[2]==='aria'?'var(--c-aria)':'var(--c-contatto)';}
+  return 'var(--muted)';
+}
+/* intestazione della giornata nel diario */
+function dayHead(t){var k=dayKey(t),n=Date.now();if(k===dayKey(n))return 'Oggi';if(k===dayKey(n-864e5))return 'Ieri';return dayLabel(t);}
+/* una riga del diario: ora, pallino del tipo, descrizione (più la nota dalle estensioni), chi. Il tocco apre la modifica. */
+function diaryRow(e,prev,noWho){
+  var d=describe(e,prev),x=extRow(e);
+  return '<button class="row tap" onclick="A.edit(\''+e.id+'\')"><div class="time">'+fmtTime(e.t)+'</div>'+
+    '<div class="what"><i class="dot" style="--dc:'+kindDot(e)+'"></i>'+d[0]+' '+d[1]+x+'</div>'+
+    '<span class="meta">'+(!noWho&&e.who?'<span class="who">'+esc(e.who)+'</span>':'')+'<span class="chev">›</span></span></button>';
+}
 function renderDiary(){
-  var ev=sorted().filter(function(e){return e.k!=='appt'&&!EXT.hidden[e.k];}),vis=ev.slice(-10);
+  var ev=sorted().filter(function(e){return e.k!=='appt'&&!EXT.hidden[e.k];}),vis=ev.slice(-12);
   if(!vis.length){$('#diary').innerHTML='<div class="list"><div class="empty">Ancora vuoto. Tocca Pappa, Pannolino o Nanna: due tap e la voce è registrata.</div></div>';return;}
-  var h='<div class="list">';
+  var h='',day=null;
   for(var i=vis.length-1;i>=0;i--){
     var e=vis[i],prev=null;for(var j=ev.indexOf(e)-1;j>=0;j--){if(ev[j].k==='sleep'||ev[j].k==='wake'){prev=ev[j];break;}}
-    var d=describe(e,prev),x=extRow(e);
-    h+='<div class="row'+(x.tap?' tap':'')+'"><div class="time">'+(dayKey(e.t)===dayKey(Date.now())?'':'<small>'+dayLabel(e.t)+'</small><br>')+fmtTime(e.t)+'</div><div class="what"'+(x.tap?' role="button" tabindex="0" onclick="'+x.tap+'"':'')+'>'+d[0]+' '+d[1]+(e.who?'<span class="who">'+esc(e.who)+'</span>':'')+x.html+'</div><button class="del" aria-label="Elimina" onclick="A.del(\''+e.id+'\')">×</button></div>';
+    var k=dayKey(e.t);
+    if(k!==day){if(day!==null)h+='</div>';h+='<h4 class="dy-head">'+esc(dayHead(e.t))+'</h4><div class="list">';day=k;}
+    h+=diaryRow(e,prev);
   }
   $('#diary').innerHTML=h+'</div>';
+}
+/* ---------- modifica di una voce del diario ---------- */
+/* Campi modificabili per tipo: 'chips' = scelte a tap, 'step' = numero con ±. Le voci delle estensioni (food, moment,
+   lettera) qui cambiano solo ora e nota: il resto lo gestisce l'estensione che le ha create. */
+function editFields(e){
+  var lv=[['poca','Poca'],['normale','Normale'],['tanta','Tanta'],['no','No']];
+  if(e.k==='feed')return [{key:'prep',label:'Preparato',type:'step',steps:[50,10],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
+                          {key:'ml',label:'Bevuto',type:'step',steps:[50,10],min:0,max:400,fmt:function(v){return (v||0)+' ml';}}];
+  if(e.k==='diaper')return [{key:'pipi',label:'Pipì',type:'chips',opts:lv,norm:lvlKey},{key:'cacca',label:'Cacca',type:'chips',opts:lv,norm:lvlKey}];
+  if(e.k==='other')return [{key:'what',label:'Cosa',type:'chips',opts:OTHER.map(function(o){return [o[0],o[1]];})}];
+  if(e.k==='temp')return [{key:'c',label:'Temperatura',type:'step',steps:[1,0.1],min:33,max:43,fmt:fmtTemp}];
+  if(e.k==='med')return [{key:'what',label:'Medicina',type:'chips',opts:MEDS}];
+  if(e.k==='measure')return [{key:'w',label:METRICS.w.label,type:'step',steps:[100,10],min:METRICS.w.min,max:METRICS.w.max,start:METRICS.w.start,fmt:METRICS.w.fmt,nullable:true},
+                             {key:'l',label:METRICS.l.label,type:'step',steps:[1,0.5],min:METRICS.l.min,max:METRICS.l.max,start:METRICS.l.start,fmt:METRICS.l.fmt,nullable:true}];
+  return [];
+}
+A.edit=function(id){
+  var e=byId(id);if(!e){toast('Questa voce non c\'è più');return;}
+  if(e.k==='cry'){A.cryDetail(id);return;}
+  var d=new Date(e.t),v={};
+  editFields(e).forEach(function(f){var x=e[f.key];v[f.key]=f.norm?f.norm(x):(x==null?null:x);});
+  flow={type:'edit',step:0,off:0,data:{id:id,day:isoDay(e.t),tm:pad(d.getHours())+':'+pad(d.getMinutes()),v:v,note:(typeof e.note==='string'?e.note:'')},link:null};
+  showScreen();renderFlow();
+};
+/* giorno valido davvero: "2026-02-31" e "2026-13-01" sono scritti bene ma non esistono */
+function validDay(day){
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(day||'');if(!m)return false;
+  var y=+m[1],mo=+m[2]-1,da=+m[3],x=new Date(y,mo,da);
+  return x.getFullYear()===y&&x.getMonth()===mo&&x.getDate()===da;
+}
+function validTime(tm){var m=/^(\d{2}):(\d{2})$/.exec(tm||'');return !!m&&+m[1]<24&&+m[2]<60;}
+A.editDay=function(day){if(!flow||flow.type!=='edit')return;if(validDay(day))flow.data.day=day;renderFlow();};
+A.editTime=function(tm){if(!flow||flow.type!=='edit')return;if(validTime(tm))flow.data.tm=tm;renderFlow();};
+A.editPick=function(key,val){if(!flow||flow.type!=='edit')return;flow.data.v[key]=val;renderFlow();};
+A.editStep=function(key,d){
+  if(!flow||flow.type!=='edit')return;
+  var e=byId(flow.data.id);if(!e)return;
+  var f=editFields(e).filter(function(x){return x.key===key;})[0];if(!f)return;
+  var cur=flow.data.v[key];if(cur==null)cur=f.start!=null?f.start:f.min;
+  var v=Math.round((cur+d)*1000)/1000;
+  flow.data.v[key]=Math.max(f.min,Math.min(f.max,v));renderFlow();
+};
+A.editClear=function(key){if(!flow||flow.type!=='edit')return;flow.data.v[key]=null;renderFlow();};
+A.editNote=function(v){if(!flow||flow.type!=='edit')return;flow.data.note=v;var c=$('#edCount');if(c)c.textContent=String(noteClean(v).length);};
+/* istante scelto con la data e l'ora della schermata; null se non è valido */
+function editTime(){
+  var d=flow.data,m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(d.day||''),h=/^(\d{2}):(\d{2})$/.exec(d.tm||'');
+  if(!m||!h||!validDay(d.day)||!validTime(d.tm))return null;
+  var x=new Date(+m[1],+m[2]-1,+m[3],+h[1],+h[2],0,0).getTime();
+  return isNaN(x)?null:x;
+}
+function editStepper(f,v){
+  var b=function(d){return '<button onclick="A.editStep(\''+f.key+'\','+d+')">'+(d>0?'+':'−')+String(Math.abs(d)).replace('.',',')+'</button>';};
+  return '<div class="stepper"><div class="col">'+b(-f.steps[0])+b(-f.steps[1])+'</div><div class="val">'+esc(v==null?'—':f.fmt(v))+'</div><div class="col">'+b(f.steps[1])+b(f.steps[0])+'</div></div>'+
+    (f.nullable&&v!=null?'<button class="ed-clear" onclick="A.editClear(\''+f.key+'\')">Togli '+esc(f.label.toLowerCase())+'</button>':'');
+}
+function renderEdit(){
+  var d=flow.data,e=byId(d.id);
+  if(!e)return '<div class="bar">'+backBtn()+'<div class="title">Modifica</div></div><p class="hint">Questa voce non c\'è più.</p>';
+  var ds=describe(e,null),t=editTime();
+  var h='<div class="bar">'+backBtn()+'<div class="title">Modifica</div></div>';
+  h+='<div class="ed-ev"><i class="dot" style="--dc:'+kindDot(e)+'"></i><div><div class="what">'+ds[0]+' '+ds[1]+'</div><div class="hint">registrata'+(e.who?' da '+esc(e.who):'')+'</div></div></div>';
+  h+='<h2>Quando</h2><div class="ed-when">';
+  h+='<label class="datechip on">'+esc(t?fmtDate(t):d.day)+'<input type="date" value="'+esc(d.day)+'" onchange="A.editDay(this.value)" aria-label="Giorno"></label>';
+  h+='<label class="datechip on">'+esc(d.tm)+'<input type="time" value="'+esc(d.tm)+'" onchange="A.editTime(this.value)" aria-label="Ora"></label></div>';
+  editFields(e).forEach(function(f){
+    var v=d.v[f.key];
+    h+='<h2>'+esc(f.label)+'</h2>';
+    if(f.type==='chips')h+='<div class="seg wide">'+f.opts.map(function(o){return '<button class="'+(o[0]===v?'on':'')+'" onclick="A.editPick(\''+f.key+'\',\''+o[0]+'\')">'+esc(o[1])+'</button>';}).join('')+'</div>';
+    else h+=editStepper(f,v);
+  });
+  h+='<h2>Nota</h2><textarea class="f ed-ta" id="edNote" maxlength="'+NOTE_MAX+'" rows="3" placeholder="es. ha bevuto piano · cacca verde" oninput="A.editNote(this.value)">'+esc(d.note)+'</textarea>';
+  h+='<p class="hint ed-count"><span id="edCount">'+noteClean(d.note).length+'</span>/'+NOTE_MAX+'</p>';
+  h+='<div class="spacer"></div><button class="btn" onclick="A.finish(\'save\')">Salva le modifiche</button>';
+  h+='<button class="btn warn" onclick="A.finish(\'del\')">Elimina la voce</button>';
+  return h;
+}
+/* salva (o elimina) la voce aperta in modifica; torna sempre a Home */
+function editSave(val){
+  var d=flow.data,e=byId(d.id);
+  if(!e){toast('Questa voce non c\'è più');A.home();return;}
+  if(val==='del'){var id=d.id;flow=null;$('#screen').classList.remove('on');A.del(id);return;}
+  var t=editTime();
+  if(t==null){toast('Data o ora non valide');return;}
+  var ch=false;
+  if(Math.abs(t-e.t)>=1000){e.t=t;ch=true;}
+  editFields(e).forEach(function(f){
+    /* confronto con il valore grezzo: così una voce vecchia (per esempio pipì "si") si normalizza quando la si modifica */
+    var nv=d.v[f.key],old=e[f.key];
+    if(nv===old||(nv==null&&old==null))return;
+    if(nv==null)delete e[f.key];else e[f.key]=nv;
+    ch=true;
+  });
+  var note=noteClean(d.note),had=typeof e.note==='string'?e.note:'';
+  if(note!==had){if(note){e.note=note;e.noteBy=who;}else{delete e.note;delete e.noteBy;}ch=true;}
+  if(e.k==='feed'&&e.ml>e.prep)e.prep=e.ml;
+  if(ch){touched(e);save();}
+  flow=null;$('#screen').classList.remove('on');
+  renderHome();renderCries();refreshViews();
+  toast(ch?'Voce aggiornata':'Nessuna modifica');
 }
 A.del=function(id){
   if(!window.confirm('Eliminare questa voce?'))return;
@@ -768,7 +892,7 @@ A.del=function(id){
   if(e&&e.k==='cry')dropAudio(e);
   if(S.openCry===id)S.openCry=null;save();renderHome();renderCries();
 };
-function renderHome(){renderHeader();renderStatus();renderHealthLine();renderNight();renderDiary();renderExtHome();}
+function renderHome(){renderHeader();renderStatus();renderNext();renderNight();renderDiary();renderExtHome();}
 
 /* ---------- cries tab ---------- */
 function renderCries(){
@@ -1293,12 +1417,26 @@ function healthFinish(val){
 }
 
 /* --- Home: riga salute (vitamina D, prossima visita) e riepilogo della notte --- */
-function renderHealthLine(){
-  var el=$('#healthLine');if(!el)return;
-  var h='',nx=nextAppt();
-  if(everMed('vitd')){var vd=todayMeds('vitd');h+=vd.length?'<span class="pill on">✓ Vitamina D '+fmtTime(vd[vd.length-1].t)+'</span>':'<button class="pill act" onclick="A.quickMed(\'vitd\',this)">Vitamina D · non ancora oggi</button>';}
-  if(nx&&nx.t-Date.now()<14*864e5)h+='<button class="pill" style="--hc:'+kindColor(nx.kind)+'" onclick="A.goHealth()"><i></i>'+esc(apptKind(nx.kind))+' '+esc(inDays(nx.t))+'</button>';
-  el.innerHTML=h?'<div class="hl">'+h+'</div>':'';
+/* Riga della scheda "Prossime tappe": pallino del colore della cosa, testo (html già pronto), quando a destra e
+   un'azione opzionale. La usano anche predict.js e reminders.js (API.nextRow), così le righe sono tutte uguali. */
+function nextRow(o){
+  var inner='<i style="--pc:'+(o.color||'var(--muted)')+'"></i><span class="nx-txt">'+o.text+'</span>'+(o.when?'<span class="nx-when">'+esc(o.when)+'</span>':'');
+  var main=o.onclick?'<button class="nx-main" onclick="'+o.onclick+'">'+inner+'</button>':'<div class="nx-main">'+inner+'</div>';
+  return '<div class="nx-row'+(o.cls?' '+o.cls:'')+'">'+main+(o.act?'<button class="nx-act" onclick="'+o.actOnclick+'">'+esc(o.act)+'</button>':'')+'</div>';
+}
+/* riga di casa: la vitamina D di oggi. Le visite le annunciano i promemoria (oggi e domani) e la tab Salute: qui non si
+   ripetono. Le previsioni e i promemoria arrivano dalle estensioni, nello stesso formato. */
+function coreNextRows(){
+  if(!everMed('vitd'))return '';
+  var vd=todayMeds('vitd');
+  return vd.length?nextRow({color:'var(--c-cambio)',text:'Vitamina D data oggi',when:fmtTime(vd[vd.length-1].t),cls:'done'})
+                  :nextRow({color:'var(--c-cambio)',text:'Vitamina D di oggi',when:'non ancora',act:'Segna',actOnclick:'A.quickMed(\'vitd\',this)'});
+}
+/* "Prossime tappe": una sola scheda con previsioni (predict), promemoria (reminders), vitamina D e visite */
+function renderNext(){
+  var el=$('#next');if(!el)return;
+  var rows=extHtml('next')+coreNextRows();
+  el.innerHTML=rows?'<div class="card nx"><h3>Prossime tappe</h3>'+rows+'</div>':'';
 }
 A.goHealth=function(){showView('salute');};
 function nightWindow(now){var d=new Date(now);var end=new Date(d.getFullYear(),d.getMonth(),d.getDate(),7,0,0).getTime();if(now<end)end=now;var start=end-9*H;return {start:start,end:end};}
@@ -1311,17 +1449,55 @@ function nightSummary(now){
   var sleep=0,cur=null;ev.forEach(function(e){if(e.k==='sleep')cur=e.t;else if(e.k==='wake'&&cur!=null){var a=Math.max(cur,w.start),b=Math.min(e.t,w.end);if(b>a)sleep+=b-a;cur=null;}});
   if(cur!=null){var a2=Math.max(cur,w.start);if(w.end>a2)sleep+=w.end-a2;}
   var whos={};inW.forEach(function(e){if(e.who&&e.who!=='Io'&&(e.k==='feed'||e.k==='diaper'||e.k==='other'||e.k==='med'))whos[e.who]=(whos[e.who]||0)+1;});
-  return {start:w.start,end:w.end,feeds:feeds.length,ml:ml,diapers:diapers,cries:cries.length,cryLabels:cries.map(function(c){return c.label?LABELS[c.label]:'?';}),sleep:sleep,whos:whos,list:inW};
+  /* tratto di sonno più lungo dentro la finestra, risvegli segnati e note scritte stanotte: servono al resoconto */
+  var best=null,c2=null;
+  ev.forEach(function(e){
+    if(e.k==='sleep'){c2=e.t;return;}
+    if(e.k!=='wake'||c2==null)return;
+    var a=Math.max(c2,w.start),b=Math.min(e.t,w.end);if(b>a&&(!best||b-a>best.dur))best={dur:b-a,start:a};c2=null;
+  });
+  if(c2!=null){var a3=Math.max(c2,w.start),b3=Math.min(now,w.end);if(b3>a3&&(!best||b3-a3>best.dur))best={dur:b3-a3,start:a3};}
+  var poo=inW.filter(function(e){return e.k==='diaper'&&lvlKey(e.cacca)!=='no';}).length;
+  var notes=inW.filter(function(e){return typeof e.note==='string'&&e.note.trim();});
+  return {start:w.start,end:w.end,feeds:feeds.length,ml:ml,diapers:diapers,poo:poo,cries:cries.length,cryLabels:cries.map(function(c){return c.label?LABELS[c.label]:'?';}),
+    sleep:sleep,longest:best,wakes:inW.filter(function(e){return e.k==='wake';}).length,notes:notes,whos:whos,list:inW};
 }
 var nightOpen=false;
 A.toggleNight=function(){nightOpen=!nightOpen;renderNight();};
+/* Resoconto della notte in frasi, per chi si è svegliato senza averla vissuta: solo fatti, nessun giudizio. */
+function nightStory(n){
+  var name=esc(S.settings.name||'Alan'),p=[];
+  if(n.sleep>0){
+    var s='Stanotte '+name+' ha dormito '+fmtDur(n.sleep)+' in tutto';
+    if(n.longest&&n.longest.dur<n.sleep)s+=', il tratto più lungo '+fmtDur(n.longest.dur)+' dalle '+fmtTime(n.longest.start);
+    else if(n.longest)s+=', dalle '+fmtTime(n.longest.start);
+    p.push(s+'.');
+    if(n.wakes>1)p.push('Si è svegliato '+n.wakes+' volte.');
+  }else p.push('Stanotte nessuna nanna segnata con Nanna e Sveglio.');
+  if(n.feeds)p.push('Ha mangiato '+(n.feeds===1?'una volta':n.feeds+' volte')+(n.ml?', '+n.ml+' ml in tutto':'')+'.');
+  if(n.diapers)p.push(n.diapers===1?('Un cambio'+(n.poo?', con cacca':'')+'.'):(n.diapers+' cambi'+(n.poo?', '+n.poo+' con cacca':'')+'.'));
+  if(n.cries){
+    var lab={},bits=[];n.cryLabels.forEach(function(l){lab[l]=(lab[l]||0)+1;});
+    for(var k in lab)if(k!=='?')bits.push(lab[k]+' '+k.toLowerCase());
+    p.push((n.cries===1?'Un pianto':n.cries+' pianti')+(bits.length?' ('+esc(bits.join(', '))+')':'')+'.');
+  }
+  var ws=Object.keys(n.whos);
+  if(ws.length)p.push('Alzate: '+ws.map(function(k){return esc(k)+' '+n.whos[k];}).join(', ')+'.');
+  return p.join(' ');
+}
 function renderNight(){
   var el=$('#night');if(!el)return;
   var n=nightSummary();if(!n){el.innerHTML='';return;}
   var bits=[];bits.push(n.feeds+(n.feeds===1?' pappa':' pappe')+(n.ml?' ('+n.ml+' ml)':''));bits.push(n.diapers+(n.diapers===1?' cambio':' cambi'));if(n.cries)bits.push(n.cries+(n.cries===1?' pianto':' pianti'));bits.push('dormito '+fmtDur(n.sleep));
-  var whoTxt=Object.keys(n.whos).map(function(k){return esc(k)+' '+n.whos[k];}).join(' · ');
-  var h='<div class="night'+(nightOpen?' open':'')+'"><button class="nh" onclick="A.toggleNight()"><div><div class="lbl">Stanotte <span class="hint">'+fmtTime(n.start)+'–'+fmtTime(n.end)+'</span></div><div class="sum">'+esc(bits.join(' · '))+'</div>'+(whoTxt?'<div class="hint">si è alzato: '+whoTxt+'</div>':'')+'</div><span class="chev">'+(nightOpen?'▴':'▾')+'</span></button>';
-  if(nightOpen){h+='<div class="list">';n.list.slice().reverse().forEach(function(e){var dsc=describe(e,null);h+='<div class="row"><div class="time">'+fmtTime(e.t)+'</div><div class="what">'+dsc[0]+' '+dsc[1]+(e.who?'<span class="who">'+esc(e.who)+'</span>':'')+'</div><span></span></div>';});h+='</div>';}
+  var h='<div class="night'+(nightOpen?' open':'')+'"><button class="nh" onclick="A.toggleNight()" aria-expanded="'+(nightOpen?'true':'false')+'"><div><div class="lbl">Com\'è andata stanotte <span class="hint">'+fmtTime(n.start)+'–'+fmtTime(n.end)+'</span></div><div class="sum">'+esc(bits.join(' · '))+'</div><div class="hint">'+(nightOpen?'tocca per chiudere':'tocca per il resoconto')+'</div></div><span class="chev">'+(nightOpen?'▴':'▾')+'</span></button>';
+  if(nightOpen){
+    h+='<div class="ng-body"><p class="ng-story">'+nightStory(n)+'</p>';
+    h+='<div class="ng-nums">'+[['Dormito',fmtDur(n.sleep)],['Pappe',n.feeds+(n.ml?' <small>'+n.ml+' ml</small>':'')],['Cambi',n.diapers+(n.poo?' <small>'+n.poo+' con cacca</small>':'')],['Pianti',String(n.cries)]].map(function(x){return '<div><div class="l">'+x[0]+'</div><div class="v">'+x[1]+'</div></div>';}).join('')+'</div>';
+    if(n.notes.length)h+='<p class="ng-notes">'+n.notes.map(function(e){return '<span>'+fmtTime(e.t)+' '+esc(describe(e,null)[0])+': «'+esc(e.note.trim())+'»</span>';}).join('')+'</p>';
+    h+='</div><div class="list">';
+    n.list.slice().reverse().forEach(function(e){h+=diaryRow(e,null,true);});
+    h+='</div>';
+  }
   el.innerHTML=h+'</div>';
 }
 
@@ -1330,9 +1506,8 @@ function renderNight(){
    riquadri in Pattern/Salute/Altro (slot), descrizioni nel diario (describe), voci da nascondere nel diario (hide),
    e reagiscono a 'change' (ogni salvataggio o merge). Tutto ciò che serve dall'app passa da API. */
 var EXT={flows:{},home:[],tabs:{},slots:{},describe:{},hidden:{},hooks:{},rows:[]},extReady=false;
-/* decorazione delle righe del diario: ogni funzione registrata con AlanExt.row torna html da aggiungere in fondo alla
-   riga e/o un onclick (tap) per tutta la descrizione; il primo tap registrato vince */
-function extRow(e){var out={html:'',tap:null};for(var i=0;i<EXT.rows.length;i++){try{var r=EXT.rows[i](e,API);if(!r)continue;if(typeof r==='string')out.html+=r;else{if(r.html)out.html+=r.html;if(r.tap&&!out.tap)out.tap=r.tap;}}catch(x){}}return out;}
+/* decorazione delle righe del diario: ogni funzione registrata con AlanExt.row torna html da aggiungere in fondo alla riga */
+function extRow(e){var out='';for(var i=0;i<EXT.rows.length;i++){try{var r=EXT.rows[i](e,API);if(r)out+=(typeof r==='string'?r:(r.html||''));}catch(x){}}return out;}
 function extEmit(evt){var hs=EXT.hooks[evt]||[];for(var i=0;i<hs.length;i++){try{hs[i](API);}catch(e){}}}
 function extHtml(slot){var fs=(EXT.slots[slot]||[]).slice().sort(function(a,b){return (a.prio||0)-(b.prio||0);}),out='';for(var i=0;i<fs.length;i++){try{out+=fs[i].fn(API)||'';}catch(e){}}return out;}
 function renderExtHome(){
@@ -1347,7 +1522,7 @@ var API={
   touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,snapshot:snapshot,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
   fedFeed:fedFeed,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,nightSummary:nightSummary,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
   fmtTime:fmtTime,fmtDur:fmtDur,fmtSec:fmtSec,fmtDate:fmtDate,fmtTemp:fmtTemp,dayKey:dayKey,dayLabel:dayLabel,isoDay:isoDay,noon:noon,inDays:inDays,pad:pad,esc:esc,mean:mean,median:median,pct:pct,niceTicks:niceTicks,
-  toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
+  toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,nextRow:nextRow,renderNext:renderNext,noteClean:noteClean,NOTE_MAX:NOTE_MAX,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
   q:function(s){return $(s);},lsGet:lsGet,lsSet:lsSet,
   fileGet:function(k){return idbGet('files',k);},filePut:function(k,v){return idbPut('files',k,v);},fileDel:function(k){return idbDel('files',k);},
   blobToBuf:blobToBuf,audioGet:audioGet,audioPut:audioPut,

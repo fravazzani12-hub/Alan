@@ -86,8 +86,9 @@ function basisText(ex,name){
   if(ex.basis==='misto')return 'ritmo di '+name+' e norma';
   return 'ritmo di '+name;
 }
+/* una riga della scheda "Prossime tappe" di Home (markup condiviso, API.nextRow) */
 function rowHtml(cls,onclick,text,when){
-  return '<button class="pd-row '+cls+'" onclick="'+onclick+'"><i></i><span class="pd-txt">'+text+'</span><span class="pd-when">'+when+'</span></button>';
+  return API.nextRow({color:cls==='pd-sonno'?'var(--c-sonno)':'var(--c-fame)',text:text,when:when,onclick:onclick,cls:cls});
 }
 function homeHtml(){
   var now=Date.now(),h='',c=API.context(now);
@@ -103,9 +104,9 @@ function homeHtml(){
   if(!h){
     /* un accenno solo finché non c'è ancora nessuna pappa né nanna registrata */
     if(!API.events().length||c.lastFeedT!=null||c.sleepT!=null||c.wakeT!=null)return '';
-    return '<div class="pd"><div class="pd-empty">Dopo la prima pappa e la prima nanna qui compare quando aspettarsi le prossime.</div></div>';
+    return '<div class="pd-empty">Dopo la prima pappa e la prima nanna qui compare quando aspettarsi le prossime.</div>';
   }
-  return '<div class="pd">'+h+'</div>';
+  return h;
 }
 
 /* ---------- Pattern: ritmo di Alan ---------- */
@@ -133,14 +134,13 @@ function delta(d,lead){
 }
 
 /* ---------- registrazioni ---------- */
-X.home('predict',homeHtml,'top');
+X.slot('next',homeHtml,-20);
 X.slot('stats',statsHtml);
-X.predict={nextNap:nextNap,nextFeed:nextFeed,nextWake:nextWake,observations:observations,expected:expected,rel:rel,phrase:phrase};
+X.predict={homeHtml:homeHtml,nextNap:nextNap,nextFeed:nextFeed,nextWake:nextWake,observations:observations,expected:expected,rel:rel,phrase:phrase};
 /* i minuti passano anche senza nuove voci: la riga si aggiorna da sola ogni minuto, solo in Home e fuori dai percorsi */
 setInterval(function(){
   if(API.flow()||API.curView()!=='oggi')return;
-  var el=document.getElementById('home-predict');if(!el)return;
-  try{el.innerHTML=homeHtml();}catch(e){}
+  try{API.renderNext();}catch(e){}
 },60000);
 X.refresh();
 })();
