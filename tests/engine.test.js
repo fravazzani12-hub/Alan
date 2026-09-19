@@ -43,7 +43,7 @@ const {boot,synth}=require('./stub');
   assert.ok(S.openCry,'pianto aperto');assert.ok(/Pianto delle/.test(txt('#screenInner')));
   A.leaveOpen();
   T('renderCries()');assert.ok(/Quanto ci azzecca/.test(txt('#cries')));
-  T('renderStats()');assert.ok(/Ultime 24 ore/.test(txt('#stats'))&&/Perché piangeva/.test(txt('#stats')));
+  T('renderStats()');assert.ok(/Perché piangeva/.test(txt('#stats'))&&/Dettagli: fasce orarie/.test(txt('#stats')),'Pattern: pianti con i dettagli a scomparsa');assert.ok(/hidden/.test(String(app.els['#stats']._h)),'dettagli chiusi');A.statsDetails();assert.ok(/Per fascia oraria/.test(txt('#stats'))&&/Nascondi i dettagli/.test(txt('#stats'))&&!/ hidden>/.test(String(app.els['#stats']._h)),'dettagli aperti');A.statsDetails();
   A.exportData();assert.ok(/^AZ[02]:/.test(app.els['#impTxt'].value),'export produce un codice');
   console.log('engine ok · precisione LOO suono '+Math.round(acc.aud*100)+'%, peso suono '+Math.round(h1.w*100)+'%');
 })().catch(e=>{console.error(e);process.exit(1);});

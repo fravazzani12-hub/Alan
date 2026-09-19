@@ -138,7 +138,7 @@ Ogni estensione ha la sua suite (`timer`, `predict`, `reminders`, `stats`, `repo
 
 ## 9. Estensioni
 Ogni funzione aggiuntiva vive in `js/<nome>.js`, si registra su `window.AlanExt` (percorsi a tap `flow`, blocchi Home `home`,
-tab intere `tab`, riquadri in Pattern/Salute/Altro `slot`, `describe`, `hide` e `row` per il diario (html in coda alla riga e/o tap sulla descrizione), hook `on('change')` a ogni
+tab intere `tab`, riquadri in Pattern/Salute/Altro `slot` (con priorità opzionale: più bassa = più in alto), `describe`, `hide` e `row` per il diario (html in coda alla riga e/o tap sulla descrizione), hook `on('change')` a ogni
 salvataggio o merge) e non tocca `js/app.js`: tutto ciò che le serve passa da `AlanExt.api` (sezione "estensioni" di app.js).
 Gli script si caricano in `index.html` dopo `app.js`, nell'ordine timer, predict, reminders, stats, report, svezzamento, momenti, note, noise.
 Ogni estensione ha la sua suite `tests/<nome>.test.js` (caricata con `boot({ext:['<nome>']})`) e il suo blocco CSS delimitato da
@@ -205,30 +205,30 @@ testo, tutta la Home se compare o sparisce una riga; mai durante un percorso). L
 `AlanExt.reminders.compute(now)` restituisce le righe per quell'istante. In Altro (slot `altro`, sopra Impostazioni) la card
 «Promemoria» ha tre interruttori a tap (`role="switch"`, `aria-checked`): Vitamina D, Visite, Pappa in ritardo.
 
-### 9.4 Statistiche della settimana (`js/stats.js`)
-Slot `stats`, in fondo a Pattern. Nessun dato proprio: calcoli sugli eventi, esposti su `AlanExt.stats` = {nights(now),
-milkPerDay(now), feedTimes(now), diapersPerDay(now)} e ridisegnati a ogni `renderStats`. Quattro schede, ognuna con titolo, grafico SVG inline (viewBox
-largo 360, classi `.gc .grid .lbl` del grafico di crescita, colori dai token via `--hc`) e una riga di lettura fattuale, mai un
-giudizio; senza dati ogni scheda mostra un testo di attesa. I tre grafici condividono l'ordine cronologico (da sinistra a
-destra, dall'alto in basso).
-1. **Sonno per notte**: barre delle ultime 7 notti complete dalle 22 alle 7 (dalla più vecchia a "ieri", etichetta = giorno in
-   cui la notte è cominciata; la notte in corso non compare, la riassume la Home), ore dormite = sovrapposizione degli intervalli
-   Nanna→Sveglio con la finestra (una nanna aperta arriva fino ad adesso); una notte senza sonno segnato si vede come "—" e non
-   entra nella media (uno zero sarebbe falso: il sonno non era tracciato); linea tratteggiata = media, lettura "in media 9 h 20 a
-   notte, su N notti".
-2. **Latte al giorno**: ml dei biberon (feed con ml > 0) per ciascuno degli ultimi 7 giorni, oggi in corso più chiaro e
-   fuori dalla media; media sui giorni interi con almeno una pappa (o su oggi se è l'unico), lettura "in media 640 ml al giorno,
-   su N giorni".
-3. **Quando mangia**: 7 righe (dal più vecchio a oggi) sull'asse delle 24 ore, un pallino per pappa, i pianti come tacche rosse, la notte 22–7 in ombra, un segno tratteggiato sull'ora attuale nella riga di oggi; lettura
-   "in media 6,5 pappe al giorno · una ogni 3 h 10 · N pianti in 7 giorni" (intervallo medio fra pappe consecutive fra 30 min e
-   8 h, stessa regola di Pattern). Pappe con ml = 0 non contano.
+### 9.4 Pattern: la settimana, pappa, nanna, pannolini (`js/stats.js`)
+Slot `stats` con priorità −10: le schede stanno **prima** di "Perché piangeva" (in `renderStats`, app.js), che ora tiene solo
+le barre delle cause e un pulsante "Dettagli" che apre o chiude le tabelle (fasce orarie, contesto → causa, suono → causa).
+Nessun dato proprio: calcoli sugli eventi esposti su `AlanExt.stats` = {nights, milkPerDay, feedTimes, histogram, usual,
+diapersPerDay, week} e ridisegnati a ogni `renderStats`. Quattro schede, letture fattuali e mai giudizi; senza dati ognuna
+mostra un testo di attesa. Marche sottili (barre ≤ 22 px con la cima arrotondata di 4 px e la base piatta, linee 2 px,
+segmenti separati da 2 px di superficie), griglia solida e leggera, un'etichetta solo su massimo, minimo e oggi, media come
+riga sottile con il valore a destra; ogni barra ha `<title>` (tooltip) e al tocco dice il dettaglio con un toast.
+1. **La settimana di Alan**: quattro riquadri (pappe al giorno con i ml, sonno di notte, cambi con la quota di cacca, pianti)
+   con la media dei giorni interi con qualcosa di registrato e una linea di andamento a 7 punti (l'ultimo punto vuoto = oggi
+   in corso; i buchi restano buchi); sotto, la riga "Oggi" con pappe, cambi e pianti di giornata.
+2. **Pappa**. "Quando mangia": una riga per giorno (dal più vecchio a oggi) sulle 24 ore, le pappe come barrette alte in
+   proporzione ai ml (rifiutata = quadratino vuoto), le nanne segnate come fasce azzurre, la notte 22–7 in ombra, un segno
+   sull'ora attuale nella riga di oggi. Lettura: "di solito verso le 8, 11 e 14 · in media 6,5 pappe al giorno · una ogni
+   3 h 30" (intervallo medio fra pappe consecutive fra 30 min e 8 h). "Le ore delle pappe": profilo delle 24 ore sui 7 giorni
+   (`histogram`, mezz'ore lisciate su 3) come area + linea, con i momenti abituali (`usual`: gruppi separati da salti > 1,5 h,
+   giro di mezzanotte compreso, almeno 2 pappe e il 40% dei giorni con pappe) segnati da un punto con l'ora. "Quanto beve":
+   ml al giorno, media sui giorni interi con almeno una pappa. Se ci sono rigurgiti, una riga con quanti e quanti entro
+   30 min da una pappa.
+3. **Nanna**: ore dormite per notte (22–7) nelle ultime 7 notti complete, dalla più vecchia a "ieri"; una notte senza sonno
+   segnato si vede come "—" e non entra nella media (uno zero sarebbe falso).
 4. **Pannolini**: due grafici a barre impilate (pipì e cacca), una barra per giorno con i cambi in cui c'era, divisa per
-   quantità (poca chiara, normale media, tanta piena; i valori si normalizzano con `lvlKey`, il vecchio `si` conta come
-   normale); il totale sopra la barra, oggi in corso più chiaro e fuori dalla media; media tratteggiata sui giorni interi con
-   almeno un cambio. Letture: "in media 3,2 cambi al giorno, su N giorni" e per ciascun grafico "3,2 al giorno · 6 poca · 9
-   normale · 6 tanta in 7 giorni". Solo conteggi, nessuna soglia: quanto è giusto lo dice il pediatra.
-Decimali in italiano con la virgola; l'unità dell'asse è scritta una volta sola sopra l'asse; le etichette dei valori hanno un
-alone del colore della superficie (`paint-order:stroke`) per restare leggibili sopra le barre.
+   quantità (poca chiara, normale media, tanta piena; `lvlKey` normalizza i valori vecchi), media sui giorni interi.
+Decimali in italiano con la virgola; le ore abituali si scrivono con `fmtClock` (al mezz'ora: "8", "14:30").
 
 ### 9.5 Riepilogo per il pediatra (`js/report.js`)
 In Altro la card "Per il pediatra" ha le chip 7/30/90 giorni (scelta in localStorage `alan.report.days`, default 30, non
