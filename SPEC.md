@@ -348,21 +348,29 @@ stazionario, due canali indipendenti, piatto fino a ~1 kHz con una gobba a 500�
 fino a 16 kHz); la risintesi differisce dal video di meno di 0,2 dB per terzo d'ottava. Varianti: Ventilatore scuro (−3 dB/ott
 sopra 200 Hz), Ventilatore chiaro (+4 dB/ott sopra 1 kHz), Rosa (−3 dB/ott) e Marrone (−6 dB/ott) con la stessa chiusura
 sopra 16 kHz. **Sintesi**: spettro con le ampiezze della curva (interpolazione in log f) e fasi casuali, simmetria hermitiana,
-IFFT radix-2 in place; versione lunga 2^21 campioni a 44,1 kHz (47,6 s) e anteprima 2^18 (5,9 s, sintesi istantanea): rumore
-gaussiano con loop circolare perfetto, RMS normalizzato; un canale per lato.
+IFFT radix-2 in place; tre lunghezze d'anello (`LEVELS` = 2^14, 2^18, 2^20 campioni a 44,1 kHz: 0,37 s, 5,9 s, 23,8 s), rumore
+gaussiano con loop circolare perfetto, RMS normalizzato, un canale per lato. `ensure(type, livello)` non scende mai di livello.
 **Riproduzione (Web Audio)**: un solo `AudioContext` creato nel tap; `master` (GainNode, volume) → uscita; ogni suono è una
 "voce" = `AudioBufferSourceNode` in loop (gapless per costruzione) con il suo GainNode. Cambio di voce (anteprima → lunga,
 suono → suono) in dissolvenza incrociata di 0,4 s, la vecchia si ferma dopo; volume con `setTargetAtTime` sul master, senza
 ricodifiche né riavvii; Stop = dissolvenza di 0,15 s. **Livelli**: `BASE_DB` −15 dBFS RMS (il livello misurato nel video) +
 `VOL_DB[livello−1]` = −16/−10/−5/0/+3 dB; il livello 4 è l'originale a parità di volume del telefono; sotto i livelli la riga
-`volText` (dB rispetto all'originale) con l'invito a misurare una volta con un'app fonometro. **Sessione a schermo bloccato**:
-un `<audio loop playsinline>` silenzioso (1 s di zeri da `wav`, blob URL) avviato nel tap tiene viva la sessione audio e porta
-la Media Session (titolo, play/pause/stop, `playbackState`); la sua pausa dal sistema ferma tutto; su `visibilitychange` e
-`statechange` il contesto sospeso viene ripreso. Timer (30 min, 1, 2, 8 h) controllato ogni 15 s e su `timeupdate` del
+`volText` (dB rispetto all'originale) con l'invito a misurare una volta con un'app fonometro. **Avvio (l'ordine che iPadOS pretende)**, tutto sincrono dentro il tocco: (1) `keepalive()` — un `<audio loop playsinline>`
+con 1 s di rumore a −90 dB (uno o due LSB: inudibile, ma per iOS è riproduzione vera, e il silenzio assoluto non basta a
+tenere viva la sessione); (2) `unlock()` — una sorgente muta di un campione fatta partire subito: è così che iOS sblocca il
+contesto; (3) `resume()`; (4) la voce con l'anello già pronto, a freddo quello corto (sintesi istantanea, nessuna attesa nel
+gesto). Poi `upgrade()` sale di un livello per volta (250 ms, poi 700 ms) in dissolvenza. Senza questo ordine, su iPad al
+primo avvio il contesto restava sospeso e il suono partiva solo rientrando nell'app.
+**Controllo che sia partito** (`watch`): a 300 ms e poi ogni 400 ms, se il contesto non è `running` richiama `resume()`; dopo
+tre tentativi `blocked` diventa vero e la schermata dice di toccare ancora Avvia (lo stato torna a posto appena riparte).
+Finché è bloccato, ogni `touchend`/`click` nella pagina ritenta lo sblocco; su `visibilitychange` e `statechange` il contesto
+sospeso viene ripreso. La Media Session porta titolo, play/pause/stop e `playbackState`; la pausa dal sistema ferma tutto. Timer (30 min, 1, 2, 8 h) controllato ogni 15 s e su `timeupdate` del
 keepalive. `play()` e il contesto nascono nel tap: il tap su un suono o su un livello lo fa partire subito (anteprima), la
-versione lunga si genera 0,7 s dopo in sottofondo (`upgrade`, annullato da Stop o da un altro cambio); `prewarm` 4 s dopo
-l'avvio prepara il suono salvato già lungo; la schermata si ridisegna a ogni tap (`refresh`). Senza `AudioContext` un toast.
+versione lunga si genera 0,7 s dopo in sottofondo (`upgrade`, annullato da Stop o da un altro cambio); `prewarm` prepara il suono salvato già lungo 4 s dopo
+l'avvio, e si rimanda di 8 s se la pagina non è in primo piano (la sintesi occupa il telefono e non deve capitare mentre si
+tocca Avvia); la schermata si ridisegna a ogni tap (`refresh`). Senza `AudioContext` un toast.
 Stato in localStorage `alan.noise` = {type, vol, timer}, solo locale. UI: riga in Home (blocco `mid`, testo → schermata,
 Avvia/Stop) e schermata `noise` (Avvia/Stop grande, 5 suoni, 5 livelli, timer, nota AAP su distanza ≥ 2 m e ≤ 50 dB).
 Esposto su `AlanExt.noise` = {curveOf, fft, synth(type, logN, fs, rand), wav, gainDb, gainLin, state, setType, setVol, setTimer,
-start, stop, toggle, isPlaying, endAt, check, render, refresh, summary, status, volText, prewarm, ensure, context, voice, keep}.
+start, stop, toggle, isPlaying, isBlocked, unlock, watch, endAt, check, render, refresh, summary, status, volText, prewarm,
+ensure, context, voice, keep}.
