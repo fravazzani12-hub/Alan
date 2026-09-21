@@ -13,7 +13,8 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   class Src extends Node{constructor(){super();this.buffer=null;this.loop=false;this.started=null;this.stopped=null;}start(t){this.started=t;}stop(t){this.stopped=t;}}
   class Buf{constructor(c,l,sr){this.numberOfChannels=c;this.length=l;this.sampleRate=sr;this.ch=[new Float32Array(l),new Float32Array(Math.max(1,l))];}copyToChannel(a,i){this.ch[i].set(a);}getChannelData(i){return this.ch[i];}}
   const ctxs=[],log=[];
-  window.AudioContext=class{constructor(){this.state='suspended';this.currentTime=10;this.destination=new Node();this.resumed=0;this.silent=0;ctxs.push(this);}
+  window.AudioContext=class{constructor(){this.state='suspended';this.born=Date.now();this.destination=new Node();this.resumed=0;this.silent=0;ctxs.push(this);}
+    get currentTime(){return 10+(Date.now()-this.born)/1000;}
     createGain(){return new Gain();}createBufferSource(){return new Src();}
     createBuffer(c,l,sr){if(l===1){this.silent++;log.push('sblocco');}else log.push('rumore');return new Buf(c,l,sr);}
     resume(){this.resumed++;log.push('resume');if(!this.stubborn)this.state='running';return Promise.resolve();}addEventListener(){}};
@@ -76,7 +77,7 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
   const t1=Date.now();NZ.setType('marrone');const dtp=Date.now()-t1;
   assert.ok(NZ.isPlaying(),'in riproduzione');assert.ok(NZ.buffers().type==='marrone'&&NZ.buffers().level===0&&NZ.buffers().L.length===(1<<14),'a freddo parte l\'anello corto');
-  assert.strictEqual(ctxs.length,1,'un solo AudioContext');let v1=NZ.voice();assert.ok(v1&&v1.type==='marrone'&&!v1.full&&v1.src.loop===true&&v1.src.started===10,'sorgente in loop avviata');
+  assert.strictEqual(ctxs.length,1,'un solo AudioContext');let v1=NZ.voice();assert.ok(v1&&v1.type==='marrone'&&!v1.full&&v1.src.loop===true&&v1.src.started>=10,'sorgente in loop avviata');
   assert.strictEqual(v1.src.buffer.length,1<<14);assert.strictEqual(v1.src.buffer.sampleRate,44100);assert.strictEqual(v1.src.buffer.ch[0][5],NZ.buffers().L[5],'campioni copiati');
   const master=v1.g.conns[0];assert.ok(master.conns[0]===ctxs[0].destination,'voce → master → uscita');near(master.gain.value,NZ.gainLin(),1e-12,'volume dal GainNode');
   assert.ok(dtp<150,'avvio istantaneo nel tocco: '+dtp+' ms');console.log('  avvio a freddo in '+dtp+' ms');
@@ -90,7 +91,7 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   NZ.setVol(3);sc=String(app.els['#screenInner']._h);assert.ok(/class="on" onclick="AlanExt.noise.setVol\('3'\)/.test(sc),'volume ridisegnato');assert.ok(NZ.isPlaying());
   assert.strictEqual(NZ.voice(),v1,'cambio volume: stessa sorgente, nessun riavvio');near(master.gain.value,Math.pow(10,-20/20),1e-12,'−20 dBFS');assert.strictEqual(master.gain.ev[master.gain.ev.length-1][0],'target','volume in dissolvenza');
   assert.ok(/Livello 3: −5 dB rispetto all'originale/.test(sc),'dB relativi: '+sc.match(/Livello[^<]*/));
-  NZ.stop();assert.strictEqual(NZ.voice(),null);assert.ok(v1.src.stopped>10,'stop: la sorgente si ferma dopo la dissolvenza');
+  NZ.stop();assert.strictEqual(NZ.voice(),null);assert.ok(v1.src.stopped>v1.src.started,'stop: la sorgente si ferma dopo la dissolvenza');
   NZ.setVol(5);assert.ok(NZ.isPlaying(),'tap sul volume da fermo: anteprima');assert.ok(/Livello 5: \+3 dB rispetto all'originale/.test(String(app.els['#screenInner']._h)));NZ.setVol(4);assert.ok(/Livello 4: come l'originale/.test(String(app.els['#screenInner']._h)));assert.strictEqual(NZ.volText(1),'Livello 1: −16 dB rispetto all\'originale');
   v1=NZ.voice();
   NZ.setTimer(120);sc=String(app.els['#screenInner']._h);assert.ok(/class="on" onclick="AlanExt.noise.setTimer\('120'\)/.test(sc),'timer ridisegnato');
@@ -116,19 +117,26 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   // scadenza simulata
   const realNow=Date.now;Date.now=()=>realNow()+61*60e3;NZ.check();Date.now=realNow;assert.ok(!NZ.isPlaying(),'alla scadenza si spegne');assert.strictEqual(NZ.endAt(),null);
   NZ.start();NZ.stop();assert.ok(!NZ.isPlaying());NZ.toggle();assert.ok(NZ.isPlaying());assert.ok(NZ.buffers().full&&NZ.voice().full,'suono lungo già pronto: parte diretto');NZ.toggle();assert.ok(!NZ.isPlaying());
-  // --- iPad: se il contesto resta sospeso, riprova e lo dice in schermata; quando si sblocca torna normale
+  // --- il primo tocco nell'app sblocca il motore in anticipo, prima ancora di toccare Avvia
+  assert.ok(NZ.primed(),'sbloccato al primo avvio');
+  // --- iPad: se il motore non parte davvero, dopo 1,2 s il rumore passa al lettore; quando riparte torna all'anello
   const c0=ctxs[0];c0.stubborn=true;c0.state='suspended';
-  NZ.open();NZ.start();
-  assert.ok(!NZ.isBlocked(),'subito dopo il tocco non si allarma');
+  NZ.setTimer(0);NZ.open();NZ.start();
+  assert.strictEqual(NZ.mode(),'wa','all\'inizio prova con il motore');assert.ok(!NZ.isBlocked());
   const r0=c0.resumed;await wait(900);
-  assert.ok(c0.resumed>r0,'riprova a sbloccare da solo');
+  assert.ok(c0.resumed>r0,'riprova a sbloccare da solo');assert.strictEqual(NZ.mode(),'wa','prima di 1,2 s non molla');
   await wait(700);
-  assert.ok(NZ.isBlocked(),'dopo tre tentativi lo dice');
-  assert.strictEqual(NZ.status(),'In attesa: tocca ancora Avvia');
-  assert.ok(/tocca di nuovo Avvia/.test(String(app.els['#screenInner']._h)),'avviso in schermata');
-  c0.stubborn=false;await wait(600);
-  assert.ok(!NZ.isBlocked()&&NZ.isPlaying(),'sbloccato: l\'avviso sparisce');
-  assert.ok(!/tocca di nuovo Avvia/.test(String(app.els['#screenInner']._h)));
+  assert.strictEqual(NZ.mode(),'el','passa al lettore');assert.ok(NZ.isPlaying(),'e il suono c\'è');
+  assert.ok(NZ.keep().playing&&NZ.keep().loop===true,'il lettore suona il rumore in anello');
+  assert.strictEqual(NZ.voice(),null,'il motore è zitto');
+  assert.ok(/dal lettore/.test(NZ.status()),NZ.status());
+  assert.ok(/non ha sbloccato il motore audio/.test(String(app.els['#screenInner']._h)),'spiegazione in schermata');
+  // sul lettore il volume si cambia rifacendo il file (iOS ignora audio.volume)
+  const src0=NZ.keep().src;NZ.setVol(2);assert.strictEqual(NZ.mode(),'el');assert.notStrictEqual(NZ.keep().src,src0,'nuovo file con il volume nuovo');
+  // il motore riparte: torna l'anello continuo e la tenuta quasi silenziosa
+  c0.stubborn=false;c0.state='running';await wait(1200);
+  assert.strictEqual(NZ.mode(),'wa','tornato al motore');assert.ok(NZ.voice()&&NZ.voice().src.loop===true);
+  assert.ok(!/dal lettore/.test(NZ.status())&&!/non ha sbloccato/.test(String(app.els['#screenInner']._h)));
   NZ.stop();A.home();
   A.home();
   console.log('noise ok');

@@ -4,11 +4,14 @@
    classici rosa e marrone. Sintesi: spettro con quelle ampiezze e fasi casuali → IFFT (2^LOG_N campioni a 44,1 kHz, 47,6 s)
    → rumore gaussiano stazionario con loop perfetto (circolare), due canali indipendenti come nel video. Volume in 5 livelli dal
    GainNode: il 4 è il livello del video (−15 dBFS RMS) a parità di volume del telefono. wav() resta per il keepalive e i test.
-   Riproduzione con Web Audio (AudioBufferSourceNode in loop: nessuno stacco al riavvio del loop, dissolvenza incrociata
+   Due modi di suonare: normalmente Web Audio (AudioBufferSourceNode in loop: nessuno stacco al riavvio del loop, dissolvenza incrociata
    fra un anello e l'altro e fra un suono e l'altro, volume dal GainNode senza ricodificare) più un <audio> quasi silenzioso
    in loop che tiene viva la sessione audio a schermo bloccato e porta i controlli della Media Session; timer di spegnimento
    controllato ogni 15 s e su 'timeupdate' del keepalive. Nel tocco parte l'anello corto (sintesi istantanea) e le versioni
-   più lunghe arrivano dopo, in dissolvenza. Impostazioni in localStorage
+   più lunghe arrivano dopo, in dissolvenza. Se il telefono non sblocca il motore audio (capita su iPad al primo avvio),
+   dopo 1,2 s il rumore passa al lettore <audio> con il file dell'anello: si sente lo stesso, con un piccolo stacco a ogni
+   giro; appena il motore riparte si torna all'anello continuo. Il primo tocco nell'app, qualunque esso sia, sblocca il
+   motore in anticipo (`prime`). Impostazioni in localStorage
    (alan.noise), solo locali. Nessun consiglio clinico: la nota in schermata riporta l'indicazione dell'AAP (volume e distanza). */
 (function(){
 'use strict';
@@ -84,7 +87,10 @@ function save(){API.lsSet(KEY,JSON.stringify(st));}
 var buf={type:null,L:null,R:null,level:-1,full:false},playing=false,endAt=null,tick=null,prepT=null,upT=null,wT=null,gen=0,blocked=false;
 /* Web Audio: ctx → master (volume) ← voce corrente (gain per la dissolvenza) ← sorgente in loop; keep = <audio> silenzioso in
    loop che tiene viva la sessione audio a schermo bloccato e porta i controlli della Media Session */
-var ctx=null,master=null,cur=null,keep=null,keepUrl=null,FADE=0.4;
+var ctx=null,master=null,cur=null,keep=null,keepUrl=null,noiseUrl=null,FADE=0.4;
+/* come sta suonando: 'wa' = Web Audio (anello senza stacchi), 'el' = il lettore <audio> (ripiego quando il telefono non
+   sblocca il motore audio: si sente un piccolissimo stacco a ogni giro dell'anello, ma il suono c'è) */
+var mode='wa',primed=false,t0=0;
 
 /* buffer del suono al livello chiesto (0 corto e istantaneo, 1 anteprima, 2 lungo): non si scende mai di livello */
 function ensure(type,level){
@@ -105,6 +111,17 @@ function context(){
   return ctx;
 }
 function resume(){if(ctx&&ctx.state!=='running'&&typeof ctx.resume==='function'){try{var p=ctx.resume();if(p&&p.then)p.then(null,function(){});}catch(e){}}}
+/* il motore sta davvero suonando? su iOS lo stato può dire "running" mentre la sessione audio è ferma: l'unica prova è
+   che l'orologio del contesto avanzi */
+function flowing(){return !!ctx&&ctx.state==='running'&&ctx.currentTime>t0+0.05;}
+/* sblocco al primissimo tocco nell'app, qualunque esso sia: così quando si tocca Avvia il motore è già sbloccato.
+   È il punto in cui iPadOS concede il permesso, e non deve esserci nient'altro nel gesto. */
+function prime(){
+  if(primed)return;
+  primed=true;
+  if(!context())return;
+  unlock();resume();
+}
 /* sblocco alla maniera di iOS: una sorgente muta di un campione fatta partire dentro il tocco. Senza questa, su iPad il
    contesto resta sospeso e il suono si sente solo tornando nell'app (quando il sistema lo riprende da solo). */
 function unlock(){
@@ -158,20 +175,54 @@ function mediaSession(){
 }
 function clearTimer(){endAt=null;if(tick){clearInterval(tick);tick=null;}}
 function check(){if(playing&&endAt&&Date.now()>=endAt){stop();API.toast('Rumore bianco spento');}}
-/* Avvio, tutto dentro il tocco e nell'ordine che iPadOS pretende: elemento silenzioso (cambia la sessione audio), sblocco
-   con una sorgente muta, resume, e solo allora il rumore. A freddo parte l'anello corto (sintesi istantanea): niente
-   attese nel gesto. Le versioni più lunghe arrivano dopo, in dissolvenza. */
+/* Avvio, tutto dentro il tocco: elemento di tenuta (cambia la sessione audio), sblocco con una sorgente muta, resume, e
+   solo allora il rumore. A freddo parte l'anello corto (sintesi istantanea): niente attese nel gesto. Le versioni più
+   lunghe arrivano dopo, in dissolvenza. Se il motore non parte davvero, `watch` passa al lettore. */
 function start(){
   var c=context();
   if(!c){API.toast('Questo browser non riproduce il suono');return;}
+  primed=true;
   keepalive();unlock();resume();
   var b=ensure(st.type,0);
+  t0=c.currentTime;
   master.gain.setTargetAtTime(gainLin(),c.currentTime,0.05);
-  if(!cur||cur.type!==b.type||b.level>(cur.level==null?-1:cur.level))voice(b);
+  if(mode==='el')elPlay();
+  else if(!cur||cur.type!==b.type||b.level>(cur.level==null?-1:cur.level))voice(b);
   playing=true;
   if(st.timer){endAt=Date.now()+st.timer*60e3;if(!tick)tick=setInterval(check,15000);}else clearTimer();
   mediaSession();watch();refresh();
   if(buf.level<2)upgrade();
+}
+/* ---------- ripiego: il rumore dal lettore <audio> ----------
+   L'elemento è già stato sbloccato dal tocco (suonava la tenuta), quindi cambiargli sorgente e farlo ripartire funziona
+   anche fuori dal gesto. Il volume sta nel file, come per il resto: iOS ignora audio.volume. */
+function elSrc(){
+  var b=buf.L&&buf.type===st.type?buf:ensure(st.type,1);
+  if(noiseUrl){try{URL.revokeObjectURL(noiseUrl);}catch(e){}}
+  try{noiseUrl=URL.createObjectURL(new Blob([wav(b.L,b.R,gainDb(st.vol))],{type:'audio/wav'}));}catch(e2){noiseUrl=null;}
+  return noiseUrl;
+}
+function elPlay(){
+  var a=keepalive(),u=elSrc();
+  if(!u)return false;
+  try{a.src=u;a.loop=true;if(typeof a.play==='function'){var p=a.play();if(p&&p.then)p.then(null,function(){});}}catch(e){return false;}
+  return true;
+}
+/* passa al lettore e zittisce il motore */
+function useElement(){
+  if(mode==='el')return;
+  mode='el';
+  if(cur){try{cur.g.gain.value=0;cur.src.stop(ctx.currentTime+0.05);}catch(e){}cur=null;}
+  elPlay();refresh();
+}
+/* il motore è tornato: riprende l'anello senza stacchi e rimette la tenuta quasi silenziosa */
+function useEngine(){
+  if(mode!=='el')return;
+  mode='wa';
+  voice(ensure(st.type,buf.type===st.type&&buf.level>0?buf.level:1));
+  var a=keep,u=silence();
+  if(a&&u){try{a.src=u;a.loop=true;if(typeof a.play==='function'){var p=a.play();if(p&&p.then)p.then(null,function(){});}}catch(e){}}
+  refresh();
 }
 /* sale al livello successivo (corto → anteprima → lungo) con una dissolvenza per volta */
 function upgrade(){
@@ -187,20 +238,29 @@ function upgrade(){
   };
   step(buf.level<1?1:2,buf.level<1?250:700);
 }
-/* controlla che il contesto sia partito davvero: se resta sospeso riprova, e dopo tre tentativi lo dice in schermata
-   (su iPad può servire un secondo tocco). Qualsiasi tocco nella pagina intanto riprova a sbloccarlo. */
+/* Controlla che stia suonando davvero (orologio del contesto che avanza, non solo lo stato). Se non parte, riprova a
+   sbloccare; dopo 1,2 s passa al lettore, così il suono c'è comunque. Se più tardi il motore riparte, torna all'anello. */
+var WATCH_AT=[300,700,1200,2000,3000];
 function watch(){
   if(wT)clearTimeout(wT);
-  var tries=0;
+  var i=0;
   var tick2=function(){
-    wT=null;if(!playing||!ctx)return;
-    if(ctx.state==='running'){if(blocked){blocked=false;refresh();}return;}
-    resume();tries++;
-    if(ctx.state==='running'){if(blocked){blocked=false;refresh();}return;}
-    if(tries>=3&&!blocked){blocked=true;refresh();}
-    wT=setTimeout(tick2,400);
+    wT=null;if(!playing)return;
+    if(flowing()){
+      /* sta suonando: se eravamo sul lettore si torna all'anello continuo, altrimenti non c'è altro da fare */
+      if(mode==='el')useEngine();
+      else if(blocked){blocked=false;refresh();}
+      return;
+    }
+    if(mode==='wa'){
+      resume();
+      if(flowing()){if(blocked){blocked=false;refresh();}return;}
+      if(WATCH_AT[i]>=1200&&!blocked){blocked=true;useElement();}
+    }
+    i++;
+    if(i<WATCH_AT.length)wT=setTimeout(tick2,WATCH_AT[i]-WATCH_AT[i-1]);
   };
-  wT=setTimeout(tick2,300);
+  wT=setTimeout(tick2,WATCH_AT[0]);
 }
 function isBlocked(){return blocked;}
 function stop(){
@@ -217,7 +277,7 @@ function toggle(){if(playing)stop();else start();}
 function isPlaying(){return playing;}
 /* il tap su un suono o su un volume lo fa sentire subito; il timer si applica al volo */
 function setType(t){if(typeOf(t)[0]!==t)return;st.type=t;save();start();}
-function setVol(v){v=+v;if(!(v>=1&&v<=5))return;st.vol=v;save();start();}
+function setVol(v){v=+v;if(!(v>=1&&v<=5))return;st.vol=v;save();if(playing&&mode==='el'){elPlay();refresh();return;}start();}
 function setTimer(m){m=+m;if(!TIMERS.some(function(t){return t[0]===m;}))return;st.timer=m;save();if(playing){if(m){endAt=Date.now()+m*60e3;if(!tick)tick=setInterval(check,15000);}else clearTimer();}refresh();}
 /* prepara il suono salvato qualche secondo dopo l'avvio, così il primo tap parte già lungo. Se la pagina non è in primo
    piano si rimanda: la sintesi occupa il telefono e non deve capitare mentre si tocca Avvia. */
@@ -232,10 +292,13 @@ function prewarm(ms){
 /* tornando in primo piano, se il contesto è stato sospeso dal sistema lo riprende; e finché è bloccato, ci riprova a
    ogni tocco nella pagina (su iPad il primo gesto utile può essere un altro) */
 if(document.addEventListener){
-  document.addEventListener('visibilitychange',function(){if(!document.hidden&&playing){resume();watch();}});
-  var retry=function(){if(playing&&ctx&&ctx.state!=='running')resume();};
-  document.addEventListener('touchend',retry,true);
-  document.addEventListener('click',retry,true);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&playing){t0=ctx?ctx.currentTime:0;resume();watch();}});
+  /* il primo tocco nell'app sblocca il motore, qualunque cosa si stia toccando; dopo, ogni tocco è un'altra occasione
+     per riprenderlo se il sistema l'ha sospeso */
+  var tap=function(){if(!primed){prime();return;}if(playing&&ctx&&ctx.state!=='running')resume();};
+  document.addEventListener('touchstart',tap,true);
+  document.addEventListener('pointerdown',tap,true);
+  document.addEventListener('click',tap,true);
 }
 
 /* ---------- testi ---------- */
@@ -245,8 +308,10 @@ function timerLabel(m){for(var i=0;i<TIMERS.length;i++)if(TIMERS[i][0]===m)retur
 function summary(){return typeOf(st.type)[1]+' · volume '+st.vol+' · '+(st.timer?'spegne dopo '+timerLabel(st.timer):'sempre acceso');}
 function status(){
   if(!playing)return '';
+  var base=endAt?'In riproduzione · si spegne alle '+API.fmtTime(endAt):'In riproduzione';
+  if(mode==='el')return base+' · dal lettore';
   if(blocked)return 'In attesa: tocca ancora Avvia';
-  return (endAt?'In riproduzione · si spegne alle '+API.fmtTime(endAt):'In riproduzione')+(cur&&cur.full?'':' · anteprima');
+  return base+(cur&&cur.full?'':' · anteprima');
 }
 function open(){window.A.flow('noise',null,{});}
 
@@ -266,7 +331,8 @@ function render(){
   h+='<h2>Volume <span class="hint">tocca per sentirlo</span></h2>'+chips([1,2,3,4,5].map(function(v){return [v,String(v)];}),st.vol,'setVol');
   h+='<p class="hint nz-hint">'+API.esc(volText(st.vol))+', a parità di volume del telefono. Quanto arriva alla culla dipende dal telefono e dalla distanza: misuralo una volta con un\'app fonometro.</p>';
   h+='<h2>Si spegne da solo</h2>'+chips(TIMERS,st.timer,'setTimer');
-  if(blocked)h+='<p class="hint nz-blocked">Il telefono non ha ancora sbloccato l\'audio: tocca di nuovo Avvia. Su iPad capita al primo avvio dopo l\'installazione.</p>';
+  if(mode==='el')h+='<p class="hint nz-blocked">Questo telefono non ha sbloccato il motore audio, quindi il rumore arriva dal lettore: si sente lo stesso, con un piccolissimo stacco a ogni giro dell\'anello. Se chiudi e riapri l\'app torna liscio.</p>';
+  else if(blocked)h+='<p class="hint nz-blocked">Il telefono non ha ancora sbloccato l\'audio: tocca di nuovo Avvia.</p>';
   h+='<p class="hint">Il suono è generato dal telefono e non si interrompe per la rete. Telefono ad almeno 2 metri dalla culla, mai dentro, e volume basso: è l\'indicazione dell\'American Academy of Pediatrics (non oltre 50 dB all\'orecchio del bambino). Se dall\'app installata il suono si ferma quando blocchi lo schermo, per la notte apri l\'app in Safari o Chrome.</p>';
   return h;
 }
@@ -275,7 +341,8 @@ X.flow('noise',{render:render,finish:function(){return false;}});
 X.noise={KEY:KEY,FS:FS,LEVELS:LEVELS,LOG_N:LOG_N,PREVIEW_LOG_N:PREVIEW_LOG_N,TINY_LOG_N:TINY_LOG_N,BASE_DB:BASE_DB,CURVE_VIDEO:CURVE_VIDEO,TYPES:TYPES,VOL_DB:VOL_DB,TIMERS:TIMERS,
   curveOf:curveOf,interpLog:interpLog,fft:fft,synth:synth,wav:wav,gainDb:gainDb,
   state:function(){return st;},setType:setType,setVol:setVol,setTimer:setTimer,start:start,stop:stop,toggle:toggle,isPlaying:isPlaying,isBlocked:isBlocked,unlock:unlock,watch:watch,endAt:function(){return endAt;},check:check,
-  open:open,summary:summary,status:status,volText:volText,render:render,refresh:refresh,prewarm:prewarm,context:function(){return ctx;},voice:function(){return cur;},keep:function(){return keep;},buffers:function(){return buf;},ensure:ensure,gainLin:gainLin};
+  open:open,summary:summary,status:status,volText:volText,render:render,refresh:refresh,prewarm:prewarm,context:function(){return ctx;},voice:function(){return cur;},keep:function(){return keep;},buffers:function(){return buf;},ensure:ensure,gainLin:gainLin,
+  mode:function(){return mode;},prime:prime,primed:function(){return primed;},flowing:flowing,useElement:useElement,useEngine:useEngine};
 prewarm();
 X.refresh();
 })();
