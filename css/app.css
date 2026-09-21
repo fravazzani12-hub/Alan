@@ -406,6 +406,8 @@ button.row.tap.on .chev{color:var(--c-cambio);font-weight:700}
 .as-err{color:var(--danger)}
 .as-hint{margin:4px 0 0}
 .as-card .btn{margin-top:0}
+.as-row .nz-btn{min-width:64px;padding:0 10px}
+.as-row .nz-btn.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
 .as-live{background:var(--surface);border-left:4px solid var(--danger);border-radius:0 14px 14px 0;padding:10px 12px;margin:10px 0 0}
 .as-live-h{font-size:13px;color:var(--muted)}
 .as-g{display:flex;align-items:center;gap:8px;min-height:32px;font-size:16px}

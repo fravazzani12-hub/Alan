@@ -312,12 +312,23 @@ function render(){
   h+='<p class="hint">Funziona solo con l\'app aperta e lo schermo acceso: il telefono spegne il microfono appena esci o si blocca lo schermo. Tienilo in carica vicino al lettino. Il microfono resta aperto e il permesso si dà una volta per apertura dell\'app. Non viene salvato nessun audio: solo l\'ora, la durata e l\'impronta del suono, come nei pianti registrati a mano.</p>';
   return h;
 }
-/* schermata nera per la notte: solo ora e stato, niente luce */
-function dark(){window.A.flow('ascoltodark',null,{});}
+/* schermata nera per la notte: solo ora e stato, niente luce. Si tocca dove si vuole per tornare all'app. */
+var darkT=null;
+function dark(){
+  window.A.flow('ascoltodark',null,{});
+  /* l'orologio va avanti anche con l'ascolto spento: l'intervallo si spegne da solo quando si esce */
+  if(darkT)clearInterval(darkT);
+  darkT=setInterval(function(){
+    var f=API.flow();
+    if(!f||f.type!=='ascoltodark'){clearInterval(darkT);darkT=null;return;}
+    var ck=API.q('#asClock');if(ck)ck.textContent=API.fmtTime(Date.now());
+    var s2=API.q('#asState');if(s2)s2.textContent=stateText();
+  },10000);
+}
 function renderDark(){
   return '<div class="as-dark" onclick="A.home()"><div class="as-clock" id="asClock">'+API.fmtTime(Date.now())+'</div>'+
     '<div class="as-st" id="asState">'+API.esc(stateText())+'</div><div class="as-sum">'+API.esc(summary())+'</div>'+
-    '<div class="hint">tocca per uscire</div></div>';
+    '<div class="hint">tocca dove vuoi per tornare all\'app</div></div>';
 }
 X.flow('ascolto',{render:render,finish:function(){return false;}});
 X.flow('ascoltodark',{render:renderDark,finish:function(){return false;}});
@@ -325,8 +336,9 @@ X.flow('ascoltodark',{render:renderDark,finish:function(){return false;}});
 /* riga in Home quando è acceso, e scheda in Altro */
 X.home('ascolto',function(){
   if(!st.on)return '';
-  return '<div class="nz-card on"><button class="nz-txt" onclick="AlanExt.ascolto.open()"><b>Ascolto del pianto</b><span>'+API.esc(stateText()+' · '+summary())+'</span></button>'+
-    '<button class="nz-btn" onclick="AlanExt.ascolto.toggle()">Spegni</button></div>';
+  return '<div class="nz-card on as-row"><button class="nz-txt" onclick="AlanExt.ascolto.open()"><b>Ascolto del pianto</b><span>'+API.esc(stateText()+' · '+summary())+'</span></button>'+
+    '<button class="nz-btn" onclick="AlanExt.ascolto.dark()">Scuro</button>'+
+    '<button class="nz-btn ghost" onclick="AlanExt.ascolto.toggle()">Spegni</button></div>';
 },'mid');
 X.slot('altro',function(){
   var h='<div class="card as-card"><h3>Ascolto del pianto</h3>';
