@@ -44,6 +44,24 @@ const MIN=6e4,H=36e5;
   A.pick('prep',120);A.finish(100);fe=S.events.filter(e=>e.k==='feed').pop();assert.strictEqual(fe.dur,undefined);
   A.flow('diaper');A.setAt('bad');assert.strictEqual(app.T('flow').at,null);A.setAt('08:05');A.pick('pipi','normale');A.finish('no');
   const dp=S.events.filter(e=>e.k==='diaper').pop();assert.strictEqual(new Date(dp.t).getMinutes(),5);assert.strictEqual(dp.dur,undefined,'la fine c\'è solo per la pappa');
+  // --- durata scelta a mano: chip nel percorso, anche senza cronometro
+  A.flow('feed');A.pick('prep',120);
+  let fh=String(app.els['#screenInner']._h);
+  assert.ok(/<span>Durata<\/span>/.test(fh)&&/A.setDur\(15\)/.test(fh)&&/non lo so/.test(fh),'riga della durata: '+fh.match(/<div class="when"><span>Durata[\s\S]{0,260}/));
+  assert.ok(!/class="on"[^>]*A.setDur/.test(fh),'di partenza nessuna durata scelta');
+  A.setDur(15);assert.strictEqual(app.T('flow').data.durMin,15);
+  assert.ok(/class="on" onclick="A.setDur\(15\)"/.test(String(app.els['#screenInner']._h)),'15 evidenziato');
+  A.setDur(15);assert.strictEqual(app.T('flow').data.durMin,0,'un secondo tocco toglie');
+  A.setDur(20);A.finish(100);
+  let fd=S.events.filter(e=>e.k==='feed').pop();
+  assert.strictEqual(fd.dur,1200,'durata in secondi sulla voce');assert.strictEqual(fd.src,'biberon');
+  // senza durata la voce non ha dur
+  A.flow('feed');A.pick('prep',120);A.finish(90);
+  assert.strictEqual(S.events.filter(e=>e.k==='feed').pop().dur,undefined,'"non lo so": nessuna durata');
+  // con "finita alle" la durata è quella e la riga la mostra soltanto
+  A.flow('feed');A.setAt('08:00');A.setEnd('08:25');A.pick('prep',120);
+  fh=String(app.els['#screenInner']._h);assert.ok(/<button class="on" disabled>25 min<\/button>/.test(fh),'durata dall\'ora di fine: '+fh.match(/Durata[\s\S]{0,120}/));
+  A.finish(100);assert.strictEqual(S.events.filter(e=>e.k==='feed').pop().dur,1500);
   // i preparati includono 115 e 125
   A.flow('feed');assert.ok(/115 ml/.test(txt('#screenInner'))&&/125 ml/.test(txt('#screenInner')));A.home();
   console.log('feed ok');

@@ -1,7 +1,7 @@
 /* Estensione "timer": cronometro della pappa al biberon.
    Stato volatile in localStorage 'alan.timer' = {start}: il tempo si calcola sempre dai timestamp, così sopravvive alla
    chiusura dell'app e al cambio di tab. A "Fine" si apre il percorso Pappa già puntato sull'inizio; la voce salvata riceve
-   la durata (dur, secondi) e src 'biberon'. In Pattern: durata media delle pappe cronometrate. Nessun giudizio. */
+   la durata (dur, secondi) e src 'biberon'. In Pattern: durata media delle pappe che ce l'hanno (cronometro o scelta a mano). Nessun giudizio. */
 (function(){
 'use strict';
 var X=window.AlanExt,API=X.api;
@@ -71,14 +71,14 @@ function adopt(){
 }
 X.on('change',function(){try{adopt();}catch(e){}});
 
-/* ---------- Pattern: pappe cronometrate negli ultimi 7 giorni ---------- */
+/* ---------- Pattern: durata delle pappe negli ultimi 7 giorni (cronometrate o con la durata scelta a mano) ---------- */
 function stats(){
   var now=Date.now(),from=now-7*DAY,ev=API.sorted().filter(function(e){return e.t>=from&&e.t<=now;});
   var bib=ev.filter(function(e){return e.k==='feed'&&e.dur>0;});
   if(!bib.length)return '';
   var durs=bib.map(function(e){return e.dur;}),mx=Math.max.apply(null,durs),mn=Math.min.apply(null,durs);
   var h='<div class="card"><h3>Quanto dura la pappa</h3><div class="kv">';
-  h+='<div>In media</div><div>'+fmtMin(API.mean(durs))+' <span class="m">su '+bib.length+(bib.length===1?' pappa':' pappe')+' cronometrat'+(bib.length===1?'a':'e')+'</span></div>';
+  h+='<div>In media</div><div>'+fmtMin(API.mean(durs))+' <span class="m">su '+bib.length+(bib.length===1?' pappa':' pappe')+' con la durata'+'</span></div>';
   if(bib.length>1)h+='<div>La più corta / la più lunga</div><div>'+fmtMin(mn)+' / '+fmtMin(mx)+'</div>';
   var withMl=bib.filter(function(e){return e.ml>0;});
   if(withMl.length)h+='<div>Ritmo</div><div>'+Math.round(API.mean(withMl.map(function(e){return e.ml/(e.dur/60);}))*10)/10+' ml al minuto</div>';

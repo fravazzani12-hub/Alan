@@ -34,6 +34,7 @@ const H=36e5,MIN=6e4,DAY=864e5;
   assert.ok(/<div class="title">Modifica<\/div>/.test(sc)&&/Pappa/.test(sc)&&/registrata da Fabio/.test(sc),sc.slice(0,400));
   assert.ok(/Quando/.test(sc)&&new RegExp('type="date" value="'+isoDay(f.t)+'"').test(sc)&&new RegExp('type="time" value="'+hhmm(f.t)+'"').test(sc),'data e ora precompilate');
   assert.ok(/>Preparato</.test(sc)&&/>Bevuto</.test(sc)&&/>120 ml</.test(sc)&&/>100 ml</.test(sc),'valori attuali');
+  assert.ok(/>Durata</.test(sc)&&/>—</.test(sc),'durata modificabile anche se non c\'era');
   assert.ok(/id="edNote"/.test(sc)&&/Salva le modifiche/.test(sc)&&/Elimina la voce/.test(sc));
   // --- stepper: ±50 e ±10, con i limiti
   A.editStep('ml',10);assert.strictEqual(app.T('flow').data.v.ml,110);
@@ -55,6 +56,11 @@ const H=36e5,MIN=6e4,DAY=864e5;
   assert.ok(f._updated>before,'touched: la modifica si sincronizza');
   assert.strictEqual(app.els['#toast'].textContent,'Voce aggiornata');
   assert.ok(/class="nt">ha bevuto piano/.test(diary()),'la nota si vede nel diario');
+  // --- durata aggiunta a posteriori a una pappa che non ce l'aveva
+  A.edit(f.id);A.editStep('dur',60);A.editStep('dur',300);
+  assert.ok(/>16 min</.test(screen()),'da 10 min di partenza: '+screen().match(/Durata[\s\S]{0,200}/));
+  A.finish('save');assert.strictEqual(f.dur,960);
+  A.edit(f.id);A.editClear('dur');A.finish('save');assert.strictEqual(f.dur,undefined,'si può togliere');
   // --- nessuna modifica: niente touched
   const u1=f._updated;
   A.edit(f.id);A.finish('save');

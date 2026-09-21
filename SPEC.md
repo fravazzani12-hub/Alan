@@ -105,6 +105,7 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
 
 ## 5. UI
 - "Quando" in ogni percorso: adesso / 15 / 30 / 60 min fa / "altra ora" (selettore HH:MM; un orario nel futuro di oltre 5 min vale per ieri). Nella Pappa anche "finita alle": la differenza diventa `dur` (secondi, ≤ 6 h) con `src 'biberon'`.
+- **Durata della pappa**: nella schermata dei ml una riga "Durata" con 5/10/15/20/30/45 min e "non lo so" (`durMin` nel percorso, salvata in `dur` come secondi): così il tempo c'è anche senza cronometro. Se arriva dal cronometro (`dur` in secondi nei dati del percorso) o da "finita alle", la riga la mostra e basta. Si aggiunge o si toglie anche dalla modifica della voce.
 - Intestazione: nome ed età a sinistra, a destra le pillole di presenza (nessun selettore di chi registra).
 - Tab Salute: Crescita (Peso/Lunghezza, valore grande + percentile, grafico OMS, registrazione a stepper con "quando"),
   Vitamina D e medicine (tap unico + 7 giorni), Temperatura (chip + stepper ±0,1), Visite e vaccini (prossima in evidenza con
@@ -117,7 +118,8 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
   `next` delle estensioni — previsioni (`predict`, priorità −20) e promemoria (`reminders`, 0) — più la riga della
   vitamina D di oggi con "Segna" (app.js). Le visite di oggi e domani le annuncia il promemoria, quelle più in là stanno
   in Salute: qui non si ripetono. Senza righe la scheda non compare.
-- **Riepilogo della notte** (22–7, dalle 5 alle 13): chiuso mostra la finestra e i numeri in una riga; al tocco si apre con
+- **Riepilogo della notte** (22–7, dalle 5 alle 13; `nightStats(start, end, now)` calcola una notte qualsiasi e
+  `nightSummary(now)` è quella appena passata): chiuso mostra la finestra e i numeri in una riga; al tocco si apre con
   il resoconto in frasi (`nightStory`: quanto ha dormito e il tratto più lungo, risvegli, pappe e ml, cambi e quanti con
   cacca, pianti con le cause, alzate per genitore — nomi senza genere), quattro riquadri di numeri, le note scritte di
   notte e l'elenco delle voci, ognuna toccabile per la modifica. Serve a chi la notte non l'ha vissuta.
@@ -242,6 +244,11 @@ riga sottile con il valore a destra; ogni barra ha `<title>` (tooltip) e al tocc
    30 min da una pappa.
 3. **Nanna**: ore dormite per notte (22–7) nelle ultime 7 notti complete, dalla più vecchia a "ieri"; una notte senza sonno
    segnato si vede come "—" e non entra nella media (uno zero sarebbe falso).
+3b. **Diario notturno**: le stesse 7 notti, dalla più recente, una riga ciascuna (etichetta — "Stanotte", "La notte prima"
+   o le due date —, finestra oraria e la riga compatta "dormito 6 h 20 · 3 pappe (210 ml) · 2 cambi · 1 pianto"). Al tocco
+   si apre il racconto di quella notte (`API.nightStory` sugli stessi dati di Home), le note scritte allora e l'elenco delle
+   voci (`API.diaryRow`), ognuna toccabile per la modifica. Una sola notte aperta per volta. Compaiono solo le notti con
+   qualcosa dentro: il riquadro di Home sparisce dopo le 13, qui le notti restano.
 4. **Pannolini**: due grafici a barre impilate (pipì e cacca), una barra per giorno con i cambi in cui c'era, divisa per
    quantità (poca chiara, normale media, tanta piena; `lvlKey` normalizza i valori vecchi), media sui giorni interi.
 Decimali in italiano con la virgola; le ore abituali si scrivono con `fmtClock` (al mezz'ora: "8", "14:30").
