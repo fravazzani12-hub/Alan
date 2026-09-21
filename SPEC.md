@@ -118,6 +118,10 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
   `next` delle estensioni — previsioni (`predict`, priorità −20) e promemoria (`reminders`, 0) — più la riga della
   vitamina D di oggi con "Segna" (app.js). Le visite di oggi e domani le annuncia il promemoria, quelle più in là stanno
   in Salute: qui non si ripetono. Senza righe la scheda non compare.
+- **Banner del pianto aperto** (`renderStatus`): oltre all'ora mostra l'ipotesi più probabile con la percentuale
+  (`hypotheses` sui dati salvati con il pianto) e i pulsanti delle due cause più probabili (`TRY`: fame → Pappa, sonno →
+  Nanna, cambio → Pannolino, aria e contatto → Altro). Toccandone uno si apre quel percorso legato a quel pianto, quindi
+  registrando si spiega anche il pianto; resta "Da solo". I pianti sentiti dall'app portano l'etichetta "sentito dall'app".
 - **Riepilogo della notte** (22–7, dalle 5 alle 13; `nightStats(start, end, now)` calcola una notte qualsiasi e
   `nightSummary(now)` è quella appena passata): chiuso mostra la finestra e i numeri in una riga; al tocco si apre con
   il resoconto in frasi (`nightStory`: quanto ha dormito e il tratto più lungo, risvegli, pappe e ml, cambi e quanti con
@@ -405,8 +409,17 @@ il fondo di `sens` dB (bassa +14, media +10, alta +7), non è sotto −46 dBFS i
 `F0_HI` 750 Hz (la voce di un adulto sta molto più in basso, il fruscio non ha tono). L'episodio si apre dopo `ON_S`
 1,2 s di frame da pianto dentro una finestra di `WIN_S` 2,5 s, e comincia dal **primo frame di pianto**, non dall'inizio
 della finestra; si chiude dopo `OFF_S` 8 s senza pianto. Sotto `MIN_S` 3 s si scarta (un grido non è un pianto).
+**Ipotesi dal vivo**: mentre l'episodio è aperto, una volta al secondo `liveGuess()` ricalcola `API.hypotheses` sui frame
+raccolti fin lì; la schermata (che si ridisegna ogni secondo solo mentre piange) mostra le due cause più probabili con la
+percentuale e il pulsante del percorso da provare (`API.TRY`), dicendo che è un'ipotesi sui vostri dati e non una diagnosi.
+**Audio dei soli pianti nitidi** (interruttore `audio`, acceso di suo): un `MediaRecorder` sullo stesso stream parte con
+l'episodio; alla fine l'audio si tiene solo se `isClear` — `clarity` ≥ `CLEAR` 0,55 (quanto spesso il suono è pianto e di
+quanto supera il fondo) e durata ≥ `CLEAR_S` 5 s — altrimenti si butta. Salvataggio e invio sono quelli dell'app
+(`blobToBuf` → `audioPut` → `queueUpload`). I pezzi dell'ultimo blocco arrivano **dopo** `stop()`, quindi l'array dei
+pezzi è legato alla singola registrazione (`mr._cs`): sostituirlo alla chiusura faceva perdere tutto l'audio. Una riga di
+diagnostica in schermata dice sempre com'è andata (`audioLog`).
 **Voce creata**: una normale `cry` con `t` = inizio, `dur`, `feat` (`API.features` sugli stessi frame), `ctx`/`bins` dal
-contesto di quel momento, `audio:false` e **`auto:true`** per distinguerla da quelle registrate a mano; passa da
+contesto di quel momento, `clarity`, l'audio se nitido e **`auto:true`** per distinguerla da quelle registrate a mano; passa da
 `touched` + `save`, quindi si sincronizza e alimenta motore, precisione e Pattern come le altre. Se nessun pianto è in
 attesa di spiegazione diventa lui `openCry`, così dal telefono basta registrare cosa avete fatto. Due episodi a meno di
 `MERGE_S` 60 s si uniscono in una voce sola (una crisi con pause non diventa dieci pianti); oltre `MAX_HOUR` 20 episodi

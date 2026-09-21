@@ -4,7 +4,7 @@ const assert=require('assert');
 const {boot}=require('./stub');
 const MIN=6e4;
 (async()=>{
-  const app=await boot();const {A,S}=app;
+  const app=await boot();const {A,S,T}=app;
   const mergeRemote=app.T('mergeRemote');
   let n=0;
   function cry(t){const e={id:'cry'+(n++),k:'cry',t,dur:8,who:'Fabio',label:null,ctx:{},bins:{f:-1,a:-1,h:1},feat:null,audio:false};S.events.push(e);S.openCry=e.id;return e;}
@@ -24,7 +24,18 @@ const MIN=6e4;
   c=cry(Date.now()-MIN);A.flow('other');A.finish('coccole');assert.strictEqual(c.label,'contatto');
   // fuori finestra: pianto di 50 min fa → nessuna etichetta
   c=cry(Date.now()-50*MIN);A.flow('feed');A.pick('prep',90);A.finish(90);assert.strictEqual(c.label,null);
+  // --- banner del pianto aperto: ipotesi e cosa provare, con i percorsi che lo spiegano registrando
   S.openCry=null;
+  S.events.push({id:'fb',k:'feed',t:Date.now()-4*36e5,who:'Fabio',prep:120,ml:100});
+  const bc=cry(Date.now()-3*MIN);
+  T('renderStatus()');let bn=String(app.els['#openCryBanner']._h);
+  assert.ok(/class="banner"/.test(bn)&&/Pianto delle /.test(bn),bn.slice(0,200));
+  assert.ok(/probabilmente [a-zà-ù \/]+ \(\d+%\) · prova:/.test(bn),'ipotesi con la percentuale: '+bn.match(/<span>[^<]*/));
+  assert.ok(bn.indexOf("A.flow('")>=0&&bn.indexOf("','"+bc.id+"')")>=0,'i pulsanti aprono i percorsi legati a questo pianto');
+  assert.ok(/>Da solo</.test(bn),'resta "Da solo"');
+  bc.auto=true;T('renderStatus()');assert.ok(/sentito dall'app/.test(String(app.els['#openCryBanner']._h)),'i pianti automatici si riconoscono');
+  bc.label='fame';T('renderStatus()');assert.strictEqual(String(app.els['#openCryBanner']._h),'','spiegato: il banner sparisce');
+  S.events.pop();S.openCry=null;
   // azione antecedente di più di 5 min (quando = 15 min fa) → nessuna etichetta
   c=cry(Date.now());A.flow('feed');A.setOff(15);A.pick('prep',90);A.finish(90);assert.strictEqual(c.label,null);
   // azione 15 min fa con pianto di 12 min fa → dentro [−5, +45] → etichetta
