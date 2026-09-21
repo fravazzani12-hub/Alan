@@ -161,7 +161,7 @@ Ogni estensione ha la sua suite (`timer`, `predict`, `reminders`, `stats`, `repo
 Ogni funzione aggiuntiva vive in `js/<nome>.js`, si registra su `window.AlanExt` (percorsi a tap `flow`, blocchi Home `home`,
 tab intere `tab`, riquadri in Pattern/Salute/Altro `slot` (con priorità opzionale: più bassa = più in alto), `describe`, `hide` e `row` per il diario (html in coda alla riga; il tocco della riga è sempre la modifica), righe della scheda "Prossime tappe" con lo slot `next` (markup condiviso `API.nextRow`, ridisegno con `API.renderNext`), sulla descrizione), hook `on('change')` a ogni
 salvataggio o merge) e non tocca `js/app.js`: tutto ciò che le serve passa da `AlanExt.api` (sezione "estensioni" di app.js).
-Gli script si caricano in `index.html` dopo `app.js`, nell'ordine timer, predict, reminders, stats, report, svezzamento, momenti, note, noise.
+Gli script si caricano in `index.html` dopo `app.js`, nell'ordine timer, predict, reminders, stats, report, svezzamento, momenti, note, noise, ascolto.
 Ogni estensione ha la sua suite `tests/<nome>.test.js` (caricata con `boot({ext:['<nome>']})`) e il suo blocco CSS delimitato da
 `/* == nome == */ … /* == /nome == */` in `css/app.css`, con i soli token di colore. Le regole di §5 valgono anche qui: solo tap,
 target ≥ 44 px, un'idea per schermata, numeri come fatti e mai come giudizi.
@@ -388,3 +388,31 @@ Avvia/Stop) e schermata `noise` (Avvia/Stop grande, 5 suoni, 5 livelli, timer, n
 Esposto su `AlanExt.noise` = {curveOf, fft, synth(type, logN, fs, rand), wav, gainDb, gainLin, state, setType, setVol, setTimer,
 start, stop, toggle, isPlaying, isBlocked, unlock, watch, endAt, check, render, refresh, summary, status, volText, prewarm,
 ensure, context, voice, keep}.
+
+### 9.10 Ascolto del pianto (`js/ascolto.js`)
+L'app sente il pianto e lo segna da sola: serve a sapere **quante volte piange, a che ora, per quanto e con che tono**,
+senza dover far partire una registrazione mentre si consola un bambino. Pensata per un dispositivo lasciato nella stanza
+(l'iPad): Safari chiude il microfono appena l'app va in secondo piano o lo schermo si blocca, quindi l'ascolto vive solo
+mentre la schermata è davanti; `navigator.wakeLock` tiene sveglio lo schermo dove c'è (iPadOS 16.4+). Interruttore per
+dispositivo in `alan.ascolto` = {on, sens, audio}, **mai sincronizzato**: sugli altri telefoni resta spento.
+**Catena**: un solo `getUserMedia` (un permesso per apertura dell'app, non uno per pianto, perché lo stream resta aperto)
+→ `MediaStreamSource` → `AnalyserNode` (fftSize 2048) → un frame ogni `FRAME` = 50 ms con `API.analyseFrame`, le stesse
+misure dei pianti registrati a mano.
+**Rilevatore** (funzione pura `push(frame, now)`, senza microfono, così è provabile): il **fondo** è il 25° percentile
+degli ultimi 30 s e si impara **solo fuori dagli episodi** — con la mediana, o imparando durante il pianto, un pianto
+lungo alzerebbe la soglia contro se stesso e il rilevatore diventerebbe sordo a metà. Un frame vale come pianto se supera
+il fondo di `sens` dB (bassa +14, media +10, alta +7), non è sotto −46 dBFS in assoluto e ha un tono fra `F0_LO` 250 e
+`F0_HI` 750 Hz (la voce di un adulto sta molto più in basso, il fruscio non ha tono). L'episodio si apre dopo `ON_S`
+1,2 s di frame da pianto dentro una finestra di `WIN_S` 2,5 s, e comincia dal **primo frame di pianto**, non dall'inizio
+della finestra; si chiude dopo `OFF_S` 8 s senza pianto. Sotto `MIN_S` 3 s si scarta (un grido non è un pianto).
+**Voce creata**: una normale `cry` con `t` = inizio, `dur`, `feat` (`API.features` sugli stessi frame), `ctx`/`bins` dal
+contesto di quel momento, `audio:false` e **`auto:true`** per distinguerla da quelle registrate a mano; passa da
+`touched` + `save`, quindi si sincronizza e alimenta motore, precisione e Pattern come le altre. Se nessun pianto è in
+attesa di spiegazione diventa lui `openCry`, così dal telefono basta registrare cosa avete fatto. Due episodi a meno di
+`MERGE_S` 60 s si uniscono in una voce sola (una crisi con pause non diventa dieci pianti); oltre `MAX_HOUR` 20 episodi
+in un'ora non se ne creano altri. **Nessun audio viene salvato.**
+UI: schermata `ascolto` (acceso/spento grande, barra del livello, pianti di oggi, tre sensibilità, "Schermo scuro" =
+schermata `ascoltodark` nera con ora e stato per la notte, e i limiti scritti chiaro), riga in Home quando è acceso
+(blocco `mid`) e scheda in Altro con l'interruttore. Esposto su `AlanExt.ascolto` = {push, close, reset, isCry, floorDb,
+db, episode, inHour, setOn, toggle, setSens, sens, running, startMic, stopMic, open, dark, render, renderDark, stateText,
+summary, todayCries, meterPct, state}.

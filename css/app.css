@@ -285,8 +285,8 @@ textarea.ed-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 /* == reminders == */
 /* Le righe dei promemoria usano il markup condiviso .nx-row (scheda "Prossime tappe"). Qui resta Altro → Promemoria. */
 /* Altro → Promemoria: interruttori a tap */
-.rm-cfg .rm-sw{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:56px;padding:6px 0;border:0;background:transparent;text-align:left;font-size:15px;font-weight:700;color:var(--text)}
-.rm-cfg .rm-sw+.rm-sw{border-top:1px solid var(--line)}
+.rm-sw{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:56px;padding:6px 0;border:0;background:transparent;text-align:left;font-size:15px;font-weight:700;color:var(--text)}
+.rm-sw+.rm-sw{border-top:1px solid var(--line)}
 .rm-sw-t{min-width:0;overflow-wrap:anywhere}
 .rm-sw-t small{display:block;font-size:13px;font-weight:400;color:var(--muted);margin-top:1px}
 .rm-sw i{flex-shrink:0;position:relative;width:50px;height:30px;border-radius:999px;background:var(--line);transition:background .15s}
@@ -386,6 +386,22 @@ textarea.nt-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 .nz-seg{margin:0 0 4px}.nz-seg button{padding:0 6px;white-space:nowrap}
 .nz-hint{margin:6px 0 4px}
 /* == /noise == */
+
+/* == ascolto == */
+/* Ascolto del pianto (js/ascolto.js): schermata con livello del suono, scheda in Altro, schermo scuro per la notte */
+.as-main{margin-top:6px}.as-main small{display:block;font-size:14px;font-weight:400;margin-top:4px;opacity:.85}
+.as-main.on{background:var(--c-cambio);color:var(--tag-ink)}
+.as-meter{height:10px;border-radius:999px;background:var(--surface2);overflow:hidden;margin:10px 0 2px}
+.as-meter i{display:block;height:100%;background:var(--c-cambio);transition:width .1s linear}
+.as-err{color:var(--danger)}
+.as-hint{margin:4px 0 0}
+.as-card .btn{margin-top:0}
+.as-dark{position:fixed;inset:0;background:#000;color:#5a6472;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:9}
+.as-dark .as-clock{font-size:52px;font-weight:700;font-variant-numeric:tabular-nums;color:#7d8798}
+.as-dark .as-st{font-size:17px}
+.as-dark .as-sum{font-size:15px}
+.as-dark .hint{position:absolute;bottom:28px;color:#39414f}
+/* == /ascolto == */
 
 /* == report == */
 /* Altro: card "Per il pediatra" */
