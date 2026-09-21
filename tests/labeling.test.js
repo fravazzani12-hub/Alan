@@ -36,6 +36,46 @@ const MIN=6e4;
   bc.auto=true;T('renderStatus()');assert.ok(/sentito dall'app/.test(String(app.els['#openCryBanner']._h)),'i pianti automatici si riconoscono');
   bc.label='fame';T('renderStatus()');assert.strictEqual(String(app.els['#openCryBanner']._h),'','spiegato: il banner sparisce');
   S.events.pop();S.openCry=null;
+  // --- associare a mano un'azione registrata dopo: è l'ordine vero (prima si consola, poi si scrive)
+  S.events.length=0;S.openCry=null;
+  const t0=Date.now();
+  const cl=cry(t0-40*MIN);
+  const fd={id:'ef',k:'feed',t:t0-20*MIN,who:'Fabio',prep:120,ml:100};
+  const dp={id:'ed',k:'diaper',t:t0-10*MIN,who:'Ilaria',pipi:'normale',cacca:'no'};
+  const old={id:'eo',k:'feed',t:t0-3*36e5,who:'Fabio',prep:120,ml:90};
+  const far={id:'ex',k:'feed',t:t0+2*36e5,who:'Fabio',prep:120,ml:90};
+  S.events.push(fd,dp,old,far);
+  const cand=T('explainers')(cl);
+  assert.deepStrictEqual(cand.map(e=>e.id),['ef','ed'],'solo le azioni da 5 min prima a 90 dopo, in ordine');
+  A.cryDetail(cl.id);let sc=String(app.els['#screenInner']._h);
+  assert.ok(/Cosa avete fatto dopo/.test(sc)&&/anche a distanza di ore/.test(sc),'la schermata invita ad associare quando si vuole');
+  assert.ok(sc.indexOf("A.explainWith('"+cl.id+"','ef')")>=0&&sc.indexOf("A.explainWith('"+cl.id+"','ed')")>=0,'una riga per azione');
+  assert.ok(/Pappa/.test(sc)&&/Fame/.test(sc),'accanto all\'azione la causa che assegnerebbe');
+  A.explainWith(cl.id,'ed');
+  assert.strictEqual(cl.label,'cambio','la causa viene dall\'azione scelta');
+  assert.strictEqual(cl.by,'ed','resta scritto con quale azione');
+  assert.strictEqual(S.openCry,null,'non resta in attesa');
+  assert.ok(/^Pianto spiegato: pannolino \(cambio delle \d\d:\d\d\)$/.test(app.els['#toast'].textContent),app.els['#toast'].textContent);
+  assert.ok(/class="row tap on"/.test(String(app.els['#screenInner']._h)),'la scelta resta segnata');
+  A.explainWith(cl.id,'ef');assert.strictEqual(cl.label,'fame','si può cambiare idea');assert.strictEqual(cl.by,'ef');
+  A.home();
+  // --- "Dopo": il banner si toglie di mezzo ma il pianto resta e l'azione successiva lo spiega lo stesso
+  S.events.length=0;const c2=cry(Date.now()-10*MIN);
+  T('renderStatus()');assert.ok(/class="banner"/.test(String(app.els['#openCryBanner']._h)));
+  A.laterCry();
+  assert.strictEqual(String(app.els['#openCryBanner']._h),'','banner nascosto');
+  assert.strictEqual(S.openCry,c2.id,'ma il pianto resta in attesa');
+  assert.ok(+app.store['alan.cry.later']>Date.now()+36e5,'nascosto per un paio d\'ore');
+  A.flow('feed');A.pick('prep',120);A.finish(100);
+  assert.strictEqual(c2.label,'fame','registrando dopo, si spiega da solo');
+  // --- più pianti da spiegare: il banner lo dice e porta ai Pianti
+  S.events.length=0;app.store['alan.cry.later']='0';
+  const p1=cry(Date.now()-2*36e5),p2=cry(Date.now()-36e5),p3=cry(Date.now()-20*MIN);
+  S.openCry=p3.id;
+  assert.deepStrictEqual(T('pendingCries')().map(e=>e.id),[p3.id,p2.id,p1.id],'dal più recente, ultime 24 ore');
+  T('renderStatus()');const bn2=String(app.els['#openCryBanner']._h);
+  assert.ok(/3 pianti da spiegare · falli con calma/.test(bn2)&&/A.goCries\(\)/.test(bn2),bn2.slice(-260));
+  S.events.length=0;S.openCry=null;
   // azione antecedente di più di 5 min (quando = 15 min fa) → nessuna etichetta
   c=cry(Date.now());A.flow('feed');A.setOff(15);A.pick('prep',90);A.finish(90);assert.strictEqual(c.label,null);
   // azione 15 min fa con pianto di 12 min fa → dentro [−5, +45] → etichetta

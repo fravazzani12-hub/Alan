@@ -29,7 +29,7 @@ per chi sviluppa (umano o Claude Code).
 | temp | c (°C, un decimale) | ≥ 38 °C sotto i 90 giorni: mostra la bandiera rossa già presente in Altro, testo identico |
 | med | what (vitd/probiotico/simeticone/paracetamolo/altro), name | "Vitamina D" ha il tap rapido in Salute e in Home (solo dopo il primo uso) |
 | appt | kind (bilancio/vaccino/visita/esame/altro), title, place, note, done | `t` = data e ora dell'appuntamento (futuro); non compare nel diario; esportabile in .ics |
-| cry | dur (s), label (fame/sonno/cambio/aria/contatto/solo/null), bins {f,a,h}, ctx (snapshot), feat {vec[12], meanF0, sdF0, meanRms, bursts10, meanBurst, meanPause, voiced, cent, durS}, audio (bool, **solo locale**), mime, audioPath (percorso nel bucket, `<family_id>/<id>.<ext>`), rec {mime, bytes, frames, err} (esito della registrazione, mostrato nel dettaglio del pianto) | audio in IndexedDB, chiave = id, valore `{buf: ArrayBuffer, mime}` (i Blob in IndexedDB su iOS sono fragili; i vecchi Blob restano leggibili) |
+| cry | dur (s), label (fame/sonno/cambio/aria/contatto/solo/null), by (id dell'azione con cui è stato spiegato a mano), bins {f,a,h}, ctx (snapshot), feat {vec[12], meanF0, sdF0, meanRms, bursts10, meanBurst, meanPause, voiced, cent, durS}, audio (bool, **solo locale**), mime, audioPath (percorso nel bucket, `<family_id>/<id>.<ext>`), rec {mime, bytes, frames, err} (esito della registrazione, mostrato nel dettaglio del pianto) | audio in IndexedDB, chiave = id, valore `{buf: ArrayBuffer, mime}` (i Blob in IndexedDB su iOS sono fragili; i vecchi Blob restano leggibili) |
 
 Impostazioni: `settings {name, birth (YYYY-MM-DD), feedH (ore | null = per età), _updated}`.
 
@@ -122,6 +122,14 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
   (`hypotheses` sui dati salvati con il pianto) e i pulsanti delle due cause più probabili (`TRY`: fame → Pappa, sonno →
   Nanna, cambio → Pannolino, aria e contatto → Altro). Toccandone uno si apre quel percorso legato a quel pianto, quindi
   registrando si spiega anche il pianto; resta "Da solo". I pianti sentiti dall'app portano l'etichetta "sentito dall'app".
+  **Niente blocca**: "Dopo" nasconde il banner per due ore (`alan.cry.later`, solo locale) lasciando il pianto in attesa,
+  quindi un'azione registrata entro i 45 minuti lo spiega lo stesso; con più di un pianto da spiegare una riga dice quanti
+  sono (`pendingCries`, ultime 24 ore) e porta ai Pianti. L'ordine vero è azione prima, catalogazione poi: l'app non
+  chiede mai di fare il contrario.
+- **Associare a mano un'azione a un pianto** (schermata del pianto, sezione "Cosa avete fatto dopo"): `explainers(cry)`
+  elenca le azioni registrate da 5 minuti prima a 90 dopo che possono spiegarlo, con accanto la causa che assegnerebbero;
+  `A.explainWith(cry, evento)` mette quella causa sul pianto e scrive in `by` con quale azione. Si può fare a distanza di
+  ore, anche su pianti vecchi, e si può cambiare idea. I chip della spiegazione restano per i casi senza azione.
 - **Riepilogo della notte** (22–7, dalle 5 alle 13; `nightStats(start, end, now)` calcola una notte qualsiasi e
   `nightSummary(now)` è quella appena passata): chiuso mostra la finestra e i numeri in una riga; al tocco si apre con
   il resoconto in frasi (`nightStory`: quanto ha dormito e il tratto più lungo, risvegli, pappe e ml, cambi e quanti con
