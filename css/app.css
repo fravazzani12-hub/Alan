@@ -421,6 +421,15 @@ button.row.tap.on .chev{color:var(--c-cambio);font-weight:700}
 .as-dark .as-st{font-size:17px}
 .as-dark .as-sum{font-size:15px}
 .as-dark .hint{position:absolute;bottom:28px;color:#39414f}
+/* numeri dal vivo e diario degli episodi sentiti */
+.as-num{margin:2px 0 8px;font-variant-numeric:tabular-nums}
+.as-eps{display:flex;flex-direction:column;gap:2px}
+.as-ep{padding:8px 0;border-bottom:1px solid var(--line)}
+.as-ep:last-child{border-bottom:0}
+.as-ep-h{display:flex;gap:8px;align-items:baseline}
+.as-ep-h b{font-variant-numeric:tabular-nums}
+.as-ep-h span{flex:1;min-width:0}
+.as-ep small{display:block;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;margin-top:2px}
 /* == /ascolto == */
 
 /* == report == */
