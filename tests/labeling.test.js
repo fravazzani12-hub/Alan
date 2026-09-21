@@ -33,7 +33,9 @@ const MIN=6e4;
   assert.ok(/probabilmente [a-zà-ù \/]+ \(\d+%\) · prova:/.test(bn),'ipotesi con la percentuale: '+bn.match(/<span>[^<]*/));
   assert.ok(bn.indexOf("A.flow('")>=0&&bn.indexOf("','"+bc.id+"')")>=0,'i pulsanti aprono i percorsi legati a questo pianto');
   assert.ok(/>Da solo</.test(bn),'resta "Da solo"');
-  bc.auto=true;T('renderStatus()');assert.ok(/sentito dall'app/.test(String(app.els['#openCryBanner']._h)),'i pianti automatici si riconoscono');
+  bc.auto=true;bc.dur=120;T('renderStatus()');assert.ok(/sentito dall'app/.test(String(app.els['#openCryBanner']._h)),'i pianti automatici si riconoscono');
+  bc.dur=8;T('renderStatus()');assert.strictEqual(String(app.els['#openCryBanner']._h),'','un pianto breve sentito dall\'app non viene chiesto');
+  assert.strictEqual(S.openCry,null);S.openCry=bc.id;bc.dur=120;
   bc.label='fame';T('renderStatus()');assert.strictEqual(String(app.els['#openCryBanner']._h),'','spiegato: il banner sparisce');
   S.events.pop();S.openCry=null;
   // --- associare a mano un'azione registrata dopo: è l'ordine vero (prima si consola, poi si scrive)

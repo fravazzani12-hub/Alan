@@ -143,8 +143,8 @@ function close(now){
   API.events().push(e);API.touched(e);
   if(blob){if(isClear(e2))keepAudio(e,blob);else audioLog='pianto poco nitido o corto: audio non tenuto';}
   hour.push(now);last={id:e.id,end:e2.lastCry};
-  /* se nessun pianto è in attesa di spiegazione, questo lo diventa: dal telefono basta registrare cosa avete fatto */
-  var S=API.state();if(!S.openCry)S.openCry=e.id;
+  /* se nessun pianto è in attesa e questo è abbastanza lungo da valere la domanda (soglia in app.js), lo diventa */
+  var S=API.state();if(!S.openCry&&API.askExplain(e))S.openCry=e.id;
   API.save();X.refresh();
   return e;
 }
