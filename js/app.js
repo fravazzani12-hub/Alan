@@ -358,6 +358,33 @@ function analyseFrame(an,tbuf,fbuf,sr){
   for(i=1;i<maxBin;i++){num+=fbuf[i]*i*binHz;den+=fbuf[i];}
   return {rms:rms,zcr:zc/n*sr/2,cent:den?num/den:0,f0:pitchAC(tbuf,sr)};
 }
+/* Collegamento del microfono al motore audio.
+   Su iPad il Web Audio a volte non riceve nulla anche con il contesto in funzione: due cause note su Safari,
+   la stessa MediaStream usata insieme dal registratore e dal motore audio, e un nodo che non arriva all'uscita
+   e quindi non viene "tirato". Quindi: traccia clonata (modo 0) e sempre un guadagno a zero verso l'uscita.
+   Se resta muto si riprova con la traccia originale (modo 1) e poi con un contesto nuovo (modo 2, in startRec). */
+function micGraph(ctx,stream,mode){
+  if(!ctx||!stream)return null;
+  var ms=stream,mine=null;
+  if(!mode){
+    try{
+      var tr=stream.getAudioTracks?stream.getAudioTracks()[0]:null;
+      if(tr&&tr.clone&&typeof MediaStream!=='undefined'){mine=new MediaStream([tr.clone()]);ms=mine;}
+    }catch(e){ms=stream;mine=null;}
+  }
+  var src=ctx.createMediaStreamSource(ms);
+  var an=ctx.createAnalyser();an.fftSize=2048;an.smoothingTimeConstant=0;
+  var sink=ctx.createGain();sink.gain.value=0;
+  src.connect(an);an.connect(sink);sink.connect(ctx.destination);
+  return {src:src,an:an,sink:sink,own:mine,mode:mode||0,tbuf:new Float32Array(an.fftSize),fbuf:new Uint8Array(an.frequencyBinCount)};
+}
+function micGraphStop(g){
+  if(!g)return;
+  try{g.src.disconnect();}catch(e){}
+  try{g.an.disconnect();}catch(e){}
+  try{g.sink.disconnect();}catch(e){}
+  if(g.own){try{g.own.getTracks().forEach(function(t){t.stop();});}catch(e){}}
+}
 function features(frames){
   if(frames.length<16)return null;
   var rmsArr=frames.map(function(f){return f.rms;}),p95=pct(rmsArr,0.95),thr=Math.max(0.006,p95*0.25);
@@ -391,7 +418,7 @@ function features(frames){
    audio/mp4 non sono affidabili); l'audio finisce in IndexedDB come {buf,mime}. Ogni passo scrive in diag(). */
 function startRec(){
   diagReset();
-  rec={t:Date.now(),frames:[],chunks:[],blob:null,mime:'',status:'starting',err:null,stream:null,ctx:null,an:null,src:null,mr:null,timer:null,stopped:false,retried:false,bytes:0};
+  rec={t:Date.now(),frames:[],chunks:[],blob:null,mime:'',status:'starting',err:null,stream:null,ctx:null,an:null,src:null,graph:null,tries:0,mr:null,timer:null,stopped:false,bytes:0};
   var hasMic=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
   diag('mic',hasMic,hasMic?'getUserMedia disponibile':'navigator.mediaDevices.getUserMedia assente'+(isStandalone()?' (app installata: serve iOS 14.3 o più recente)':''));
   if(!hasMic){rec.status='nomic';rec.err='Questo browser non espone il microfono.';return;}
@@ -443,37 +470,49 @@ function startRec(){
     renderCry();
   });
 }
-function attachAnalyser(){
-  if(!rec||!rec.ctx||!rec.stream)return;
+function attachAnalyser(mode){
+  if(!rec||!rec.stream)return;
   try{
-    if(rec.src){try{rec.src.disconnect();}catch(e){}}
-    var an=rec.ctx.createAnalyser();an.fftSize=2048;an.smoothingTimeConstant=0;
-    rec.src=rec.ctx.createMediaStreamSource(rec.stream);rec.src.connect(an);rec.an=an;
-    rec.tbuf=new Float32Array(an.fftSize);rec.fbuf=new Uint8Array(an.frequencyBinCount);
+    if(rec.graph){micGraphStop(rec.graph);rec.graph=null;rec.an=null;}
+    if(mode===2){
+      /* contesto nuovo, creato dopo il permesso: su iPad quello nato prima a volte resta sordo */
+      var AC=window.AudioContext||window.webkitAudioContext;
+      try{if(rec.ctx){rec.ctx.onstatechange=null;rec.ctx.close();}}catch(e2){}
+      rec.ctx=new AC();
+      if(rec.ctx.state!=='running'&&rec.ctx.resume)rec.ctx.resume().catch(function(){});
+    }
+    if(!rec.ctx)return;
+    var g=micGraph(rec.ctx,rec.stream,mode||0);
+    rec.graph=g;rec.an=g.an;rec.tbuf=g.tbuf;rec.fbuf=g.fbuf;rec.src=g.src;
     if(rec.ctx.state!=='running'&&rec.ctx.resume)rec.ctx.resume().catch(function(){});
   }catch(e){rec.an=null;diag('ctx',false,'collegamento del microfono al motore audio fallito: '+errStr(e));}
 }
+var MIC_TRY=['microfono collegato con la traccia clonata','microfono collegato con la traccia originale','motore audio ricreato dopo il permesso'];
 function framesDiag(){
   if(!rec)return;
-  var n=rec.frames.length,act=0,voiced=0,i;
-  for(i=0;i<n;i++){if(rec.frames[i].rms>0.004)act++;if(rec.frames[i].f0)voiced++;}
+  var n=rec.frames.length,act=0,voiced=0,live=0,i;
+  for(i=0;i<n;i++){if(rec.frames[i].rms>0)live++;if(rec.frames[i].rms>0.004)act++;if(rec.frames[i].f0)voiced++;}
   var el=(Date.now()-rec.t)/1000;
   if(!rec.an){diag('frames',false,'nessun motore audio: l\'impronta non si calcola');return;}
-  if(act===0&&el>=2&&!rec.retried){
-    /* iOS a volte cambia frequenza di campionamento quando parte il microfono e il contesto resta muto: ricollego una volta */
-    rec.retried=true;
-    try{if(rec.ctx.state!=='running'&&rec.ctx.resume)rec.ctx.resume();}catch(e){}
-    attachAnalyser();
-    diag('frames',null,'silenzio nei primi '+Math.round(el)+' s (contesto '+rec.ctx.state+'): ricollego il microfono al motore audio');
+  /* tutti i campioni esattamente a zero = il motore audio non riceve nulla (un microfono vero non è mai muto così):
+     si risale la scala dei collegamenti, un gradino ogni 1,5 s */
+  var tries=rec.tries||0;
+  if(live===0&&el>=1.5*(tries+1)&&tries<2){
+    rec.tries=tries+1;
+    attachAnalyser(rec.tries);
+    diag('frames',null,'nessun segnale nei primi '+Math.round(el)+' s (contesto '+rec.ctx.state+'): '+MIC_TRY[rec.tries]);
     return;
   }
-  diag('frames',act>0?true:(el<2?null:false),n+' frame, '+act+' con suono, tono trovato in '+voiced+(act===0&&el>=2?' · il motore audio non riceve segnale (contesto '+rec.ctx.state+')':''));
+  var how=live>0&&(rec.tries||0)>0?' · '+MIC_TRY[rec.tries]:'';
+  diag('frames',act>0?true:(el<2?null:false),n+' frame, '+act+' con suono, tono trovato in '+voiced+
+    (live===0&&el>=2?' · il motore audio non riceve segnale (contesto '+rec.ctx.state+')'+(tries>=2?': prova a spegnere il rumore bianco, chiudere l\'app e riaprirla':''):(act===0&&el>=2?' · segnale presente ma sotto la soglia: era silenzio?':''))+how);
 }
 function finishRec(){
   return new Promise(function(res){
     if(!rec){res();return;}
     rec.stopped=true;clearInterval(rec.timer);
     var done=function(){
+      try{micGraphStop(rec.graph);}catch(e){}
       try{if(rec.stream)rec.stream.getTracks().forEach(function(t){t.stop();});}catch(e){}
       try{if(rec.ctx)rec.ctx.close();}catch(e){}
       if(rec.chunks.length){rec.blob=new Blob(rec.chunks,{type:rec.mime||(rec.chunks[0]&&rec.chunks[0].type)||'audio/mp4'});if(!rec.mime)rec.mime=rec.blob.type||'';}
@@ -1612,7 +1651,7 @@ var API={
   MIN:MIN,H:H,LABELS:LABELS,CAUSES:CAUSES,OTHER:OTHER,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
   state:function(){return S;},events:function(){return S.events;},settings:function(){return S.settings;},who:function(){return who;},flow:function(){return flow;},
   touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,snapshot:snapshot,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
-  fedFeed:fedFeed,explainers:explainers,pendingCries:pendingCries,askExplain:askExplain,explainMin:explainMin,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,analyseFrame:analyseFrame,features:features,bins:bins,nightSummary:nightSummary,nightStats:nightStats,nightStory:nightStory,nightWindow:nightWindow,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
+  fedFeed:fedFeed,explainers:explainers,pendingCries:pendingCries,askExplain:askExplain,explainMin:explainMin,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,analyseFrame:analyseFrame,micGraph:micGraph,micGraphStop:micGraphStop,features:features,bins:bins,nightSummary:nightSummary,nightStats:nightStats,nightStory:nightStory,nightWindow:nightWindow,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
   fmtTime:fmtTime,fmtDur:fmtDur,fmtSec:fmtSec,fmtDate:fmtDate,fmtTemp:fmtTemp,dayKey:dayKey,dayLabel:dayLabel,isoDay:isoDay,noon:noon,inDays:inDays,pad:pad,esc:esc,mean:mean,median:median,pct:pct,niceTicks:niceTicks,
   toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,nextRow:nextRow,queueUpload:queueUpload,TRY:TRY,renderNext:renderNext,noteClean:noteClean,NOTE_MAX:NOTE_MAX,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
   q:function(s){return $(s);},lsGet:lsGet,lsSet:lsSet,
