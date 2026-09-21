@@ -124,7 +124,14 @@ sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
   registrando si spiega anche il pianto; resta "Da solo". I pianti sentiti dall'app portano l'etichetta "sentito dall'app".
   **Niente blocca**: "Dopo" nasconde il banner per due ore (`alan.cry.later`, solo locale) lasciando il pianto in attesa,
   quindi un'azione registrata entro i 45 minuti lo spiega lo stesso; con più di un pianto da spiegare una riga dice quanti
-  sono (`pendingCries`, ultime 24 ore) e porta ai Pianti. L'ordine vero è azione prima, catalogazione poi: l'app non
+  sono (`pendingCries`, ultime 24 ore) e porta ai Pianti.
+- **Quali pianti vengono chiesti** (`askExplain`): quelli registrati a mano con "Piange" sempre (li hai registrati
+  apposta), quelli sentiti dall'app solo se durano almeno `explainMin` (`alan.explain`, solo locale: sempre / 30 s /
+  1 min / 2 min / 5 min, di suo 1 min). Con l'ascolto acceso i pianti sono tanti e chiederli tutti non ha senso: quelli
+  sotto la soglia restano nel diario e nei numeri, si possono spiegare quando si vuole o mai, e nella lista dei Pianti
+  portano l'etichetta "breve" invece di "da spiegare". Il controllo sta nella scheda "Da spiegare" della tab Pianti, con
+  il numero di quelli in attesa. La misura "Quanto ci azzecca" (§4) non cambia: conta solo i pianti spiegati, quindi
+  lasciarne indietro non falsa niente. L'ordine vero è azione prima, catalogazione poi: l'app non
   chiede mai di fare il contrario.
 - **Associare a mano un'azione a un pianto** (schermata del pianto, sezione "Cosa avete fatto dopo"): `explainers(cry)`
   elenca le azioni registrate da 5 minuti prima a 90 dopo che possono spiegarlo, con accanto la causa che assegnerebbero;

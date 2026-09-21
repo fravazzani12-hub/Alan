@@ -59,7 +59,11 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   assert.ok(ev.feat&&ev.feat.vec.length===12,'impronta acustica con le 12 misure');
   near(ev.feat.meanF0,420,1,'tono medio');
   assert.ok(ev._updated,'passa da touched: si sincronizza');
-  assert.strictEqual(S.openCry,ev.id,'resta in attesa di spiegazione: dal telefono si compila');
+  assert.strictEqual(S.openCry,null,'cinque secondi: sotto la soglia, non viene chiesto niente');
+  assert.strictEqual(API.askExplain(ev),false);
+  A.setExplainMin(0);
+  assert.strictEqual(API.askExplain(ev),true,'con la soglia a zero si chiedono tutti');
+  A.setExplainMin(60);
   // --- un pianto poco dopo si unisce al precedente invece di fare una voce nuova
   let t2=t+5e3+OFFS()*1000+20e3;
   feed(t2,4,-28,420);feed(t2+4e3,OFFS(),-52,null);
@@ -75,6 +79,7 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   assert.strictEqual(cries().length,2,'troppo corto: ignorato');
   // --- un pianto lungo non deve far salire il fondo contro se stesso (il rilevatore non diventa sordo a metà)
   AS.reset();S.events.length=0;S.openCry=null;
+  A.setExplainMin(0);                          /* con la soglia a zero anche questo finisce fra quelli da spiegare */
   const tl=t0+3*3600e3;
   feed(tl,10,-52,null);
   const flBefore=AS.floorDb();
@@ -83,6 +88,10 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   let evl=feed(tl+35e3,OFFS(),-52,null);
   assert.ok(evl,'il pianto lungo si chiude');
   near(evl.dur,25,1,'durata intera, non troncata');
+  assert.strictEqual(API.askExplain(evl),true,'soglia a zero: lo chiede');
+  assert.strictEqual(S.openCry,evl.id,'resta in attesa: dal telefono si compila');
+  A.setExplainMin(60);assert.strictEqual(API.askExplain(evl),false,'a un minuto, venticinque secondi non si chiedono');
+  S.openCry=null;
   // --- con il rumore bianco acceso il fondo si alza e lo stesso livello non basta più
   AS.reset();S.events.length=0;S.openCry=null;
   const tn=t0+2*3600e3;

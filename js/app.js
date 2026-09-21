@@ -23,6 +23,12 @@ var TRY={fame:['feed','Pappa'],sonno:['sleep','Nanna'],cambio:['diaper','Pannoli
 /* nota libera su una voce del diario: la scrive la schermata di modifica, la mostra js/note.js */
 var NOTE_MAX=200;
 var BANNER_HIDE='alan.cry.later';
+/* Con l'ascolto acceso i pianti sono tanti: l'app chiede la spiegazione solo per quelli che sente lei e che superano
+   questa durata. Quelli registrati a mano si chiedono sempre (li hai registrati apposta). Solo su questo dispositivo. */
+var EXPLAIN_KEY='alan.explain',EXPLAIN_OPTS=[[0,'sempre'],[30,'30 s'],[60,'1 min'],[120,'2 min'],[300,'5 min']];
+function explainMin(){var v=+(lsGet(EXPLAIN_KEY)||60);return EXPLAIN_OPTS.some(function(o){return o[0]===v;})?v:60;}
+function askExplain(e){return !!e&&e.k==='cry'&&!e.label&&(!e.auto||(e.dur||0)>=explainMin());}
+A.setExplainMin=function(v){lsSet(EXPLAIN_KEY,String(+v||0));renderHome();renderCries();};
 function noteClean(s){return String(s==null?'':s).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').replace(/^\s+|\s+$/g,'').slice(0,NOTE_MAX);}
 function lvlKey(v){return v==='si'?'normale':(LVL[v]?v:'no');}
 
@@ -110,7 +116,7 @@ function explainers(cry){
 /* pianti senza spiegazione delle ultime 24 ore, dal più recente */
 function pendingCries(now){
   now=now||Date.now();
-  return sorted().filter(function(e){return e.k==='cry'&&!e.label&&now-e.t<=24*H;}).reverse();
+  return sorted().filter(function(e){return askExplain(e)&&now-e.t<=24*H;}).reverse();
 }
 function tryLabelOpenCry(e,linkId){
   var label=labelFor(e);if(!label)return null;
@@ -781,7 +787,9 @@ function renderStatus(){
   $('#status').innerHTML=h;
   var oc=S.openCry?byId(S.openCry):null,bn=$('#openCryBanner');
   var hideUntil=+(lsGet(BANNER_HIDE)||0);
-  if(oc&&!oc.label&&Date.now()>=hideUntil){
+  /* un pianto già spiegato, o troppo breve per essere chiesto, esce dall'attesa e il banner sparisce */
+  if(oc&&!askExplain(oc)){S.openCry=null;oc=null;}
+  if(oc&&Date.now()>=hideUntil){
     var hy=null;try{hy=hypotheses(oc.ctx||snapshot(context(oc.t)),oc.bins||bins(context(oc.t)),oc.feat?oc.feat.vec:null);}catch(e9){}
     var top=hy&&hy.list.length?hy.list.slice(0,2):[];
     var bh='<div class="banner"><div class="bn-txt"><b>Pianto delle '+fmtTime(oc.t)+'</b>'+(oc.auto?' <span class="tag-auto">sentito dall\'app</span>':'');
@@ -969,12 +977,18 @@ function renderCries(){
     h+='<p class="hint">Misurato a posteriori: per ogni pianto, l\'app prova a indovinarlo usando solo gli altri. Peso attuale del suono nelle ipotesi: '+Math.round(aw.w*100)+'%'+(acc.audN>=8&&aw.calib===0?' (il suono per ora non batte il caso, quindi è escluso)':'')+'.</p>';
   }
   h+='</div>';
+  var pend=pendingCries().length,em=explainMin();
+  h+='<div class="card"><h3>Da spiegare</h3>';
+  h+='<p class="st-read">'+(pend?pend+(pend===1?' pianto in attesa':' pianti in attesa')+', con calma':'Nessun pianto in attesa')+'</p>';
+  h+='<p class="hint">Dei pianti che sente l\'app, chiedi solo quelli più lunghi di:</p>';
+  h+='<div class="seg wide">'+EXPLAIN_OPTS.map(function(o){return '<button class="'+(o[0]===em?'on':'')+'" onclick="A.setExplainMin('+o[0]+')">'+o[1]+'</button>';}).join('')+'</div>';
+  h+='<p class="hint">I pianti che registri tu con "Piange" si chiedono sempre. Gli altri restano nel diario e nei numeri: puoi spiegarli quando vuoi, o mai.</p></div>';
   var cries=sorted().filter(function(e){return e.k==='cry';}).reverse();
   if(!cries.length){h+='<div class="list"><div class="empty">Nessun pianto registrato. Alla prossima crisi tocca "Piange".</div></div>';}
   else{
     h+='<div class="list">';
     cries.slice(0,60).forEach(function(e){
-      var tag=e.label?'<span class="tag" style="--hc:'+(cause(e.label)?cause(e.label).c:'var(--muted)')+'">'+LABELS[e.label]+'</span>':'<span class="tag" style="--hc:var(--muted)">?</span>';
+      var tag=e.label?'<span class="tag" style="--hc:'+(cause(e.label)?cause(e.label).c:'var(--muted)')+'">'+LABELS[e.label]+'</span>':'<span class="tag" style="--hc:var(--muted)">'+(askExplain(e)?'da spiegare':'breve')+'</span>';
       var det=(e.dur?fmtSec(e.dur):'')+(e.feat?' · '+Math.round(e.feat.meanF0)+' Hz · '+Math.round(e.feat.bursts10*10)/10+' raffiche/10 s':((e.audio||e.audioPath)?' · troppo corto per l\'impronta':' · senza audio'));
       h+='<div class="row" onclick="A.cryDetail(\''+e.id+'\')"><div class="time">'+(dayKey(e.t)===dayKey(Date.now())?'':'<small>'+dayLabel(e.t)+'</small><br>')+fmtTime(e.t)+'</div><div class="what">'+tag+' <span class="detail">'+det+'</span></div>'+(e.audio||e.audioPath?'<button class="play'+(e.audio?'':' cloud')+'" aria-label="'+(e.audio?'Ascolta':'Scarica e ascolta')+'" onclick="event.stopPropagation();A.play(\''+e.id+'\',this)">▶</button>':'<span></span>')+'</div>';
     });
@@ -1598,7 +1612,7 @@ var API={
   MIN:MIN,H:H,LABELS:LABELS,CAUSES:CAUSES,OTHER:OTHER,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
   state:function(){return S;},events:function(){return S.events;},settings:function(){return S.settings;},who:function(){return who;},flow:function(){return flow;},
   touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,snapshot:snapshot,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
-  fedFeed:fedFeed,explainers:explainers,pendingCries:pendingCries,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,analyseFrame:analyseFrame,features:features,bins:bins,nightSummary:nightSummary,nightStats:nightStats,nightStory:nightStory,nightWindow:nightWindow,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
+  fedFeed:fedFeed,explainers:explainers,pendingCries:pendingCries,askExplain:askExplain,explainMin:explainMin,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,analyseFrame:analyseFrame,features:features,bins:bins,nightSummary:nightSummary,nightStats:nightStats,nightStory:nightStory,nightWindow:nightWindow,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
   fmtTime:fmtTime,fmtDur:fmtDur,fmtSec:fmtSec,fmtDate:fmtDate,fmtTemp:fmtTemp,dayKey:dayKey,dayLabel:dayLabel,isoDay:isoDay,noon:noon,inDays:inDays,pad:pad,esc:esc,mean:mean,median:median,pct:pct,niceTicks:niceTicks,
   toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,nextRow:nextRow,queueUpload:queueUpload,TRY:TRY,renderNext:renderNext,noteClean:noteClean,NOTE_MAX:NOTE_MAX,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
   q:function(s){return $(s);},lsGet:lsGet,lsSet:lsSet,
