@@ -368,10 +368,17 @@ tenere viva la sessione); (2) `unlock()` — una sorgente muta di un campione fa
 contesto; (3) `resume()`; (4) la voce con l'anello già pronto, a freddo quello corto (sintesi istantanea, nessuna attesa nel
 gesto). Poi `upgrade()` sale di un livello per volta (250 ms, poi 700 ms) in dissolvenza. Senza questo ordine, su iPad al
 primo avvio il contesto restava sospeso e il suono partiva solo rientrando nell'app.
-**Controllo che sia partito** (`watch`): a 300 ms e poi ogni 400 ms, se il contesto non è `running` richiama `resume()`; dopo
-tre tentativi `blocked` diventa vero e la schermata dice di toccare ancora Avvia (lo stato torna a posto appena riparte).
-Finché è bloccato, ogni `touchend`/`click` nella pagina ritenta lo sblocco; su `visibilitychange` e `statechange` il contesto
-sospeso viene ripreso. La Media Session porta titolo, play/pause/stop e `playbackState`; la pausa dal sistema ferma tutto. Timer (30 min, 1, 2, 8 h) controllato ogni 15 s e su `timeupdate` del
+**Sblocco in anticipo** (`prime`): il primo tocco nell'app, qualunque esso sia (`touchstart`/`pointerdown`/`click` in cattura,
+una volta sola), crea il contesto, fa partire la sorgente muta e chiama `resume()`. È il gesto più presto disponibile e non
+contiene altro: quando poi si tocca Avvia il motore è già sbloccato. I tocchi successivi sono altre occasioni per riprenderlo.
+**Controllo che stia suonando** (`watch`, a 300/700/1200/2000/3000 ms): la prova non è lo stato del contesto (su iOS può dire
+`running` con la sessione audio ferma) ma `flowing()` = stato `running` **e** orologio del contesto che avanza. Finché non
+suona si richiama `resume()`; a 1,2 s si passa al lettore (`useElement`).
+**Ripiego sul lettore** (`mode` = 'el'): lo stesso `<audio>` della tenuta cambia sorgente e suona il file dell'anello al
+volume scelto (iOS ignora `audio.volume`, quindi il volume sta nel file e cambiarlo rigenera il blob). L'elemento è già
+sbloccato dal tocco, quindi riparte anche fuori dal gesto. Si sente un piccolo stacco a ogni giro dell'anello, e la schermata
+lo spiega. Appena `flowing()` torna vero (controllo periodico, `visibilitychange`, nuovo Avvia) si torna all'anello continuo
+(`useEngine`). Su `visibilitychange` e `statechange` il contesto sospeso viene ripreso. La Media Session porta titolo, play/pause/stop e `playbackState`; la pausa dal sistema ferma tutto. Timer (30 min, 1, 2, 8 h) controllato ogni 15 s e su `timeupdate` del
 keepalive. `play()` e il contesto nascono nel tap: il tap su un suono o su un livello lo fa partire subito (anteprima), la
 versione lunga si genera 0,7 s dopo in sottofondo (`upgrade`, annullato da Stop o da un altro cambio); `prewarm` prepara il suono salvato già lungo 4 s dopo
 l'avvio, e si rimanda di 8 s se la pagina non è in primo piano (la sintesi occupa il telefono e non deve capitare mentre si

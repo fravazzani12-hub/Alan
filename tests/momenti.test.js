@@ -129,7 +129,7 @@ const DAY=864e5,H=36e5;
   n0=S.events.length;A.finish('save');
   assert.ok(T('flow')&&S.events.length===n0,'senza foto né parole non salva');assert.strictEqual(app.els['#toast'].textContent,'Aggiungi una foto o due parole');
   assert.strictEqual(await M.pick({files:[{name:'a.jpg',size:5e6,type:'image/jpeg'}]}),true);
-  assert.ok(/Foto pronta · 2 kB/.test(screen())&&/Cambia foto/.test(screen()),screen());
+  assert.ok(/<img src="blob:/.test(screen())&&/Cambia foto/.test(screen()),'anteprima della foto: '+screen().match(/mo-prev[\s\S]{0,80}/));
   M.caption('Il primo bagnetto  di Alan');A.hdate(API.isoDay(Date.now()-1*DAY));
   A.finish('save');await wait(30);
   assert.strictEqual(T('flow'),null);assert.strictEqual(S.events.length,n0+1);

@@ -18,6 +18,9 @@ function boot(opts){
   global.document={querySelector:s=>els[s]||(els[s]=mk()),querySelectorAll:()=>[],addEventListener(){},hidden:false,documentElement:html,
     getElementById:id=>els['#'+id]||null,createElement:()=>{const e=mk();e.appendChild=()=>{};e.remove=()=>{};e.click=()=>{};return e;},body:{classList:{add(){},remove(){}},appendChild(){}}};
   global.location={search:'',pathname:'/'};global.history={replaceState(){}};
+  /* blob URL finti ma diversi l'uno dall'altro (serve a chi cambia la sorgente di un <audio>); la classe URL resta quella vera */
+  let urlN=0;
+  if(typeof URL!=='undefined'){URL.createObjectURL=()=>'blob:alan/'+(++urlN);URL.revokeObjectURL=()=>{};}
   global.window={confirm:()=>true,scrollTo(){},indexedDB:undefined,addEventListener(){},matchMedia:()=>({matches:false})};
   if(opts.AlanSync){global.window.AlanSync=opts.AlanSync;global.AlanSync=opts.AlanSync;}else{delete global.AlanSync;}
   Object.defineProperty(global,'navigator',{value:{userAgent:'test'},configurable:true,writable:true});
