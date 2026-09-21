@@ -426,6 +426,11 @@ dispositivo in `alan.ascolto` = {on, sens, audio}, **mai sincronizzato**: sugli 
 → `AnalyserNode` (fftSize 2048) → un frame ogni `FRAME` = 50 ms con `API.analyseFrame`, le stesse misure dei pianti
 registrati a mano. Se dopo tre tentativi non arriva nulla la riga di stato lo dice ("il microfono non arriva al motore
 audio"): senza questo l'ascolto resterebbe acceso e sordo senza che si veda.
+**Diario di bordo** (`alan.ascolto.log`, ultimi 12, solo locale): ogni episodio che si chiude lascia una riga con ora,
+durata, esito (`segnato` / `unito` / `troppo corto` / `tetto orario`), quota di frame con tono, stacco medio dal fondo e
+nitidezza. Senza, un pianto sentito ma non segnato non lasciava traccia da nessuna parte e non si poteva capire perché.
+In schermata anche una riga di numeri dal vivo (fondo, soglia, picco, quota di tono negli ultimi 30 s), da guardare
+mentre piange per sapere se il microfono lo sta sentendo davvero.
 **Rilevatore** (funzione pura `push(frame, now)`, senza microfono, così è provabile): il **fondo** è il 25° percentile
 degli ultimi 30 s e si impara **solo fuori dagli episodi** — con la mediana, o imparando durante il pianto, un pianto
 lungo alzerebbe la soglia contro se stesso e il rilevatore diventerebbe sordo a metà. Un frame vale come pianto se supera
@@ -433,6 +438,10 @@ il fondo di `sens` dB (bassa +14, media +10, alta +7), non è sotto −46 dBFS i
 `F0_HI` 750 Hz (la voce di un adulto sta molto più in basso, il fruscio non ha tono). L'episodio si apre dopo `ON_S`
 1,2 s di frame da pianto dentro una finestra di `WIN_S` 2,5 s, e comincia dal **primo frame di pianto**, non dall'inizio
 della finestra; si chiude dopo `OFF_S` 8 s senza pianto. Sotto `MIN_S` 3 s si scarta (un grido non è un pianto).
+Dentro un episodio aperto il tono non si trova a ogni frame (respiri, singhiozzi, distanza dal microfono): un frame solo
+forte tiene vivo il pianto per `HANG_S` 1,5 s dall'ultimo tono, altrimenti un pianto vero si chiudeva dopo un secondo.
+Nitidezza e numeri dell'episodio si calcolano sui frame **fino all'ultimo pianto**: gli 8 s di quiete che lo chiudono non
+sono confusione e non devono abbassare la nitidezza.
 **Ipotesi dal vivo**: mentre l'episodio è aperto, una volta al secondo `liveGuess()` ricalcola `API.hypotheses` sui frame
 raccolti fin lì; la schermata (che si ridisegna ogni secondo solo mentre piange) mostra le due cause più probabili con la
 percentuale e il pulsante del percorso da provare (`API.TRY`), dicendo che è un'ipotesi sui vostri dati e non una diagnosi.

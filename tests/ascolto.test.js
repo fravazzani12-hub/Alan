@@ -109,6 +109,37 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
     feed(s,30,-52,null);feed(s+30e3,4,-28,420);feed(s+34e3,OFFS(),-52,null);
   }
   assert.strictEqual(cries().length,AS.MAX_HOUR,'oltre il tetto non aggiunge più voci');
+  // --- il tono non si trova a ogni frame: un frame forte vale ancora come pianto per HANG_S
+  AS.reset();S.events.length=0;S.openCry=null;
+  const tHang=t0+6*3600e3;
+  feed(tHang,30,-52,null);
+  feed(tHang+30e3,2,-28,420);                      /* due secondi di pianto con il tono */
+  feed(tHang+32e3,4,-28,null);                     /* poi forte ma senza tono: respiri, singhiozzi, distanza */
+  const evh=feed(tHang+36e3,OFFS(),-52,null);
+  assert.ok(evh,'il pianto non muore quando il tono sparisce per qualche frame');
+  near(evh.dur,2+AS.HANG_S,0.4,'la coda vale HANG_S dopo l\'ultimo tono, non di più');
+  // --- ogni episodio finisce nel diario di bordo, anche quello scartato
+  AS.reset();S.events.length=0;S.openCry=null;
+  const tg=t0+7*3600e3;
+  feed(tg,30,-52,null);
+  feed(tg+30e3,6,-28,420);feed(tg+36e3,OFFS(),-52,null);   /* pianto segnato */
+  feed(tg+60e3,1.5,-28,420);feed(tg+61.5e3,OFFS(),-52,null); /* grido: troppo corto */
+  let lg=AS.log();
+  assert.strictEqual(lg[0].out,'corto','il grido resta a verbale');
+  assert.strictEqual(lg[1].out,'salvato');
+  assert.ok(lg[1].dur>=6&&lg[1].dur<=7,'durata a verbale: '+lg[1].dur);
+  assert.ok(lg[1].tono>80&&lg[1].over>=20,'tono e stacco dal fondo: '+JSON.stringify(lg[1]));
+  assert.strictEqual(lg[1].fl,-52);
+  feed(tg+90e3,5,-28,420);feed(tg+95e3,OFFS(),-52,null);     /* vicino al primo: unito */
+  assert.strictEqual(AS.log()[0].out,'unito');
+  const card=AS.logCard();
+  assert.ok(/Ultimi episodi sentiti/.test(card),card.slice(0,120));
+  assert.ok(/troppo corto, non segnato/.test(card)&&/unito al pianto di poco prima/.test(card),'il diario dice perché');
+  assert.ok(/dopo 8 s di quiete/.test(card),'spiega perché un pianto in corso non è ancora nel diario');
+  assert.strictEqual(AS.statLine(),'','a microfono spento niente numeri');
+  const lv=AS.liveStats();
+  near(lv.thr,lv.fl+AS.sens()[2],1e-9,'soglia = fondo + sensibilità');
+  assert.ok(lv.peak>=lv.fl&&lv.tono>0&&lv.tono<1,'picco e quota di tono dal vivo: '+JSON.stringify(lv));
   // --- nitidezza: un pianto pulito e lungo tiene l'audio, uno confuso o corto no
   AS.reset();S.events.length=0;S.openCry=null;
   const tq=t0+5*3600e3;
@@ -203,7 +234,8 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   assert.ok(/Tieni l'audio dei pianti nitidi/.test(sc)&&/aria-checked="true"/.test(sc),'interruttore dell\'audio acceso');
   AS.setAudio(false);assert.ok(/aria-checked="false"/.test(String(app.els['#screenInner']._h)));AS.setAudio(true);
   assert.ok(/solo con l'app aperta e lo schermo acceso/.test(sc)&&/permesso si dà una volta per apertura/.test(sc),'i limiti scritti chiaro');
-  assert.ok(/Non viene salvato nessun audio/.test(sc));
+  assert.ok(/Dell'audio si tiene solo quello dei pianti nitidi/.test(sc),'niente frasi che si contraddicono sull\'audio');
+  assert.ok(/Ultimi episodi sentiti/.test(sc),'il diario di bordo è in schermata');
   AS.dark();const dk=String(app.els['#screenInner']._h);
   assert.ok(/as-dark/.test(dk)&&/as-clock/.test(dk),'schermo scuro');
   assert.ok(/tocca dove vuoi per tornare all'app/.test(dk)&&/onclick="A.home\(\)"/.test(dk),'si esce toccando dove si vuole');
