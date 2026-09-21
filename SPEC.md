@@ -439,8 +439,10 @@ contesto di quel momento, `clarity`, l'audio se nitido e **`auto:true`** per dis
 attesa di spiegazione diventa lui `openCry`, così dal telefono basta registrare cosa avete fatto. Due episodi a meno di
 `MERGE_S` 60 s si uniscono in una voce sola (una crisi con pause non diventa dieci pianti); oltre `MAX_HOUR` 20 episodi
 in un'ora non se ne creano altri. **Nessun audio viene salvato.**
-UI: schermata `ascolto` (acceso/spento grande, barra del livello, pianti di oggi, tre sensibilità, "Schermo scuro" =
-schermata `ascoltodark` nera con ora e stato per la notte, e i limiti scritti chiaro), riga in Home quando è acceso
-(blocco `mid`) e scheda in Altro con l'interruttore. Esposto su `AlanExt.ascolto` = {push, close, reset, isCry, floorDb,
+UI: schermata `ascolto` (acceso/spento grande, barra del livello, pianti di oggi, tre sensibilità, interruttore
+dell'audio, diagnostica dell'audio, "Schermo scuro", e i limiti scritti chiaro); riga in Home quando è acceso (blocco
+`mid`) con **"Scuro"** e "Spegni", così la schermata nera si accende da dove la si guarda; scheda in Altro con
+l'interruttore. La schermata `ascoltodark` è nera con ora, stato e pianti di oggi, si tocca dove si vuole per tornare
+all'app e tiene l'orologio aggiornato ogni 10 s anche con l'ascolto spento (l'intervallo si ferma da solo all'uscita). Esposto su `AlanExt.ascolto` = {push, close, reset, isCry, floorDb,
 db, episode, inHour, setOn, toggle, setSens, sens, running, startMic, stopMic, open, dark, render, renderDark, stateText,
 summary, todayCries, meterPct, state}.
