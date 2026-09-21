@@ -22,9 +22,9 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   assert.ok(T('EXT.flows.ascolto')&&T('EXT.flows.ascoltodark'),'schermate registrate');
   assert.ok(T('EXT.slots.altro').length>=1,'scheda in Altro');
   // --- spento di suo, e solo su questo dispositivo
-  assert.deepStrictEqual(AS.state(),{on:false,sens:1,audio:false});
+  assert.deepStrictEqual(AS.state(),{on:false,sens:1,audio:true},'spento, orecchio medio, audio dei pianti nitidi acceso');
   assert.strictEqual(app.store['alan.ascolto'],undefined,'niente da salvare finché non si tocca');
-  AS.setSens(2);assert.deepStrictEqual(JSON.parse(app.store['alan.ascolto']),{on:false,sens:2,audio:false});
+  AS.setSens(2);assert.deepStrictEqual(JSON.parse(app.store['alan.ascolto']),{on:false,sens:2,audio:true});
   assert.strictEqual(AS.sens()[2],7,'orecchio alto: +7 dB sul fondo');
   AS.setSens(9);assert.strictEqual(AS.state().sens,2,'valore fuori scala ignorato');
   AS.setSens(1);
@@ -100,6 +100,85 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
     feed(s,30,-52,null);feed(s+30e3,4,-28,420);feed(s+34e3,OFFS(),-52,null);
   }
   assert.strictEqual(cries().length,AS.MAX_HOUR,'oltre il tetto non aggiunge più voci');
+  // --- nitidezza: un pianto pulito e lungo tiene l'audio, uno confuso o corto no
+  AS.reset();S.events.length=0;S.openCry=null;
+  const tq=t0+5*3600e3;
+  feed(tq,10,-52,null);
+  feed(tq+10e3,8,-28,420);                       /* pianto netto: +24 dB sul fondo */
+  const epClear=AS.episode();
+  assert.ok(AS.clarity(epClear)>=AS.CLEAR,'pianto netto: nitido ('+AS.clarity(epClear).toFixed(2)+')');
+  assert.ok(AS.isClear(epClear),'abbastanza lungo e chiaro: l\'audio si tiene');
+  feed(tq+18e3,OFFS(),-52,null);
+  // pianto breve: non si tiene l'audio anche se netto
+  AS.reset();
+  feed(tq+60e3,10,-52,null);feed(tq+70e3,4,-28,420);
+  const epShort=AS.episode();
+  assert.ok(AS.clarity(epShort)>=AS.CLEAR,'netto');
+  assert.ok(!AS.isClear(epShort),'ma corto: niente audio');
+  feed(tq+74e3,OFFS(),-52,null);
+  // pianto confuso: tanto rumore attorno, poco pianto vero
+  AS.reset();
+  feed(tq+200e3,10,-40,null);
+  for(let i=0;i<Math.round(12000/F);i++){const t=tq+210e3+i*F;AS.push(frame(t,(i%5===0)?-26:-39,(i%5===0)?420:null),t);}
+  const epNoisy=AS.episode();
+  if(epNoisy)assert.ok(AS.clarity(epNoisy)<AS.CLEAR,'pianto confuso nel rumore: non nitido ('+AS.clarity(epNoisy).toFixed(2)+')');
+  AS.reset();
+  // --- audio dei pianti nitidi: i pezzi arrivano DOPO lo stop e non si devono perdere
+  AS.reset();S.events.length=0;S.openCry=null;
+  class FakeMR{
+    constructor(s,o){this.stream=s;this.mimeType=(o&&o.mimeType)||'audio/webm';this.state='inactive';FakeMR.last=this;}
+    static isTypeSupported(m){return m==='audio/mp4';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';setTimeout(()=>{if(this.ondataavailable)this.ondataavailable({data:{size:9000,byteLength:9000}});if(this.onstop)this.onstop();},0);}
+  }
+  window.MediaRecorder=FakeMR;
+  AS.setStream({fake:true});
+  const put=[];const queued=[];
+  API.blobToBuf=b=>Promise.resolve(new ArrayBuffer(b.size||0));
+  API.audioPut=(id,buf,mime)=>{put.push([id,buf.byteLength,mime]);return Promise.resolve();};
+  API.queueUpload=id=>{queued.push(id);};
+  const ta=t0+7*3600e3;
+  feed(ta,10,-52,null);
+  feed(ta+10e3,8,-28,420);
+  assert.ok(FakeMR.last&&FakeMR.last.state==='recording','registra mentre piange');
+  assert.strictEqual(FakeMR.last.mimeType,'audio/mp4','sceglie il formato che il telefono sa registrare');
+  let eva=feed(ta+18e3,OFFS(),-52,null);
+  assert.ok(eva,'voce creata');
+  await new Promise(r=>setTimeout(r,30));
+  assert.strictEqual(eva.audio,true,'audio tenuto sulla voce');
+  assert.strictEqual(put.length,1);assert.strictEqual(put[0][0],eva.id);assert.strictEqual(put[0][1],9000,'il pezzo arrivato dopo lo stop è dentro');
+  assert.deepStrictEqual(queued,[eva.id],'messo in coda verso il cloud');
+  assert.ok(/audio tenuto · 9 kB/.test(AS.audioLog()),AS.audioLog());
+  // un pianto corto: registra ma butta l'audio
+  AS.reset();put.length=0;queued.length=0;
+  feed(ta+120e3,10,-52,null);feed(ta+130e3,4,-28,420);
+  let evb=feed(ta+134e3,OFFS(),-52,null);
+  await new Promise(r=>setTimeout(r,30));
+  assert.ok(evb&&!evb.audio,'corto: nessun audio');assert.strictEqual(put.length,0);
+  assert.ok(/non tenuto/.test(AS.audioLog()),AS.audioLog());
+  // con l'interruttore spento non registra nemmeno
+  AS.setAudio(false);AS.reset();
+  feed(ta+300e3,10,-52,null);feed(ta+310e3,8,-28,420);
+  assert.ok(/audio spento/.test(AS.audioLog()),AS.audioLog());
+  feed(ta+318e3,OFFS(),-52,null);
+  AS.setAudio(true);AS.setStream(null);delete window.MediaRecorder;
+  S.events.length=0;S.openCry=null;AS.reset();
+  // --- ipotesi dal vivo mentre piange: le stesse dell'app, con cosa provare
+  S.events.length=0;S.openCry=null;
+  const th=t0+6*3600e3;
+  S.events.push({id:'f0',k:'feed',t:th-4*36e5,who:'Fabio',prep:120,ml:100});
+  feed(th,10,-52,null);feed(th+10e3,4,-28,420);
+  assert.ok(AS.episode(),'episodio aperto');
+  const hy=AS.liveGuess();
+  assert.ok(hy&&hy.list.length===5,'cinque cause come nei pianti a mano');
+  assert.ok(hy.list[0].p>=hy.list[1].p,'ordinate per probabilità');
+  assert.ok(/^probabilmente [a-zà-ù \/]+ \d+%$/.test(AS.guessText()),'testo dell\'ipotesi: '+AS.guessText());
+  const box=AS.liveBox();
+  assert.ok(/as-live/.test(box)&&/Sta piangendo/.test(box)&&/Prova: /.test(box),box.slice(0,200));
+  assert.ok(/non una diagnosi/.test(box),'detto chiaro che è un\'ipotesi');
+  assert.ok(/A.flow\('(feed|sleep|diaper|other)'\)/.test(box),'il pulsante apre il percorso giusto');
+  assert.strictEqual(AS.stateText(),'spento','senza microfono acceso la schermata non racconta niente');
+  feed(th+14e3,OFFS(),-52,null);AS.reset();S.events.length=0;S.openCry=null;
   // --- schermate e riga in Home
   S.events.length=0;AS.reset();
   T('renderHome()');assert.strictEqual(String(app.els['#home-ascolto']._h),'','spento: nessuna riga in Home');
@@ -110,6 +189,8 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   assert.ok(/<div class="title">Ascolto del pianto<\/div>/.test(sc)&&/Accendi l'ascolto/.test(sc)&&/as-meter/.test(sc),sc.slice(0,300));
   assert.ok(/id="asLevel" style="width:0%"/.test(sc),'spento: barra del livello vuota');assert.strictEqual(AS.meterPct(),0);
   assert.ok(/Quanto orecchio/.test(sc)&&(sc.match(/AlanExt.ascolto.setSens/g)||[]).length===3,'tre sensibilità');
+  assert.ok(/Tieni l'audio dei pianti nitidi/.test(sc)&&/aria-checked="true"/.test(sc),'interruttore dell\'audio acceso');
+  AS.setAudio(false);assert.ok(/aria-checked="false"/.test(String(app.els['#screenInner']._h)));AS.setAudio(true);
   assert.ok(/solo con l'app aperta e lo schermo acceso/.test(sc)&&/permesso si dà una volta per apertura/.test(sc),'i limiti scritti chiaro');
   assert.ok(/Non viene salvato nessun audio/.test(sc));
   AS.dark();assert.ok(/as-dark/.test(String(app.els['#screenInner']._h))&&/as-clock/.test(String(app.els['#screenInner']._h)),'schermo scuro');

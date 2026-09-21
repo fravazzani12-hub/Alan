@@ -50,7 +50,7 @@ header.top>div:first-child{min-width:0;padding-right:8px}
 .cry{width:100%;margin:12px 0 10px;min-height:104px;border:0;border-radius:20px;background:var(--amber);color:var(--amber-ink);font-size:28px;font-weight:700;box-shadow:0 6px 0 var(--amber-shadow)}
 .cry:active{transform:translateY(3px);box-shadow:0 3px 0 var(--amber-shadow)}
 .cry small{display:block;font-weight:400;font-size:14px;margin-top:2px;opacity:.85}
-.banner{background:var(--surface);border-left:4px solid var(--danger);border-radius:0 12px 12px 0;padding:10px 12px;margin:0 0 10px;font-size:14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.banner{background:var(--surface);border-left:4px solid var(--danger);border-radius:0 12px 12px 0;padding:10px 12px;margin:0 0 10px;font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
 .banner button{border:1px solid var(--line);background:var(--surface2);border-radius:10px;min-height:44px;padding:0 12px;font-size:14px;font-weight:700;white-space:nowrap}
 .home-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .home-grid button{min-height:96px;border-radius:16px;border:1px solid var(--line);background:var(--surface);font-size:22px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-bottom:4px solid var(--tc)}
@@ -387,6 +387,13 @@ textarea.nt-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 .nz-hint{margin:6px 0 4px}
 /* == /noise == */
 
+.banner .bn-txt{flex:1;min-width:0}
+.banner .bn-txt b{display:block;font-size:15px}
+.banner .bn-txt span{display:block;font-size:14px;color:var(--muted);margin-top:1px;overflow-wrap:anywhere}
+.banner .tag-auto{display:inline-block;font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+.banner .bn-acts{display:flex;flex-wrap:wrap;gap:6px;flex:none}
+.banner .bn-acts button{min-height:44px;padding:0 12px;border-radius:12px;border:0;background:var(--text);color:var(--bg);font:inherit;font-size:14px;font-weight:700}
+.banner .bn-acts button.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
 /* == ascolto == */
 /* Ascolto del pianto (js/ascolto.js): schermata con livello del suono, scheda in Altro, schermo scuro per la notte */
 .as-main{margin-top:6px}.as-main small{display:block;font-size:14px;font-weight:400;margin-top:4px;opacity:.85}
@@ -396,6 +403,14 @@ textarea.nt-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 .as-err{color:var(--danger)}
 .as-hint{margin:4px 0 0}
 .as-card .btn{margin-top:0}
+.as-live{background:var(--surface);border-left:4px solid var(--danger);border-radius:0 14px 14px 0;padding:10px 12px;margin:10px 0 0}
+.as-live-h{font-size:13px;color:var(--muted)}
+.as-g{display:flex;align-items:center;gap:8px;min-height:32px;font-size:16px}
+.as-g i{width:10px;height:10px;border-radius:50%;background:var(--hc);flex:none}
+.as-g b{flex:1;min-width:0}
+.as-g span{color:var(--muted);font-variant-numeric:tabular-nums;font-size:14px}
+.as-try{margin-top:8px}
+.as-live .hint{margin:8px 0 0}
 .as-dark{position:fixed;inset:0;background:#000;color:#5a6472;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:9}
 .as-dark .as-clock{font-size:52px;font-weight:700;font-variant-numeric:tabular-nums;color:#7d8798}
 .as-dark .as-st{font-size:17px}

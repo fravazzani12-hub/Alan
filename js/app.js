@@ -17,6 +17,9 @@ var OTHER=[['ruttino','Ruttino','aria'],['rigurgito','Rigurgito','aria'],['massa
 /* pipì/cacca: no, poca, normale, tanta. 'si' è il valore della versione 12 e si legge come normale. */
 var LVL={no:'no',poca:'poca',normale:'normale',tanta:'tanta',si:'normale'};
 var LVL_ORDER=['poca','normale','tanta'];
+/* Cosa si può provare per ciascuna causa: apre il percorso normale, che registrando spiega anche il pianto.
+   Sono le azioni della giornata, non consigli: la causa resta un'ipotesi misurata sui vostri dati. */
+var TRY={fame:['feed','Pappa'],sonno:['sleep','Nanna'],cambio:['diaper','Pannolino'],aria:['other','Ruttino o massaggio'],contatto:['other','Coccole o ciuccio']};
 /* nota libera su una voce del diario: la scrive la schermata di modifica, la mostra js/note.js */
 var NOTE_MAX=200;
 function noteClean(s){return String(s==null?'':s).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').replace(/^\s+|\s+$/g,'').slice(0,NOTE_MAX);}
@@ -751,7 +754,16 @@ function renderStatus(){
   h+=statusTile('Ultimo cambio',c.sinceDiaperH!=null?fmtDur(c.sinceDiaperH*H)+' fa':'—',ld?('pipì '+LVL[ld.pipi]+', cacca '+LVL[ld.cacca]):'nessuno','var(--c-cambio)',c.sinceDiaperH!=null&&c.sinceDiaperH>3,'A.flow(\'diaper\')');
   $('#status').innerHTML=h;
   var oc=S.openCry?byId(S.openCry):null,bn=$('#openCryBanner');
-  if(oc&&!oc.label){bn.innerHTML='<div class="banner"><div>Pianto delle '+fmtTime(oc.t)+' senza spiegazione: la prossima cosa che registri lo etichetta.</div><button onclick="A.soloOpen()">Da solo</button></div>';}
+  if(oc&&!oc.label){
+    var hy=null;try{hy=hypotheses(oc.ctx||snapshot(context(oc.t)),oc.bins||bins(context(oc.t)),oc.feat?oc.feat.vec:null);}catch(e9){}
+    var top=hy&&hy.list.length?hy.list.slice(0,2):[];
+    var bh='<div class="banner"><div class="bn-txt"><b>Pianto delle '+fmtTime(oc.t)+'</b>'+(oc.auto?' <span class="tag-auto">sentito dall\'app</span>':'');
+    bh+=top.length?'<span>probabilmente '+esc(top[0].label.toLowerCase())+' ('+Math.round(top[0].p*100)+'%) · prova:</span>':'<span>senza spiegazione: la prossima cosa che registri lo etichetta.</span>';
+    bh+='</div><div class="bn-acts">';
+    top.forEach(function(x){var t=TRY[x.id];if(t)bh+='<button onclick="A.flow(\''+t[0]+'\',\''+oc.id+'\')">'+esc(t[1])+'</button>';});
+    bh+='<button class="ghost" onclick="A.soloOpen()">Da solo</button></div></div>';
+    bn.innerHTML=bh;
+  }
   else{bn.innerHTML='';if(oc&&oc.label)S.openCry=null;}
   $('#qSleep').innerHTML=c.sleeping?'Sveglio<small>si è svegliato</small>':'Nanna<small>si è addormentato</small>';
   var tp=typicalPrep();$('#qFeed').textContent='di solito '+Math.round(tp)+' ml';
@@ -1545,7 +1557,7 @@ var API={
   touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,snapshot:snapshot,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
   fedFeed:fedFeed,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,analyseFrame:analyseFrame,features:features,bins:bins,nightSummary:nightSummary,nightStats:nightStats,nightStory:nightStory,nightWindow:nightWindow,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
   fmtTime:fmtTime,fmtDur:fmtDur,fmtSec:fmtSec,fmtDate:fmtDate,fmtTemp:fmtTemp,dayKey:dayKey,dayLabel:dayLabel,isoDay:isoDay,noon:noon,inDays:inDays,pad:pad,esc:esc,mean:mean,median:median,pct:pct,niceTicks:niceTicks,
-  toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,nextRow:nextRow,renderNext:renderNext,noteClean:noteClean,NOTE_MAX:NOTE_MAX,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
+  toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,nextRow:nextRow,queueUpload:queueUpload,TRY:TRY,renderNext:renderNext,noteClean:noteClean,NOTE_MAX:NOTE_MAX,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
   q:function(s){return $(s);},lsGet:lsGet,lsSet:lsSet,
   fileGet:function(k){return idbGet('files',k);},filePut:function(k,v){return idbPut('files',k,v);},fileDel:function(k){return idbDel('files',k);},
   blobToBuf:blobToBuf,audioGet:audioGet,audioPut:audioPut,

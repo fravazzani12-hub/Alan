@@ -11,6 +11,8 @@ const DAY=864e5,H=36e5;
   const tab=()=>String(app.els['#momenti']._h);
   const screen=()=>String(app.els['#screenInner']._h);
   const wait=(ms)=>new Promise(r=>setTimeout(r,ms||120));
+  /* aspetta che una condizione diventi vera invece di sperare in un ritardo fisso (le suite girano anche sotto carico) */
+  const until=async(fn,msg)=>{for(let i=0;i<60;i++){if(fn())return;await wait(30);}assert.ok(false,msg||'condizione mai vera');};
   const src=fs.readFileSync(__dirname+'/../js/momenti.js','utf8');
   let seq=0;const add=(e)=>{e.id=e.id||('t'+(++seq));e._updated=new Date().toISOString();S.events.push(e);return e;};
 
@@ -167,7 +169,7 @@ const DAY=864e5,H=36e5;
   // --- elimina dal visore: evento, file locale, oggetto nel cloud, coda
   assert.strictEqual(M.del('r1'),true);
   assert.strictEqual(T('flow'),null);assert.ok(!S.events.some(x=>x.id==='r1'));assert.deepStrictEqual(calls.del,['r1']);assert.deepStrictEqual(calls.rm,['fam/r1.bin']);assert.strictEqual(M.known.r1,undefined);
-  await wait();assert.ok(!/r1/.test(tab().match(/mo-grid[\s\S]*?<\/div>/)||''),'album ridisegnato');
+  await until(()=>!/r1/.test(tab().match(/mo-grid[\s\S]*?<\/div>/)||''),'album ridisegnato senza la foto eliminata');
   // --- foto non ancora caricata dall'altro telefono: segnaposto "in arrivo", il tap avvisa
   add({k:'moment',kind:'photo',text:'Nonna',photo:true,t:now-7*H,who:'Fabio',id:'r2'});
   API.showView('momenti');await wait();
