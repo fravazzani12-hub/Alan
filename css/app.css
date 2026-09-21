@@ -394,6 +394,9 @@ textarea.nt-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 .banner .bn-acts{display:flex;flex-wrap:wrap;gap:6px;flex:none}
 .banner .bn-acts button{min-height:44px;padding:0 12px;border-radius:12px;border:0;background:var(--text);color:var(--bg);font:inherit;font-size:14px;font-weight:700}
 .banner .bn-acts button.ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+.banner .bn-more{flex:1 0 100%;min-height:44px;margin-top:2px;border:0;border-radius:12px;background:var(--surface2);color:var(--text);font:inherit;font-size:14px}
+button.row.tap.on{background:var(--surface2)}
+button.row.tap.on .chev{color:var(--c-cambio);font-weight:700}
 /* == ascolto == */
 /* Ascolto del pianto (js/ascolto.js): schermata con livello del suono, scheda in Altro, schermo scuro per la notte */
 .as-main{margin-top:6px}.as-main small{display:block;font-size:14px;font-weight:400;margin-top:4px;opacity:.85}
