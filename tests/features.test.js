@@ -34,5 +34,38 @@ const {boot,synth}=require('./stub');
   // soglia: senza F0 nei frame attivi la voce è 0 ma le raffiche restano
   const nof0=synth('fame',6,{seed:5}).map(fr=>({...fr,f0:null}));
   const n=features(nof0);assert.strictEqual(n.vec[1],0);assert.strictEqual(n.voiced,0);assert.ok(n.vec[6]>4);
+  // --- collegamento del microfono al motore audio (iPad: il Web Audio resta muto se il grafo non arriva
+  //     all'uscita o se la stessa MediaStream alimenta anche il registratore)
+  const micGraph=app.T('micGraph'),micGraphStop=app.T('micGraphStop');
+  global.MediaStream=class{constructor(ts){this.ts=ts;}getAudioTracks(){return this.ts;}getTracks(){return this.ts;}};
+  const mkTrack=()=>{const t={stopped:false,clones:0,stop(){t.stopped=true;},clone(){t.clones++;const c=mkTrack();c.clone_of=t;return c;}};return t;};
+  const mkCtx=()=>{
+    const log=[],node=k=>({kind:k,connect(d){log.push(k+'>'+d.kind);},disconnect(){log.push(k+' via');}});
+    const dest=node('uscita');
+    return {state:'running',destination:dest,log,
+      createMediaStreamSource(ms){const n=node('mic');n.ms=ms;return n;},
+      createAnalyser(){const n=node('analisi');n.fftSize=0;n.smoothingTimeConstant=1;Object.defineProperty(n,'frequencyBinCount',{get(){return n.fftSize/2;}});return n;},
+      createGain(){const n=node('guadagno');n.gain={value:1};return n;}};
+  };
+  let tr=mkTrack(),ms={getAudioTracks:()=>[tr],getTracks:()=>[tr]},ctx=mkCtx();
+  let g=micGraph(ctx,ms,0);
+  assert.ok(g.src.ms instanceof MediaStream&&g.src.ms.getAudioTracks()[0].clone_of===tr,'modo 0: il motore audio sente una traccia clonata');
+  assert.strictEqual(g.an.fftSize,2048);assert.strictEqual(g.an.smoothingTimeConstant,0);
+  assert.strictEqual(g.sink.gain.value,0,'il ritorno verso l\'uscita è muto');
+  assert.deepStrictEqual(ctx.log,['mic>analisi','analisi>guadagno','guadagno>uscita'],'il grafo arriva all\'uscita: '+ctx.log);
+  assert.strictEqual(g.tbuf.length,2048);assert.strictEqual(g.fbuf.length,1024);
+  micGraphStop(g);
+  assert.ok(g.own.getAudioTracks()[0].stopped,'lo stop chiude la traccia clonata');
+  assert.strictEqual(tr.stopped,false,'la traccia del registratore resta viva');
+  assert.ok(ctx.log.slice(3).join(' ').includes('mic via'),'i nodi vengono staccati');
+  // modo 1: stessa MediaStream del registratore, nessun clone da chiudere
+  tr=mkTrack();ms={getAudioTracks:()=>[tr],getTracks:()=>[tr]};ctx=mkCtx();
+  g=micGraph(ctx,ms,1);
+  assert.strictEqual(g.src.ms,ms,'modo 1: traccia originale');assert.strictEqual(tr.clones,0);
+  assert.strictEqual(g.own,null);
+  assert.deepStrictEqual(ctx.log,['mic>analisi','analisi>guadagno','guadagno>uscita']);
+  micGraphStop(g);assert.strictEqual(tr.stopped,false,'lo stop non spegne il microfono del registratore');
+  assert.strictEqual(micGraph(null,ms,0),null);assert.strictEqual(micGraph(ctx,null,0),null);
+  delete global.MediaStream;
   console.log('features ok');
 })().catch(e=>{console.error(e);process.exit(1);});

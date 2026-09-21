@@ -93,9 +93,16 @@ raffiche/10 s, durata media raffica, durata media pausa, centroide medio, ZCR me
 Servono almeno 16 frame e 6 attivi, altrimenti niente impronta (il pianto si salva comunque).
 
 Registrazione (ordine pensato per iOS, PWA da Safari): l'AudioContext nasce e viene ripreso dentro il tap su "Piange", prima
-di getUserMedia (creato dopo resterebbe sospeso e l'analisi sarebbe muta); se dopo 2 s non arriva segnale il microfono viene
-ricollegato una volta. MediaRecorder preferisce `audio/mp4` e parte senza timeslice (un solo blob a stop). Il riascolto
-sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
+di getUserMedia (creato dopo resterebbe sospeso e l'analisi sarebbe muta). MediaRecorder preferisce `audio/mp4` e parte senza
+timeslice (un solo blob a stop). Il riascolto sblocca l'elemento audio nel tap con un wav muto, poi gli dà la sorgente vera.
+
+Collegamento del microfono al motore audio (`micGraph`, usato anche dall'ascolto automatico): su iPad il Web Audio può restare
+muto anche con il contesto in funzione, per due motivi noti di Safari — la stessa MediaStream usata insieme dal registratore e
+dal motore audio, e un nodo che non arriva all'uscita e quindi non viene elaborato. Quindi il grafo è sempre
+microfono → AnalyserNode → guadagno a **zero** → uscita, e il microfono è una **traccia clonata** (modo 0). Nessun segnale =
+tutti i campioni esattamente a zero (un microfono vero non è mai muto così): in quel caso si sale di un gradino ogni 1,5 s —
+modo 1 traccia originale, modo 2 contesto nuovo creato dopo il permesso. La diagnostica dice quale modo ha funzionato; se
+falliscono tutti e tre lo scrive e suggerisce di spegnere il rumore bianco e riaprire l'app.
 
 ### 4.5 Voto acustico e fusione
 - k-NN (k=5) su vec z-scorato sui pianti etichettati con feat, peso 1/(d+0,35), smoothing 2%. Servono almeno 3 pianti etichettati con impronta.
@@ -415,8 +422,10 @@ senza dover far partire una registrazione mentre si consola un bambino. Pensata 
 mentre la schermata è davanti; `navigator.wakeLock` tiene sveglio lo schermo dove c'è (iPadOS 16.4+). Interruttore per
 dispositivo in `alan.ascolto` = {on, sens, audio}, **mai sincronizzato**: sugli altri telefoni resta spento.
 **Catena**: un solo `getUserMedia` (un permesso per apertura dell'app, non uno per pianto, perché lo stream resta aperto)
-→ `MediaStreamSource` → `AnalyserNode` (fftSize 2048) → un frame ogni `FRAME` = 50 ms con `API.analyseFrame`, le stesse
-misure dei pianti registrati a mano.
+→ `API.micGraph` (§4.4: traccia clonata, guadagno a zero verso l'uscita, e la stessa scala di ripieghi se resta muto)
+→ `AnalyserNode` (fftSize 2048) → un frame ogni `FRAME` = 50 ms con `API.analyseFrame`, le stesse misure dei pianti
+registrati a mano. Se dopo tre tentativi non arriva nulla la riga di stato lo dice ("il microfono non arriva al motore
+audio"): senza questo l'ascolto resterebbe acceso e sordo senza che si veda.
 **Rilevatore** (funzione pura `push(frame, now)`, senza microfono, così è provabile): il **fondo** è il 25° percentile
 degli ultimi 30 s e si impara **solo fuori dagli episodi** — con la mediana, o imparando durante il pianto, un pianto
 lungo alzerebbe la soglia contro se stesso e il rilevatore diventerebbe sordo a metà. Un frame vale come pianto se supera

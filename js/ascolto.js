@@ -204,13 +204,15 @@ function setAudio(on){st.audio=!!on;save();refresh();}
 
 /* ---------- microfono ---------- */
 var stream=null,ctx=null,an=null,tbuf=null,fbuf=null,timer=null,lock=null,err=null,started=0;
+var graph=null,micTry=0,micLive=0,micNote='';
 function running(){return !!timer;}
 function stopMic(){
   if(timer){clearInterval(timer);timer=null;}
   if(ep)close(Date.now());else recStop();
+  if(graph){try{API.micGraphStop(graph);}catch(e3){}graph=null;}
   if(stream){try{stream.getTracks().forEach(function(t){t.stop();});}catch(e){}stream=null;}
   if(ctx&&typeof ctx.close==='function'){try{ctx.close();}catch(e2){}}
-  ctx=null;an=null;
+  ctx=null;an=null;micTry=0;micLive=0;micNote='';
   releaseLock();
 }
 function releaseLock(){if(lock){try{lock.release();}catch(e){}lock=null;}}
@@ -232,10 +234,7 @@ function startMic(){
     .catch(function(){return navigator.mediaDevices.getUserMedia({audio:true});})
     .then(function(s){
       stream=s;
-      var src=ctx.createMediaStreamSource(s);
-      an=ctx.createAnalyser();an.fftSize=2048;an.smoothingTimeConstant=0;
-      src.connect(an);
-      tbuf=new Float32Array(an.fftSize);fbuf=new Uint8Array(an.frequencyBinCount);
+      attach(0);
       reset();started=Date.now();
       timer=setInterval(tick,FRAME);
       keepAwake();refresh();
@@ -244,11 +243,37 @@ function startMic(){
       st.on=false;save();refresh();
     });
 }
+/* Collegamento al motore audio, con la scala di ripieghi di app.js: traccia clonata, traccia originale,
+   contesto nuovo. Su iPad il primo modo a volte resta muto e senza questo l'ascolto non sente nulla. */
+function attach(mode){
+  if(!stream)return;
+  try{
+    if(graph){API.micGraphStop(graph);graph=null;an=null;}
+    if(mode===2){
+      var AC=window.AudioContext||window.webkitAudioContext;
+      try{if(ctx&&ctx.close)ctx.close();}catch(e2){}
+      ctx=new AC();
+      if(ctx.resume)try{ctx.resume();}catch(e3){}
+    }
+    graph=API.micGraph(ctx,stream,mode||0);
+    an=graph.an;tbuf=graph.tbuf;fbuf=graph.fbuf;
+    micTry=mode||0;micLive=0;
+    if(ctx.state!=='running'&&ctx.resume)try{ctx.resume();}catch(e4){}
+  }catch(e){an=null;err='Microfono non collegato al motore audio.';}
+}
+/* niente segnale = tutti i campioni esattamente a zero: un microfono vero non è mai muto così */
+function micWatch(f){
+  if(f.rms>0){micLive++;if(micLive===1&&micTry)micNote=MIC_NOTE[micTry];return;}
+  if(micLive||micTry>=2||!started)return;
+  if(Date.now()-started>=1500*(micTry+1))attach(micTry+1);
+}
+var MIC_NOTE=['','collegato con la traccia originale','motore audio ricreato dopo il permesso'];
 var frames=0;
 function tick(){
   if(!an)return;
   var f=API.analyseFrame(an,tbuf,fbuf,ctx.sampleRate);
   f.t=Date.now();
+  micWatch(f);
   push(f,f.t);
   /* il disegno costa: la barra quattro volte al secondo, testo e orologio una */
   if(frames%4===0){var el=API.q('#asLevel');if(el&&el.style)el.style.width=meterPct()+'%';}
@@ -289,8 +314,9 @@ function todayCries(){
 function meterPct(){return running()?Math.max(0,Math.min(100,(lastLevel+60)/60*100)):0;}
 function stateText(){
   if(!running())return st.on?'microfono in attesa…':'spento';
+  if(!micLive&&started&&Date.now()-started>4500)return 'il microfono non arriva al motore audio';
   if(ep)return 'sta piangendo… '+(guessText()||'');
-  return 'in ascolto · fondo '+Math.round(lastFloor)+' dB';
+  return 'in ascolto · fondo '+Math.round(lastFloor)+' dB'+(micNote?' · '+micNote:'');
 }
 function summary(){
   var c=todayCries(),auto=c.filter(function(e){return e.auto;}).length;
