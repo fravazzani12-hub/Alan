@@ -44,9 +44,9 @@ const near=(a,b,tol,msg)=>assert.ok(Math.abs(a-b)<=tol,msg+': '+a+' vs '+b);
   // --- in attesa scaduta (oltre 6 h) si dimentica; una voce già con durata non si sovrascrive
   API.lsSet('alan.timer.pending',JSON.stringify({start:Date.now()-7*36e5,dur:300,at:new Date().toISOString()}));TM.adopt();assert.strictEqual(TM.pending(),null);
   // --- Pattern: solo con pappe cronometrate; media, corta/lunga, ml al minuto
-  T('renderStats()');let st=txt('#stats');assert.ok(/Quanto dura la pappa/.test(st),st);assert.ok(/In media 10 min su 1 pappa cronometrata/.test(st),st);
+  T('renderStats()');let st=txt('#stats');assert.ok(/Quanto dura la pappa/.test(st),st);assert.ok(/In media 10 min su 1 pappa con la durata/.test(st),st);
   S.events.push({id:'b1',k:'feed',t:now-8*36e5,who:'Fabio',prep:120,ml:120,src:'biberon',dur:1200});
-  T('renderStats()');st=txt('#stats');assert.ok(/su 2 pappe cronometrate/.test(st)&&/10 min \/ 20 min/.test(st),st);assert.ok(/Ritmo (8|8\.\d|8,\d) ml al minuto/.test(st.replace(',','.')),st);
+  T('renderStats()');st=txt('#stats');assert.ok(/su 2 pappe con la durata/.test(st)&&/10 min \/ 20 min/.test(st),st);assert.ok(/Ritmo (8|8\.\d|8,\d) ml al minuto/.test(st.replace(',','.')),st);
   S.events.splice(0);T('renderStats()');assert.ok(!/Quanto dura la pappa/.test(txt('#stats')),'senza dati niente riquadro');
   console.log('timer ok');
 })().catch(e=>{console.error(e);process.exit(1);});

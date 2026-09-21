@@ -655,6 +655,17 @@ function whenRow(){
   }
   return h;
 }
+/* "Durata": un tap per avere il tempo della pappa anche senza cronometro. Se la durata arriva dal cronometro o dall'ora
+   di fine, la riga la mostra e basta. */
+var DURS=[5,10,15,20,30,45];
+function durRow(){
+  /* flow.data.dur arriva dal cronometro in secondi; la scelta a mano sta in durMin (minuti) */
+  var ft=flowTime(),fixed=(ft&&ft.dur)?ft.dur:(flow.data.dur||null);
+  if(fixed)return '<div class="when"><span>Durata</span><button class="on" disabled>'+Math.round(fixed/60)+' min</button></div>';
+  var cur=flow.data.durMin||0;
+  return '<div class="when"><span>Durata</span>'+DURS.map(function(m){return '<button class="'+(cur===m?'on':'')+'" onclick="A.setDur('+m+')">'+m+'</button>';}).join('')+'<button onclick="A.setDur(0)">non lo so</button></div>';
+}
+A.setDur=function(m){if(!flow)return;flow.data.durMin=(flow.data.durMin===m?0:m)||0;renderFlow();};
 function backBtn(){return '<button class="back" onclick="A.home()" aria-label="Indietro">‹</button>';}
 function renderFlow(){
   if(!flow||flow.type==='cry')return;
@@ -668,6 +679,7 @@ function renderFlow(){
       h+='<div class="stepper"><button onclick="A.stepPrep(-10)">−10</button><div class="val">'+cv+' ml</div><button onclick="A.stepPrep(10)">+10</button></div><button class="btn ghost" onclick="A.pick(\'prep\','+cv+')">Avanti con '+cv+' ml</button>';
     }else{
       var prep=d.prep,vals=[];for(var v=prep;v>0;v-=10)vals.push(v);vals.push(0);
+      h+=durRow();
       h+='<h2>Quanto ne ha bevuto? <span style="font-size:15px;color:var(--muted);font-weight:400">su '+prep+' ml</span></h2><div class="grid3">'+vals.map(function(v){return '<button onclick="A.finish('+v+')">'+(v===prep?'Tutto<small>'+v+' ml</small>':(v===0?'Niente<small>rifiutato</small>':v+'<small>ml</small>'))+'</button>';}).join('')+'</div>';
     }
   }else if(flow.type==='diaper'){
@@ -701,7 +713,10 @@ A.finish=function(val){
   else if(HEALTH_TYPES[flow.type]){var hr=healthFinish(val);if(!hr){toast('Niente da salvare');return;}e=hr.e;t=hr.t;msg=hr.msg;}
   else if(EXT.flows[flow.type]){var xr=EXT.flows[flow.type].finish(flow,val,API);if(xr===false){return;}if(!xr||!xr.e){toast('Niente da salvare');return;}e=xr.e;if(xr.t)t=xr.t;msg=xr.msg||'Salvato';}
   if(!e)return;
-  if(ft&&ft.dur&&e.k==='feed'){e.dur=ft.dur;e.src='biberon';}
+  if(e.k==='feed'){
+    var fdur=(ft&&ft.dur)?ft.dur:(d.dur||(d.durMin?d.durMin*60:0));
+    if(fdur>0){e.dur=fdur;e.src='biberon';}
+  }
   e.id=uid();e.t=t;e.who=who;S.events.push(e);touched(e);
   var linked=tryLabelOpenCry(e,flow.link);
   save();
@@ -791,7 +806,8 @@ function renderDiary(){
 function editFields(e){
   var lv=[['poca','Poca'],['normale','Normale'],['tanta','Tanta'],['no','No']];
   if(e.k==='feed')return [{key:'prep',label:'Preparato',type:'step',steps:[50,10],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
-                          {key:'ml',label:'Bevuto',type:'step',steps:[50,10],min:0,max:400,fmt:function(v){return (v||0)+' ml';}}];
+                          {key:'ml',label:'Bevuto',type:'step',steps:[50,10],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
+                          {key:'dur',label:'Durata',type:'step',steps:[300,60],min:60,max:7200,start:600,fmt:function(v){return Math.round(v/60)+' min';},nullable:true}];
   if(e.k==='diaper')return [{key:'pipi',label:'Pipì',type:'chips',opts:lv,norm:lvlKey},{key:'cacca',label:'Cacca',type:'chips',opts:lv,norm:lvlKey}];
   if(e.k==='other')return [{key:'what',label:'Cosa',type:'chips',opts:OTHER.map(function(o){return [o[0],o[1]];})}];
   if(e.k==='temp')return [{key:'c',label:'Temperatura',type:'step',steps:[1,0.1],min:33,max:43,fmt:fmtTemp}];
@@ -1440,14 +1456,15 @@ function renderNext(){
 }
 A.goHealth=function(){showView('salute');};
 function nightWindow(now){var d=new Date(now);var end=new Date(d.getFullYear(),d.getMonth(),d.getDate(),7,0,0).getTime();if(now<end)end=now;var start=end-9*H;return {start:start,end:end};}
-function nightSummary(now){
-  now=now||Date.now();var hr=new Date(now).getHours();if(hr<5||hr>=13)return null;
-  var w=nightWindow(now),ev=sorted(),inW=ev.filter(function(e){return e.t>=w.start&&e.t<=w.end&&e.k!=='appt'&&e.k!=='measure';});
-  if(!inW.length)return null;
+/* Riepilogo di una finestra notturna qualsiasi (start–end): pappe, ml, cambi, pianti, sonno e tratto più lungo, risvegli,
+   note e alzate per genitore. Lo usano il riquadro in Home (la notte appena passata) e il diario notturno in Pattern. */
+function nightStats(start,end,now){
+  now=now||Date.now();
+  var w={start:start,end:end},ev=sorted(),inW=ev.filter(function(e){return e.t>=w.start&&e.t<=w.end&&e.k!=='appt'&&e.k!=='measure';});
   var feeds=inW.filter(function(e){return e.k==='feed';}),ml=feeds.reduce(function(s,e){return s+(e.ml||0);},0);
   var diapers=inW.filter(function(e){return e.k==='diaper';}).length,cries=inW.filter(function(e){return e.k==='cry';});
   var sleep=0,cur=null;ev.forEach(function(e){if(e.k==='sleep')cur=e.t;else if(e.k==='wake'&&cur!=null){var a=Math.max(cur,w.start),b=Math.min(e.t,w.end);if(b>a)sleep+=b-a;cur=null;}});
-  if(cur!=null){var a2=Math.max(cur,w.start);if(w.end>a2)sleep+=w.end-a2;}
+  if(cur!=null){var a2=Math.max(cur,w.start),b2=Math.min(now,w.end);if(b2>a2)sleep+=b2-a2;}
   var whos={};inW.forEach(function(e){if(e.who&&e.who!=='Io'&&(e.k==='feed'||e.k==='diaper'||e.k==='other'||e.k==='med'))whos[e.who]=(whos[e.who]||0)+1;});
   /* tratto di sonno più lungo dentro la finestra, risvegli segnati e note scritte stanotte: servono al resoconto */
   var best=null,c2=null;
@@ -1461,6 +1478,12 @@ function nightSummary(now){
   var notes=inW.filter(function(e){return typeof e.note==='string'&&e.note.trim();});
   return {start:w.start,end:w.end,feeds:feeds.length,ml:ml,diapers:diapers,poo:poo,cries:cries.length,cryLabels:cries.map(function(c){return c.label?LABELS[c.label]:'?';}),
     sleep:sleep,longest:best,wakes:inW.filter(function(e){return e.k==='wake';}).length,notes:notes,whos:whos,list:inW};
+}
+/* la notte appena passata, solo di mattina (5–13) e solo se c'è qualcosa dentro */
+function nightSummary(now){
+  now=now||Date.now();var hr=new Date(now).getHours();if(hr<5||hr>=13)return null;
+  var w=nightWindow(now),n=nightStats(w.start,w.end,now);
+  return n.list.length?n:null;
 }
 var nightOpen=false;
 A.toggleNight=function(){nightOpen=!nightOpen;renderNight();};
@@ -1520,7 +1543,7 @@ var API={
   MIN:MIN,H:H,LABELS:LABELS,CAUSES:CAUSES,OTHER:OTHER,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
   state:function(){return S;},events:function(){return S.events;},settings:function(){return S.settings;},who:function(){return who;},flow:function(){return flow;},
   touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,snapshot:snapshot,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
-  fedFeed:fedFeed,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,nightSummary:nightSummary,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
+  fedFeed:fedFeed,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,nightSummary:nightSummary,nightStats:nightStats,nightStory:nightStory,nightWindow:nightWindow,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
   fmtTime:fmtTime,fmtDur:fmtDur,fmtSec:fmtSec,fmtDate:fmtDate,fmtTemp:fmtTemp,dayKey:dayKey,dayLabel:dayLabel,isoDay:isoDay,noon:noon,inDays:inDays,pad:pad,esc:esc,mean:mean,median:median,pct:pct,niceTicks:niceTicks,
   toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,nextRow:nextRow,renderNext:renderNext,noteClean:noteClean,NOTE_MAX:NOTE_MAX,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
   q:function(s){return $(s);},lsGet:lsGet,lsSet:lsSet,

@@ -335,6 +335,16 @@ textarea.ed-ta{width:100%;box-sizing:border-box;font:inherit;font-size:17px;line
 .st-legend .band{width:16px;height:9px;border-radius:4px;background:var(--c-sonno);opacity:.35}
 .st-legend .night{width:14px;height:10px;border-radius:2px;background:var(--c-sonno);opacity:.12;border:1px solid var(--line)}
 .st-legend .lv{width:14px;height:10px;border-radius:2px;background:var(--text)}.st-legend .lv.poca{opacity:.35}.st-legend .lv.normale{opacity:.7}
+.ng-list{display:flex;flex-direction:column;gap:8px;margin:8px 0 0}
+.ng-item{background:var(--surface2);border-radius:12px;overflow:hidden}
+.ng-head{display:flex;align-items:center;gap:8px;width:100%;min-height:56px;padding:8px 10px;border:0;background:transparent;color:var(--text);font:inherit;text-align:left}
+.ng-head .ng-when{flex:0 0 auto;min-width:92px}
+.ng-head .ng-when b{display:block;font-size:14px}
+.ng-head .ng-when small{display:block;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ng-head .ng-sum{flex:1;min-width:0;font-size:13px;color:var(--muted);line-height:1.3;overflow-wrap:anywhere}
+.ng-head .chev{color:var(--muted);font-size:14px;flex:none}
+.ng-item .ng-body{border-top:1px solid var(--line);background:var(--surface)}
+.ng-item .list{background:var(--surface);border-radius:0}
 .st-more{width:100%;min-height:48px;margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);color:var(--text);font:inherit;font-size:15px;font-weight:700}
 .st-details[hidden]{display:none}
 /* == /stats == */

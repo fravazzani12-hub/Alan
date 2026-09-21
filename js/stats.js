@@ -6,6 +6,8 @@
       segnate come fasce azzurre, la notte 22–7 in ombra; "Le ore delle pappe" = profilo delle 24 ore sui 7 giorni con
       i momenti abituali evidenziati; "Quanto beve" = ml al giorno, media sui giorni interi.
    3. Nanna: ore dormite per notte (22–7) nelle ultime 7 notti complete, media sulle notti con sonno segnato.
+   3b. Diario notturno: le stesse notti una per riga; al tocco si apre il resoconto di quella notte (lo stesso di Home,
+       API.nightStats + API.nightStory) e l'elenco delle voci, ognuna toccabile per la modifica.
    4. Pannolini: pipì e cacca al giorno, divisi per quantità (poca/normale/tanta).
    Marche sottili, griglia solida e leggera, etichette solo dove servono (massimo, oggi), tocco su una barra = toast
    con il dettaglio. Solo calcoli sugli eventi (nessuno stato proprio), letture fattuali: mai giudizi. Calcoli su AlanExt.stats. */
@@ -360,11 +362,61 @@ function diaperCard(now){
   h+='<p class="hint">Ogni barra è un giorno: i cambi in cui c\'era pipì o cacca, divisi per quanta ne ha fatta. Oggi è in corso (barra più chiara) e non entra nella media. Solo conteggi, nessuna soglia.</p>';
   return h+'</div>';
 }
-function render(now){now=now||Date.now();return weekCard(now)+feedCard(now)+sleepCard(now)+diaperCard(now);}
+/* ---------- diario notturno: le notti restano consultabili anche dopo la mattina ---------- */
+var openNight=null;
+/* le stesse 7 finestre di nights(), dalla più recente, con il riepilogo completo; solo quelle con qualcosa dentro */
+function nightList(now){
+  now=now||Date.now();
+  var shift=at(now,0,NIGHT_END)>now?1:0,out=[];
+  for(var i=0;i<7;i++){
+    var end=at(now,-i-shift,NIGHT_END),start=at(now,-i-shift-1,NIGHT_START);
+    var n=API.nightStats(start,end,now);
+    if(n.list.length)out.push(n);
+  }
+  return out;
+}
+function nightLabel(n,now){
+  var k=API.dayKey(n.start);
+  if(k===API.dayKey(now-864e5))return 'Stanotte';
+  if(k===API.dayKey(now-2*864e5))return 'La notte prima';
+  return API.dayLabel(n.start)+' → '+API.dayLabel(n.end);
+}
+function nightLine(n){
+  var b=[];
+  b.push('dormito '+(n.sleep?API.fmtDur(n.sleep):'—'));
+  b.push(plural(n.feeds,'pappa','pappe')+(n.ml?' ('+n.ml+' ml)':''));
+  b.push(plural(n.diapers,'cambio','cambi'));
+  if(n.cries)b.push(plural(n.cries,'pianto','pianti'));
+  return b.join(' · ');
+}
+function toggleNight(i){openNight=(openNight===i?null:i);API.refreshViews();}
+function nightsCard(now){
+  now=now||Date.now();
+  var list=nightList(now),h='<div class="card st-card"><h3>Diario notturno</h3>';
+  if(!list.length)return h+'<p class="hint st-wait">Qui restano le notti già passate: quanto ha dormito, pappe, cambi e pianti, con il racconto e le voci di quella notte.</p></div>';
+  h+='<p class="hint">Le ultime '+plural(list.length,'notte','notti')+' dalle 22 alle 7. Tocca una notte per il racconto e le voci.</p>';
+  h+='<div class="ng-list">';
+  list.forEach(function(n,i){
+    var open=openNight===i;
+    h+='<div class="ng-item'+(open?' on':'')+'"><button class="ng-head" aria-expanded="'+(open?'true':'false')+'" onclick="AlanExt.stats.toggleNight('+i+')">'+
+      '<span class="ng-when"><b>'+API.esc(nightLabel(n,now))+'</b><small>'+API.fmtTime(n.start)+'–'+API.fmtTime(n.end)+'</small></span>'+
+      '<span class="ng-sum">'+API.esc(nightLine(n))+'</span><span class="chev">'+(open?'▴':'▾')+'</span></button>';
+    if(open){
+      h+='<div class="ng-body"><p class="ng-story">'+API.nightStory(n)+'</p>';
+      if(n.notes.length)h+='<p class="ng-notes">'+n.notes.map(function(e){return '<span>'+API.fmtTime(e.t)+' '+API.esc(API.describe(e,null)[0])+': «'+API.esc(e.note.trim())+'»</span>';}).join('')+'</p>';
+      h+='</div><div class="list">';
+      n.list.slice().reverse().forEach(function(e){h+=API.diaryRow(e,null,false);});
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+  return h+'</div></div>';
+}
+function render(now){now=now||Date.now();return weekCard(now)+feedCard(now)+sleepCard(now)+nightsCard(now)+diaperCard(now);}
 
 X.slot('stats',function(){return render();},-10);
-X.stats={nights:nights,milkPerDay:milkPerDay,feedTimes:feedTimes,histogram:histogram,usual:usual,diapersPerDay:diapersPerDay,week:week,
-  weekCard:weekCard,feedCard:feedCard,sleepCard:sleepCard,diaperCard:diaperCard,render:render,say:say,
+X.stats={nights:nights,milkPerDay:milkPerDay,feedTimes:feedTimes,histogram:histogram,usual:usual,diapersPerDay:diapersPerDay,week:week,nightList:nightList,
+  weekCard:weekCard,feedCard:feedCard,sleepCard:sleepCard,nightsCard:nightsCard,diaperCard:diaperCard,toggleNight:toggleNight,nightLine:nightLine,openNight:function(){return openNight;},render:render,say:say,
   fmtH:fmtH,dec1:dec1,fmtClock:fmtClock,usualText:usualText,sleepSpans:sleepSpans,sparkline:sparkline};
 X.refresh();
 })();

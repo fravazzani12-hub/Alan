@@ -24,11 +24,11 @@ const count=(html,re)=>(String(html).match(re)||[]).length;
   let mk=ST.milkPerDay(now);assert.strictEqual(mk.days.length,7);assert.strictEqual(mk.mode,null);assert.strictEqual(mk.mean,null);
   let ft=ST.feedTimes(now);assert.strictEqual(ft.days.length,7);assert.strictEqual(ft.nFeeds,0);assert.strictEqual(ft.perDay,null);
   let html=stats();
-  assert.ok(/La settimana di Alan/.test(html)&&/<h3>Pappa<\/h3>/.test(html)&&/<h3>Nanna<\/h3>/.test(html)&&/Pannolini/.test(html),'quattro schede');
+  assert.ok(/La settimana di Alan/.test(html)&&/<h3>Pappa<\/h3>/.test(html)&&/<h3>Nanna<\/h3>/.test(html)&&/Diario notturno/.test(html)&&/Pannolini/.test(html),'cinque schede');
   assert.ok(html.indexOf('La settimana')<html.indexOf('Perché piangeva'),'le schede delle estensioni vengono prima dei pianti');
   let dp=ST.diapersPerDay(now);assert.strictEqual(dp.days.length,7);assert.strictEqual(dp.n,0);assert.strictEqual(dp.perDay,null);
   let wk=ST.week(now);assert.strictEqual(wk.any,false);assert.strictEqual(wk.feedsPerDay,null);assert.strictEqual(ST.usual(now).times.length,0);
-  assert.strictEqual(count(html,/st-wait/g),4,'quattro testi di attesa');assert.strictEqual(count(html,/st-chart/g),0,'nessun grafico');
+  assert.strictEqual(count(html,/st-wait/g),5,'cinque testi di attesa');assert.strictEqual(count(html,/st-chart/g),0,'nessun grafico');
 
   // --- 7 giorni finti. Notte d (1..7): Nanna alle 22:00 + d·10 min, Sveglio alle 07:30 → nella finestra 22–7 dorme 9 h − d·10 min.
   //     Pisolino 13–14 (non conta). Biberon alle 2 (80 ml) e 8/11/14/17/20 (100 ml) → 580 ml; biberon alle 23:00 (60 ml) nei giorni dispari;
@@ -125,9 +125,26 @@ const count=(html,re)=>(String(html).match(re)||[]).length;
   assert.ok(/st-legend/.test(dc)&&/poca<\/span>/.test(dc)&&/tanta<\/span>/.test(dc));assert.ok(!/NaN|undefined/.test(dc));
   assert.ok(!/bene|poco|troppo|giusto|regolare/.test(dc),'nessun giudizio');
 
+  // --- diario notturno: una riga per notte, dalla più recente; al tocco il racconto e le voci di quella notte
+  let nl=ST.nightList(now);
+  assert.strictEqual(nl.length,7,'sette notti con qualcosa dentro');
+  assert.ok(nl[0].start>nl[1].start,'dalla più recente');
+  assert.strictEqual(nl[0].feeds,2,'stanotte: il biberon delle 23 e quello delle 2');
+  let nc=ST.nightsCard(now);
+  assert.strictEqual(count(nc,/class="ng-head"/g),7,'sette righe');assert.ok(/<b>Stanotte<\/b>/.test(nc)&&/<b>La notte prima<\/b>/.test(nc),nc.slice(0,400));
+  assert.ok(!/ng-story/.test(nc),'chiuse: nessun racconto');assert.strictEqual(count(nc,/aria-expanded="false"/g),7);
+  assert.ok(/dormito \d+ h \d+ · 2 pappe \(\d+ ml\) · \d+ cambi?/.test(nc),'riga compatta: '+nc.match(/ng-sum">[^<]*/));
+  assert.strictEqual(ST.nightLine({sleep:0,feeds:0,ml:0,diapers:1,cries:0}),'dormito — · 0 pappe · 1 cambio','senza sonno segnato un trattino');
+  ST.toggleNight(0);nc=ST.nightsCard(now);
+  assert.strictEqual(ST.openNight(),0);assert.strictEqual(count(nc,/aria-expanded="true"/g),1);
+  assert.ok(/ng-story/.test(nc)&&/ha dormito/.test(nc),'racconto della notte');
+  assert.strictEqual(count(nc,/class="row tap"/g),nl[0].list.length,'tutte le voci della notte, toccabili');
+  assert.ok(/A.edit\(/.test(nc),'dal diario notturno si apre la modifica');
+  ST.toggleNight(0);assert.strictEqual(ST.openNight(),null,'un secondo tocco richiude');
   // tutto insieme in Pattern
   html=stats();
-  assert.strictEqual(count(html,/st-chart/g),6,'sei grafici: quando mangia, ore, quanto beve, notti, pipì, cacca');assert.strictEqual(count(html,/st-wait/g),0);
+  assert.strictEqual(count(html,/st-chart/g),6,'sei grafici: quando mangia, ore, quanto beve, notti, pipì, cacca');
+  assert.ok(/Diario notturno/.test(html)&&html.indexOf('Diario notturno')>html.indexOf('<h3>Nanna</h3>'),'il diario notturno segue la scheda Nanna');assert.strictEqual(count(html,/st-wait/g),0);
   assert.ok(/viewBox="0 0 360 /.test(html),'viewBox 360 di larghezza');assert.ok(!/NaN|undefined/.test(html));
   assert.ok(/in media 8 h 20/.test(html)&&/in media 610 ml/.test(html)&&/in media 6,5 pappe/.test(html)&&/in media 3,2 cambi/.test(html));
   assert.ok(/Perché piangeva/.test(html)&&html.indexOf('Pannolini')<html.indexOf('Perché piangeva'),'i pianti in fondo');
