@@ -41,7 +41,17 @@ const MIN=6e4,H=36e5;
   let fe=S.events.filter(e=>e.k==='feed').pop();assert.strictEqual(fe.ml,115);assert.strictEqual(fe.dur,28*60);assert.strictEqual(fe.src,'biberon');
   assert.strictEqual(new Date(fe.t).getHours(),13);assert.strictEqual(new Date(fe.t).getMinutes(),20);assert.ok(fe.t<=Date.now()+5*MIN);
   A.flow('feed');A.setAt('23:50');A.setEnd('00:10');assert.ok(/20 min/.test(txt('#screenInner')),'fine oltre la mezzanotte');A.setOff(15);assert.strictEqual(app.T('flow').at,null,'un chip normale annulla l\'orario');
+  A.setEnd('');assert.strictEqual(app.T('flow').end,null,'"togli" leva l\'ora di fine');
   A.pick('prep',120);A.finish(100);fe=S.events.filter(e=>e.k==='feed').pop();assert.strictEqual(fe.dur,undefined);
+  // --- "finita alle" anche senza "altra ora": inizio da un chip, fine dall'orologio
+  A.flow('feed');
+  assert.ok(/Finita/.test(txt('#screenInner')),'la fine si può dire anche partendo da "adesso"');
+  A.setOff(15);A.setEnd(app.T('fmtTime')(Date.now()));
+  assert.ok(/1[45] min/.test(txt('#screenInner')),'quindici minuti fa, finita adesso: '+txt('#screenInner').slice(0,140));
+  A.pick('prep',120);A.finish(110);
+  fe=S.events.filter(e=>e.k==='feed').pop();
+  assert.ok(fe.dur>=840&&fe.dur<=900,'durata da chip + ora di fine: '+fe.dur);
+  assert.strictEqual(fe.src,'biberon');
   A.flow('diaper');A.setAt('bad');assert.strictEqual(app.T('flow').at,null);A.setAt('08:05');A.pick('pipi','normale');A.finish('no');
   const dp=S.events.filter(e=>e.k==='diaper').pop();assert.strictEqual(new Date(dp.t).getMinutes(),5);assert.strictEqual(dp.dur,undefined,'la fine c\'è solo per la pappa');
   // --- durata scelta a mano: chip nel percorso, anche senza cronometro
@@ -63,6 +73,16 @@ const MIN=6e4,H=36e5;
   fh=String(app.els['#screenInner']._h);assert.ok(/<button class="on" disabled>25 min<\/button>/.test(fh),'durata dall\'ora di fine: '+fh.match(/Durata[\s\S]{0,120}/));
   A.finish(100);assert.strictEqual(S.events.filter(e=>e.k==='feed').pop().dur,1500);
   // i preparati includono 115 e 125
-  A.flow('feed');assert.ok(/115 ml/.test(txt('#screenInner'))&&/125 ml/.test(txt('#screenInner')));A.home();
+  A.flow('feed');assert.ok(/115 ml/.test(txt('#screenInner'))&&/125 ml/.test(txt('#screenInner')));
+  // --- scala da 5 ml: con 125 preparati si può segnare 120 (prima il passo da 10 saltava da 125 a 115)
+  assert.ok(/A.stepPrep\(-5\)/.test(String(app.els['#screenInner']._h))&&/A.stepPrep\(5\)/.test(String(app.els['#screenInner']._h)),'il preparato si muove di 5 in 5');
+  A.pick('prep',125);
+  const g=String(app.els['#screenInner']._h);
+  assert.ok(/A.finish\(120\)/.test(g),'120 ml c\'è');
+  assert.ok(/A.finish\(115\)/.test(g)&&/A.finish\(5\)/.test(g),'tutta la scala di 5 in 5');
+  assert.ok(/A.finish\(125\)">Tutto/.test(g)&&/A.finish\(0\)">Niente/.test(g),'"tutto" e "niente" restano agli estremi');
+  A.finish(120);
+  assert.strictEqual(S.events.filter(e=>e.k==='feed').pop().ml,120);
+  A.home();
   console.log('feed ok');
 })().catch(e=>{console.error(e);process.exit(1);});
