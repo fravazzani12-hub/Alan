@@ -697,7 +697,7 @@ A.flow=function(type,linkId,data){
   flow={type:type,step:0,off:0,data:data||{},link:linkId||null};
   showScreen();renderFlow();
 };
-A.setOff=function(o){if(flow){flow.off=o;flow.at=null;flow.end=null;renderFlow();}};
+A.setOff=function(o){if(flow){flow.off=o;flow.at=null;renderFlow();}};
 /* "altra ora": orario di inizio scritto con il selettore (HH:MM); se è nel futuro di oltre 5 minuti vale per ieri.
    Solo per la Pappa anche "finita alle": la differenza diventa la durata (dur, secondi). */
 A.setAt=function(v){if(!flow)return;flow.at=/^\d{2}:\d{2}$/.test(v||'')?v:null;if(!flow.at)flow.end=null;renderFlow();};
@@ -706,14 +706,17 @@ function atToMs(hhmm,now){
   now=now||Date.now();var p=hhmm.split(':'),d=new Date(now);d.setHours(+p[0],+p[1],0,0);
   var t=d.getTime();if(t>now+5*MIN)t-=864e5;return t;
 }
+function flowStart(){return flow.at?atToMs(flow.at):Date.now()-flow.off*MIN;}
 function flowTime(){
-  if(!flow||!flow.at)return null;
-  var t=atToMs(flow.at),dur=null;
+  if(!flow||(!flow.at&&!flow.end))return null;
+  var t=flowStart(),dur=null;
   if(flow.end){var e=atToMs(flow.end,t+12*H);if(e<t)e+=864e5;dur=Math.round((e-t)/1000);if(dur<=0||dur>6*3600)dur=null;}
   return {t:t,dur:dur};
 }
 A.pick=function(key,val){if(!flow)return;flow.data[key]=val;flow.step++;renderFlow();}
-A.stepPrep=function(d){if(!flow)return;flow.data.prepCustom=Math.max(10,Math.min(400,(flow.data.prepCustom||typicalPrep())+d));renderFlow();};
+var ML_STEP=5;                 /* i ml si contano di 5 in 5, dappertutto */
+function ml5(v){return Math.round(v/ML_STEP)*ML_STEP;}
+A.stepPrep=function(d){if(!flow)return;flow.data.prepCustom=Math.max(ML_STEP,Math.min(400,(flow.data.prepCustom||ml5(typicalPrep()))+d));renderFlow();};
 A.home=function(){
   if(flow&&flow.type==='cry'&&flow.phase==='rec'){A.cancelCry();return;}
   flow=null;$('#screen').classList.remove('on');renderHome();renderCries();
@@ -723,9 +726,10 @@ function whenRow(){
   var opts=[[0,'adesso'],[15,'15 min fa'],[30,'30 min fa'],[60,'1 h fa']],at=flow.at||null;
   var h='<div class="when"><span>Quando</span>'+opts.map(function(o){return '<button class="'+(!at&&flow.off===o[0]?'on':'')+'" onclick="A.setOff('+o[0]+')">'+o[1]+'</button>';}).join('');
   h+='<label class="datechip'+(at?' on':'')+'">'+(at?'alle '+esc(at):'altra ora')+'<input type="time" value="'+esc(at||fmtTime(Date.now()))+'" onchange="A.setAt(this.value)" aria-label="Orario di inizio"></label></div>';
-  if(at&&flow.type==='feed'){
+  /* la pappa può sempre dire quando è finita, anche se è cominciata "adesso" o "30 min fa": la differenza è la durata */
+  if(flow.type==='feed'){
     var ft=flowTime();
-    h+='<div class="when"><span>Finita</span><label class="datechip'+(flow.end?' on':'')+'">'+(flow.end?'alle '+esc(flow.end):'quando è finita?')+'<input type="time" value="'+esc(flow.end||at)+'" onchange="A.setEnd(this.value)" aria-label="Orario di fine"></label>'+(ft&&ft.dur?'<span>'+Math.round(ft.dur/60)+' min</span>':'')+'</div>';
+    h+='<div class="when"><span>Finita</span><label class="datechip'+(flow.end?' on':'')+'">'+(flow.end?'alle '+esc(flow.end):'quando è finita?')+'<input type="time" value="'+esc(flow.end||fmtTime(flowStart()))+'" onchange="A.setEnd(this.value)" aria-label="Orario di fine"></label>'+(ft&&ft.dur?'<span>'+Math.round(ft.dur/60)+' min</span>':'')+(flow.end?'<button onclick="A.setEnd(\'\')">togli</button>':'')+'</div>';
   }
   return h;
 }
@@ -749,10 +753,11 @@ function renderFlow(){
     if(flow.step===0){
       var opts=[60,90,115,120,125,150,180,210];
       h+='<h2>Quanto hai preparato?</h2><div class="grid3">'+opts.map(function(m){return '<button class="'+(Math.round(tp)===m?'on':'')+'" onclick="A.pick(\'prep\','+m+')">'+m+'<small>ml</small></button>';}).join('')+'</div>';
-      var cv=d.prepCustom||tp;
-      h+='<div class="stepper"><button onclick="A.stepPrep(-10)">−10</button><div class="val">'+cv+' ml</div><button onclick="A.stepPrep(10)">+10</button></div><button class="btn ghost" onclick="A.pick(\'prep\','+cv+')">Avanti con '+cv+' ml</button>';
+      var cv=d.prepCustom||ml5(tp);
+      h+='<div class="stepper"><button onclick="A.stepPrep(-'+ML_STEP+')">−'+ML_STEP+'</button><div class="val">'+cv+' ml</div><button onclick="A.stepPrep('+ML_STEP+')">+'+ML_STEP+'</button></div><button class="btn ghost" onclick="A.pick(\'prep\','+cv+')">Avanti con '+cv+' ml</button>';
     }else{
-      var prep=d.prep,vals=[];for(var v=prep;v>0;v-=10)vals.push(v);vals.push(0);
+      /* scala da 5 ml: con il passo da 10 un preparato da 125 non permetteva di segnare 120 */
+      var prep=d.prep,vals=[];for(var v=prep;v>0;v-=ML_STEP)vals.push(v);vals.push(0);
       h+=durRow();
       h+='<h2>Quanto ne ha bevuto? <span style="font-size:15px;color:var(--muted);font-weight:400">su '+prep+' ml</span></h2><div class="grid3">'+vals.map(function(v){return '<button onclick="A.finish('+v+')">'+(v===prep?'Tutto<small>'+v+' ml</small>':(v===0?'Niente<small>rifiutato</small>':v+'<small>ml</small>'))+'</button>';}).join('')+'</div>';
     }
@@ -895,8 +900,8 @@ function renderDiary(){
    lettera) qui cambiano solo ora e nota: il resto lo gestisce l'estensione che le ha create. */
 function editFields(e){
   var lv=[['poca','Poca'],['normale','Normale'],['tanta','Tanta'],['no','No']];
-  if(e.k==='feed')return [{key:'prep',label:'Preparato',type:'step',steps:[50,10],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
-                          {key:'ml',label:'Bevuto',type:'step',steps:[50,10],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
+  if(e.k==='feed')return [{key:'prep',label:'Preparato',type:'step',steps:[50,ML_STEP],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
+                          {key:'ml',label:'Bevuto',type:'step',steps:[50,ML_STEP],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
                           {key:'dur',label:'Durata',type:'step',steps:[300,60],min:60,max:7200,start:600,fmt:function(v){return Math.round(v/60)+' min';},nullable:true}];
   if(e.k==='diaper')return [{key:'pipi',label:'Pipì',type:'chips',opts:lv,norm:lvlKey},{key:'cacca',label:'Cacca',type:'chips',opts:lv,norm:lvlKey}];
   if(e.k==='other')return [{key:'what',label:'Cosa',type:'chips',opts:OTHER.map(function(o){return [o[0],o[1]];})}];

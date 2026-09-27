@@ -37,7 +37,9 @@ const H=36e5,MIN=6e4,DAY=864e5;
   assert.ok(/>Durata</.test(sc)&&/>—</.test(sc),'durata modificabile anche se non c\'era');
   assert.ok(/id="edNote"/.test(sc)&&/Salva le modifiche/.test(sc)&&/Elimina la voce/.test(sc));
   // --- stepper: ±50 e ±10, con i limiti
-  A.editStep('ml',10);assert.strictEqual(app.T('flow').data.v.ml,110);
+  assert.ok(/A.editStep\('ml',5\)/.test(sc)&&/A.editStep\('ml',-5\)/.test(sc),'anche qui i ml si muovono di 5 in 5');
+  A.editStep('ml',5);assert.strictEqual(app.T('flow').data.v.ml,105);
+  A.editStep('ml',5);assert.strictEqual(app.T('flow').data.v.ml,110);
   A.editStep('ml',-50);assert.strictEqual(app.T('flow').data.v.ml,60);
   A.editStep('ml',-500);assert.strictEqual(app.T('flow').data.v.ml,0,'non scende sotto zero');
   A.editStep('ml',10);

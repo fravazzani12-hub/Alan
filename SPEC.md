@@ -111,7 +111,8 @@ falliscono tutti e tre lo scrive e suggerisce di spegnere il rumore bianco e ria
 - Precisione = leave-one-out su tutti i pianti etichettati: contesto, suono, insieme, e baseline "causa più frequente".
 
 ## 5. UI
-- "Quando" in ogni percorso: adesso / 15 / 30 / 60 min fa / "altra ora" (selettore HH:MM; un orario nel futuro di oltre 5 min vale per ieri). Nella Pappa anche "finita alle": la differenza diventa `dur` (secondi, ≤ 6 h) con `src 'biberon'`.
+- "Quando" in ogni percorso: adesso / 15 / 30 / 60 min fa / "altra ora" (selettore HH:MM; un orario nel futuro di oltre 5 min vale per ieri). Nella Pappa c'è **sempre** anche "finita alle", non solo con "altra ora": la differenza fra inizio (chip o orario) e fine diventa `dur` (secondi, ≤ 6 h) con `src 'biberon'`, e "togli" la rimette a niente. Cambiare il chip dell'inizio non cancella l'ora di fine: è un orario assoluto, la durata si ricalcola.
+- **I ml si contano di 5 in 5** (`ML_STEP`), nella griglia del bevuto, nello stepper del preparato e nella modifica: con il passo da 10 un preparato da 125 ml saltava da 125 a 115 e 120 non si poteva segnare. I preparati preimpostati restano i biberon veri (60/90/115/120/125/150/180/210).
 - **Durata della pappa**: nella schermata dei ml una riga "Durata" con 5/10/15/20/30/45 min e "non lo so" (`durMin` nel percorso, salvata in `dur` come secondi): così il tempo c'è anche senza cronometro. Se arriva dal cronometro (`dur` in secondi nei dati del percorso) o da "finita alle", la riga la mostra e basta. Si aggiunge o si toglie anche dalla modifica della voce.
 - Intestazione: nome ed età a sinistra, a destra le pillole di presenza (nessun selettore di chi registra).
 - Tab Salute: Crescita (Peso/Lunghezza, valore grande + percentile, grafico OMS, registrazione a stepper con "quando"),
