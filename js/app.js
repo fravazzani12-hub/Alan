@@ -1143,11 +1143,37 @@ function renderStats(){
 function fillFeedSeg(){var seg=$('#feedSeg');if(!seg)return;var cur=S.settings.feedH>0?String(S.settings.feedH):'auto',bs=seg.querySelectorAll('button');for(var i=0;i<bs.length;i++)bs[i].classList.toggle('on',bs[i].getAttribute('data-h')===cur);}
 A.setFeedH=function(v){var n=Number(v);S.settings.feedH=n>0?n:null;S.settings._updated=new Date().toISOString();save();pushSettings();fillFeedSeg();renderHome();toast(n>0?'Pappa prevista ogni '+fmtDur(n*H):'Intervallo pappe automatico per età');};
 function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value=S.settings.birth||'';fillFeedSeg();applyTheme(themePref());renderDiag();renderAccount();fillExtAltro();}
+/* Avvio del sync: anche al secondo tentativo, quando la libreria arriva in ritardo (vedi A.loadSync). */
+function syncInit(){
+  if(!window.AlanSync)return Promise.resolve();
+  AlanSync.setPresence({who:who,at:Date.now()});
+  return AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:function(){syncWho();renderHeader();renderAccount();},onReady:flushAudio})
+    .then(function(){syncWho();renderHeader();renderAccount();flushAudio();});
+}
+/* La libreria di sync arriva da un CDN: se quel singolo file non si carica (rete ballerina al momento giusto)
+   l'accesso non si può nemmeno tentare. Questo la richiede di nuovo, senza dover chiudere e riaprire l'app. */
+var SYNC_LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js';
+A.loadSync=function(btn){
+  busy(btn,true,'Carico…');
+  var done=function(ok){busy(btn,false);if(!ok)toast('Non si carica: controlla la rete e riprova');};
+  try{
+    var sc=document.createElement('script');
+    sc.src=SYNC_LIB;
+    sc.onload=function(){syncInit().then(function(){done(!!window.supabase);renderAccount();},function(){done(false);});};
+    sc.onerror=function(){done(false);};
+    document.body.appendChild(sc);
+  }catch(e){done(false);}
+};
 function renderAccount(){
   var el=$('#account');if(!el)return;
   if(!window.AlanSync){el.innerHTML='<p class="hint">Sync non caricato.</p>';return;}
   var st=AlanSync.status(),h='';
-  if(!st.available){el.innerHTML='<p class="hint">'+(st.configured&&!st.lib?'La libreria di sync (supabase-js) non si è caricata: controlla la rete e riapri l\'app.':'Sync non configurato: compila js/config.js con URL e chiave anon del progetto Supabase (vedi README).')+'</p>';return;}
+  if(!st.available){
+    el.innerHTML=st.configured&&!st.lib
+      ? '<p class="hint">La libreria di sync non si è caricata: senza quella l\'accesso non si può nemmeno provare. Succede quando la rete balla proprio mentre l\'app si apre.</p><button class="btn" onclick="A.loadSync(this)">Riprova a caricarla</button>'
+      : '<p class="hint">Sync non configurato: compila js/config.js con URL e chiave anon del progetto Supabase (vedi README).</p>';
+    return;
+  }
   if(!st.signedIn){
     h+='<p class="hint">Accedi con l\'email e la password che avete impostato su Supabase. Si fa una volta sola per telefono.</p>';
     h+='<label class="f" for="accEmail">Email</label><input class="f" id="accEmail" type="email" inputmode="email" autocomplete="username" value="'+esc(lsGet('alan.email')||'')+'">';
@@ -1171,7 +1197,7 @@ A.login=function(btn){
   if(!em||!pw){toast('Servono email e password');return;}
   busy(btn,true,'Accedo…');
   AlanSync.signIn(em,pw).then(function(r){
-    if(r&&r.error){busy(btn,false);toast('Accesso rifiutato: '+(r.error.message==='Invalid login credentials'?'email o password sbagliate':r.error.message));}
+    if(r&&r.error){busy(btn,false);toast(r.error.message==='Invalid login credentials'?'Email o password sbagliate':'Accesso non riuscito: '+r.error.message);renderAccount();}
     else{lsSet('alan.email',em);toast('Accesso fatto');setTimeout(renderAccount,800);}
   },function(err){busy(btn,false);toast('Accesso non riuscito: '+errStr(err));});
 };
@@ -1753,7 +1779,7 @@ load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
   applyTheme(themePref());extReady=true;renderHome();initUpdates();
   try{if(/[?&]cry=1/.test(location.search)){history.replaceState(null,'',location.pathname);A.openCry();}}catch(e){}
-  if(window.AlanSync){AlanSync.setPresence({who:who,at:Date.now()});AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:function(){syncWho();renderHeader();renderAccount();},onReady:flushAudio}).then(function(){syncWho();renderHeader();renderAccount();flushAudio();});}
+  syncInit();
   window.addEventListener('online',function(){setTimeout(flushAudio,1500);});
   setInterval(function(){if(!flow)renderStatus();},30000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden){if(!flow)renderHome();setTimeout(flushAudio,1500);}});

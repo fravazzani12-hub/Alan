@@ -12,7 +12,7 @@ function table(t){const o={_since:null,_lim:null,select(){calls.push([t,'select'
 const ch={state:'closed',_on:{},on(type,f,cb){ch._on[type==='postgres_changes'?f.table:type]=cb;return ch},subscribe(cb){ch._cb=cb;setTimeout(()=>{ch.state='joined';cb('SUBSCRIBED')},5);return ch},presenceState(){return {u1:[{name:'Fabio'}],u2:[{name:'Ilaria',at:1}]}},track(m){calls.push(['track',m]);return Promise.resolve('ok')}};
 const bucket={};
 global.window={ALAN_CONFIG:{SUPABASE_URL:'https://x.supabase.co',SUPABASE_ANON_KEY:'k'},addEventListener(){},supabase:{createClient(url,key,opts){calls.push(['client',url,opts]);return {from:table,
-  auth:{getSession:()=>Promise.resolve({data:{session:{user:{id:'u1',email:'f@x',user_metadata:{name:'Fabio'}}}}}),onAuthStateChange(cb){setTimeout(()=>cb('INITIAL_SESSION',{user:{id:'u1',email:'f@x',user_metadata:{name:'Fabio'}}}),1)},signInWithPassword:a=>Promise.resolve({data:{},error:a.password==='bad'?{message:'Invalid login credentials'}:null}),signOut:()=>Promise.resolve({})},
+  auth:{getSession:()=>Promise.resolve({data:{session:{user:{id:'u1',email:'f@x',user_metadata:{name:'Fabio'}}}}}),onAuthStateChange(cb){setTimeout(()=>cb('INITIAL_SESSION',{user:{id:'u1',email:'f@x',user_metadata:{name:'Fabio'}}}),1)},signInWithPassword:a=>a.password==='boom'?Promise.reject(new Error('rete caduta')):(a.password==='appeso'?new Promise(()=>{}):Promise.resolve({data:{},error:a.password==='bad'?{message:'Invalid login credentials'}:null})),signOut:()=>Promise.resolve({})},
   channel(name,cfg){calls.push(['channel',name,cfg]);return ch},removeChannel(){calls.push(['removeChannel'])},
   storage:{from(b){return {upload(p,body,o){bucket[p]={body,o};return Promise.resolve({data:{path:p},error:null})},download(p){return Promise.resolve(bucket[p]?{data:{size:bucket[p].body.length,type:bucket[p].o.contentType},error:null}:{data:null,error:{message:'Object not found'}})},remove(ps){ps.forEach(p=>delete bucket[p]);return Promise.resolve({data:[],error:null})}}}}}}}};
 eval(fs.readFileSync(__dirname+'/../js/sync.js','utf8'));
@@ -72,6 +72,23 @@ const Sync=window.AlanSync;
   const miss=await Sync.downloadAudio('F/c1.m4a');assert.ok(miss.error);assert.strictEqual(Sync.status().lastError.where,'audio');
   // accesso rifiutato → errore riportato
   const bad=await Sync.signIn('f@x','bad');assert.strictEqual(bad.error.message,'Invalid login credentials');
+  // --- l'accesso non può restare appeso: errore di rete e attesa senza risposta tornano comunque un errore leggibile
+  const boom=await Sync.signIn('f@x','boom');
+  assert.strictEqual(boom.error.message,'rete caduta','una promessa rifiutata non esce dal pulsante');
+  assert.strictEqual(Sync.status().lastError.where,'accesso');
+  await assert.rejects(()=>Sync._withTimeout(new Promise(()=>{}),20,'nessuna risposta'),/nessuna risposta/,'il timeout scatta');
+  assert.strictEqual(await Sync._withTimeout(Promise.resolve('ok'),50,'x'),'ok','chi risponde in tempo passa');
+  // --- il lock dell'auth sta dentro la pagina (navigator.locks su Safari può restare preso e piantare tutto)
+  const opts=calls.find(c=>c[0]==='client')[2];
+  assert.strictEqual(typeof opts.auth.lock,'function','lock passato a createClient');
+  const ordine=[];
+  const p1=opts.auth.lock('a',0,()=>new Promise(r=>setTimeout(()=>{ordine.push(1);r('uno');},20)));
+  const p2=opts.auth.lock('a',0,()=>{ordine.push(2);return 'due';});
+  assert.deepStrictEqual([await p1,await p2],['uno','due']);
+  assert.deepStrictEqual(ordine,[1,2],'le chiamate restano in fila');
+  const dopoErrore=opts.auth.lock('a',0,()=>Promise.reject(new Error('x'))).catch(()=>'gestito');
+  assert.strictEqual(await dopoErrore,'gestito');
+  assert.strictEqual(await opts.auth.lock('a',0,()=>'la coda va avanti'),'la coda va avanti','un errore non blocca la fila');
   // signOut: canale rimosso, famiglia dimenticata; upsert successivi vanno in coda
   await Sync.signOut();assert.ok(calls.some(c=>c[0]==='removeChannel'));assert.strictEqual(Sync.status().family,null);
   await Sync.upsert({id:'q',t:1,k:'feed'});assert.strictEqual(Sync.status().pending,1);

@@ -68,5 +68,17 @@ const {boot}=require('./stub');
   app.A.setTheme('light');assert.strictEqual(document.documentElement.getAttribute('data-theme'),'light');
   app.A.setTheme('auto');assert.strictEqual(document.documentElement.getAttribute('data-theme'),null);assert.strictEqual(app.store['alan.theme'],undefined);
   app.A.setTheme('boh');assert.strictEqual(document.documentElement.getAttribute('data-theme'),null);
+  // --- schermata Account: senza la libreria di sync c'è un modo per riprovare, non un vicolo cieco
+  app.T("window.AlanSync.status=function(){return {available:false,configured:true,lib:false};}");
+  app.T('renderAccount()');
+  let acc=String(app.els['#account']._h);
+  assert.ok(/non si è caricata/.test(acc)&&/A.loadSync\(this\)/.test(acc),'pulsante per ricaricare la libreria: '+acc);
+  app.T("window.AlanSync.status=function(){return {available:false,configured:false,lib:false};}");
+  app.T('renderAccount()');
+  assert.ok(/Sync non configurato/.test(String(app.els['#account']._h)));
+  app.T("window.AlanSync.status=function(){return {available:true,configured:true,lib:true,signedIn:false};}");
+  app.T('renderAccount()');
+  acc=String(app.els['#account']._h);
+  assert.ok(/id="accEmail"/.test(acc)&&/id="accPass"/.test(acc)&&/A.login\(this\)/.test(acc),'il modulo di accesso c\'è');
   console.log('merge ok');
 })().catch(e=>{console.error(e);process.exit(1);});

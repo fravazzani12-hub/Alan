@@ -57,6 +57,14 @@ Remoto (opzionale, `supabase/schema.sql`):
   backoff e al ritorno in primo piano. I timestamp di Postgres (`+00:00`, microsecondi) sono normalizzati a ISO UTC con
   millisecondi prima di ogni confronto. Auth: email + password (utenti creati in dashboard), nessun flusso email; il callback
   di `onAuthStateChange` non fa chiamate dirette (deadlock del lock auth), rimanda a un tick dopo.
+- **Niente chiamate appese.** Il lock dell'auth non è quello di serie (`navigator.locks`, che vive fuori dalla pagina e su
+  Safari può restare preso quando l'app va in sottofondo, piantando ogni accesso successivo *prima* della rete): si passa a
+  `createClient` un `lock` che è una coda dentro la pagina — serializza come serve, riparte pulito a ogni apertura, e un
+  errore non blocca la fila. In più `getSession` (15 s) e `signInWithPassword` (20 s) hanno un tempo massimo: scaduto
+  quello si risponde con un errore leggibile invece di lasciare il pulsante su "Accedo…" per sempre.
+- **Libreria che non arriva.** supabase-js viene da un CDN e non passa dal service worker: se quel file non si carica
+  (rete ballerina proprio all'apertura) l'accesso non si può nemmeno tentare. La schermata Account lo dice e offre
+  "Riprova a caricarla" (`A.loadSync`), che la richiede e rifà `syncInit()` senza chiudere l'app.
 - Contratto con `js/app.js`: ogni mutazione locale passa da `touched(e)` / `removed(e)`; le righe remote entrano da
   `mergeRemote(list)`, le impostazioni da `mergeRemoteSettings(row|null)`. In `mergeRemote` un evento nuovo entra con `audio=false`;
   su un evento esistente `audio` non viene mai sovrascritto dal remoto.

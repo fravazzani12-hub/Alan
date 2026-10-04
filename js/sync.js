@@ -15,6 +15,24 @@ window.AlanSync=(function(){
   var OUTBOX='alan.outbox',SINCE='alan.sync.since',SETBOX='alan.settings.outbox',PAGE=1000;
   var SKIP=['id','t','k','who','audio','_deleted','_updated'];
 
+  /* Il lock di supabase-js usa navigator.locks, che vive fuori dalla pagina: su Safari, se l'app va in sottofondo
+     mentre una chiamata all'auth è in corso, quel lock può restare preso e da lì in poi ogni accesso si pianta
+     senza nemmeno arrivare in rete (il pulsante resta su "Accedo…" per sempre). Qui il lock è una coda dentro la
+     pagina: serializza le chiamate come serve, ma riparte pulito a ogni apertura e non può restare bloccato. */
+  var authQ=Promise.resolve();
+  function pageLock(name,acquireTimeout,fn){
+    var run=authQ.then(function(){return fn();});
+    authQ=run.then(function(){},function(){});
+    return run;
+  }
+  /* nessuna chiamata di rete può restare appesa in eterno: dopo ms si risponde comunque */
+  function withTimeout(p,ms,msg){
+    return new Promise(function(res,rej){
+      var done=false,t=setTimeout(function(){if(done)return;done=true;rej(new Error(msg));},ms);
+      Promise.resolve(p).then(function(v){if(done)return;done=true;clearTimeout(t);res(v);},
+                              function(e){if(done)return;done=true;clearTimeout(t);rej(e);});
+    });
+  }
   function configured(){return !!(CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY&&CFG.SUPABASE_URL.indexOf('INSERISCI')<0);}
   function available(){return !!(window.supabase&&configured());}
   function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -41,8 +59,11 @@ window.AlanSync=(function(){
   async function init(opts){
     onEvents=opts.onEvents;onStatus=opts.onStatus||null;onReady=opts.onReady||null;onSettings=opts.onSettings||null;
     if(!available())return {ok:false,reason:'noconfig'};
-    sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-    var got=await sb.auth.getSession();session=got&&got.data?got.data.session:null;
+    sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,lock:pageLock}});
+    var got=null;
+    try{got=await withTimeout(sb.auth.getSession(),15000,'la sessione salvata non risponde');}
+    catch(e){fail('sessione',e);}
+    session=got&&got.data?got.data.session:null;
     /* Il callback gira dentro il lock dell'auth: qualsiasi chiamata a sb.* qui dentro può bloccarsi (deadlock documentato).
        Si rimanda tutto a un tick successivo. */
     sb.auth.onAuthStateChange(function(ev,s){
@@ -202,9 +223,12 @@ window.AlanSync=(function(){
   }
   async function signIn(email,password){
     if(!sb)return {error:{message:'sync non configurato'}};
-    var r=await sb.auth.signInWithPassword({email:email,password:password});
-    if(r.error)fail('accesso',r.error);
-    return r;
+    try{
+      var r=await withTimeout(sb.auth.signInWithPassword({email:email,password:password}),20000,
+        'nessuna risposta in 20 secondi: chiudi del tutto l\'app e riaprila, poi riprova');
+      if(r.error)fail('accesso',r.error);
+      return r;
+    }catch(e){fail('accesso',e);return {error:{message:(e&&e.message)||'accesso non riuscito'}};}
   }
   async function signOut(){if(!sb)return;stopChannel();return sb.auth.signOut();}
   function status(){
@@ -223,5 +247,5 @@ window.AlanSync=(function(){
   }
   return {init:init,upsert:upsert,remove:remove,pullAll:pullAll,pullSettings:pullSettings,upsertSettings:upsertSettings,flush:flush,signIn:signIn,signOut:signOut,status:status,setPresence:setPresence,wake:wake,
     uploadAudio:uploadAudio,downloadAudio:downloadAudio,removeAudio:removeAudio,
-    _rowToEvent:rowToEvent,_eventToRow:eventToRow};
+    _rowToEvent:rowToEvent,_eventToRow:eventToRow,_withTimeout:withTimeout,_lock:pageLock};
 })();
