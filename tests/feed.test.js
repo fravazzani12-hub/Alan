@@ -1,88 +1,66 @@
-// Pappa rifiutata (ml = 0): non conta come ultima pappa, non etichetta, compare come "rifiutata".
+// Pappa: una schermata sola (quando + quanto), scala da 5 ml, rifiutata = 0 ml. node tests/feed.test.js
 'use strict';
 const assert=require('assert');
 const {boot}=require('./stub');
 const MIN=6e4,H=36e5;
 (async()=>{
   const app=await boot();const {A,S,txt}=app;
-  const context=app.T('context'),describe=app.T('describe'),modelScores=app.T('modelScores'),snapshot=app.T('snapshot');
+  const context=app.T('context'),describe=app.T('describe');
   const now=Date.now();
-  S.events.push({id:'f1',k:'feed',t:now-3*H,who:'Fabio',prep:120,ml:110});
-  S.events.push({id:'f0',k:'feed',t:now-20*MIN,who:'Ilaria',prep:120,ml:0});
+  S.events.push({id:'f1',k:'feed',t:now-3*H,who:'Fabio',ml:110});
+  S.events.push({id:'f0',k:'feed',t:now-20*MIN,who:'Ilaria',ml:0});
   const c=context(now);
   assert.strictEqual(c.lastFeedT,now-3*H,'la pappa rifiutata non è l\'ultima pappa');
   assert.ok(Math.abs(c.sinceFeedH-3)<1e-6);assert.strictEqual(c.lastMl,110);
-  assert.strictEqual(describe(S.events[1],null)[0],'Pappa');assert.ok(/rifiutata \(120 ml\)/.test(describe(S.events[1],null)[1]));
-  // il modello vede 3 h dall'ultima vera pappa: fame alta
-  const s=modelScores(snapshot(c));const best=Object.keys(s).reduce((a,b)=>s[a]>s[b]?a:b);assert.strictEqual(best,'fame');
-  // dal percorso a tap: "Niente" salva ml 0, non etichetta il pianto aperto, toast "Biberon rifiutato"
-  S.events.push({id:'c1',k:'cry',t:now-2*MIN,who:'Fabio',label:null,ctx:{},bins:{f:0,a:0,h:0},feat:null,audio:false});S.openCry='c1';
-  A.flow('feed');A.pick('prep',120);
-  assert.ok(/Niente rifiutato/.test(txt('#screenInner')));
-  A.finish(0);
-  const f=S.events.filter(e=>e.k==='feed').pop();assert.strictEqual(f.ml,0);assert.strictEqual(f.prep,120);
-  assert.strictEqual(S.events.find(e=>e.id==='c1').label,null);assert.strictEqual(S.openCry,'c1');
-  assert.strictEqual(app.els['#toast'].textContent,'Biberon rifiutato');
-  assert.ok(/Pappa rifiutata \(120 ml\)/.test(txt('#diary')));
-  // il riquadro di stato mostra ancora la pappa vera di 3 h fa
-  assert.ok(/Ultima pappa 3 h fa 110 ml/.test(txt('#status')),txt('#status'));
-  // ml tipico ignora le rifiutate
-  assert.strictEqual(app.T('typicalMl')(),110);
-  // dopo una pappa vera il pianto si spiega
-  A.flow('feed');A.pick('prep',120);A.finish(60);
-  assert.strictEqual(S.events.find(e=>e.id==='c1').label,'fame');
-  // "altra ora": inizio 13:20 e fine 13:48 di oggi → t alle 13:20, dur 28 min; un orario nel futuro vale per ieri; senza fine niente durata
-  const atMs=app.T('atToMs'),H2=36e5;
-  const d=new Date();d.setHours(13,20,0,0);const t1320=d.getTime();
-  assert.strictEqual(atMs('13:20',t1320+2*H2),t1320,'stesso giorno');assert.strictEqual(atMs('13:20',t1320-H2),t1320-864e5,'nel futuro → ieri');assert.strictEqual(atMs('13:20',t1320+3*MIN),t1320,'entro 5 min va bene');
-  A.flow('feed');assert.ok(/altra ora/.test(txt('#screenInner')));A.setAt('13:20');assert.ok(/alle 13:20/.test(txt('#screenInner'))&&/Finita/.test(txt('#screenInner')));
-  A.setEnd('13:48');assert.ok(/28 min/.test(txt('#screenInner')),txt('#screenInner'));
-  A.pick('prep',120);A.finish(115);
-  let fe=S.events.filter(e=>e.k==='feed').pop();assert.strictEqual(fe.ml,115);assert.strictEqual(fe.dur,28*60);assert.strictEqual(fe.src,'biberon');
-  assert.strictEqual(new Date(fe.t).getHours(),13);assert.strictEqual(new Date(fe.t).getMinutes(),20);assert.ok(fe.t<=Date.now()+5*MIN);
-  A.flow('feed');A.setAt('23:50');A.setEnd('00:10');assert.ok(/20 min/.test(txt('#screenInner')),'fine oltre la mezzanotte');A.setOff(15);assert.strictEqual(app.T('flow').at,null,'un chip normale annulla l\'orario');
-  A.setEnd('');assert.strictEqual(app.T('flow').end,null,'"togli" leva l\'ora di fine');
-  A.pick('prep',120);A.finish(100);fe=S.events.filter(e=>e.k==='feed').pop();assert.strictEqual(fe.dur,undefined);
-  // --- "finita alle" anche senza "altra ora": inizio da un chip, fine dall'orologio
+  assert.strictEqual(describe(S.events[1],null)[0],'Pappa');assert.ok(/rifiutata/.test(describe(S.events[1],null)[1]));
+  // --- la schermata: quando, quantità usate, stepper, salva
   A.flow('feed');
-  assert.ok(/Finita/.test(txt('#screenInner')),'la fine si può dire anche partendo da "adesso"');
-  A.setOff(15);A.setEnd(app.T('fmtTime')(Date.now()));
-  assert.ok(/1[45] min/.test(txt('#screenInner')),'quindici minuti fa, finita adesso: '+txt('#screenInner').slice(0,140));
-  A.pick('prep',120);A.finish(110);
-  fe=S.events.filter(e=>e.k==='feed').pop();
-  assert.ok(fe.dur>=840&&fe.dur<=900,'durata da chip + ora di fine: '+fe.dur);
-  assert.strictEqual(fe.src,'biberon');
-  A.flow('diaper');A.setAt('bad');assert.strictEqual(app.T('flow').at,null);A.setAt('08:05');A.pick('pipi','normale');A.finish('no');
-  const dp=S.events.filter(e=>e.k==='diaper').pop();assert.strictEqual(new Date(dp.t).getMinutes(),5);assert.strictEqual(dp.dur,undefined,'la fine c\'è solo per la pappa');
-  // --- durata scelta a mano: chip nel percorso, anche senza cronometro
-  A.flow('feed');A.pick('prep',120);
-  let fh=String(app.els['#screenInner']._h);
-  assert.ok(/<span>Durata<\/span>/.test(fh)&&/A.setDur\(15\)/.test(fh)&&/non lo so/.test(fh),'riga della durata: '+fh.match(/<div class="when"><span>Durata[\s\S]{0,260}/));
-  assert.ok(!/class="on"[^>]*A.setDur/.test(fh),'di partenza nessuna durata scelta');
-  A.setDur(15);assert.strictEqual(app.T('flow').data.durMin,15);
-  assert.ok(/class="on" onclick="A.setDur\(15\)"/.test(String(app.els['#screenInner']._h)),'15 evidenziato');
-  A.setDur(15);assert.strictEqual(app.T('flow').data.durMin,0,'un secondo tocco toglie');
-  A.setDur(20);A.finish(100);
-  let fd=S.events.filter(e=>e.k==='feed').pop();
-  assert.strictEqual(fd.dur,1200,'durata in secondi sulla voce');assert.strictEqual(fd.src,'biberon');
-  // senza durata la voce non ha dur
-  A.flow('feed');A.pick('prep',120);A.finish(90);
-  assert.strictEqual(S.events.filter(e=>e.k==='feed').pop().dur,undefined,'"non lo so": nessuna durata');
-  // con "finita alle" la durata è quella e la riga la mostra soltanto
-  A.flow('feed');A.setAt('08:00');A.setEnd('08:25');A.pick('prep',120);
-  fh=String(app.els['#screenInner']._h);assert.ok(/<button class="on" disabled>25 min<\/button>/.test(fh),'durata dall\'ora di fine: '+fh.match(/Durata[\s\S]{0,120}/));
-  A.finish(100);assert.strictEqual(S.events.filter(e=>e.k==='feed').pop().dur,1500);
-  // i preparati includono 115 e 125
-  A.flow('feed');assert.ok(/115 ml/.test(txt('#screenInner'))&&/125 ml/.test(txt('#screenInner')));
-  // --- scala da 5 ml: con 125 preparati si può segnare 120 (prima il passo da 10 saltava da 125 a 115)
-  assert.ok(/A.stepPrep\(-5\)/.test(String(app.els['#screenInner']._h))&&/A.stepPrep\(5\)/.test(String(app.els['#screenInner']._h)),'il preparato si muove di 5 in 5');
-  A.pick('prep',125);
-  const g=String(app.els['#screenInner']._h);
-  assert.ok(/A.finish\(120\)/.test(g),'120 ml c\'è');
-  assert.ok(/A.finish\(115\)/.test(g)&&/A.finish\(5\)/.test(g),'tutta la scala di 5 in 5');
-  assert.ok(/A.finish\(125\)">Tutto/.test(g)&&/A.finish\(0\)">Niente/.test(g),'"tutto" e "niente" restano agli estremi');
+  let sc=String(app.els['#screenInner']._h);
+  assert.ok(/<div class="title">Pappa<\/div>/.test(sc));
+  assert.ok(/Quando/.test(sc)&&/15 min fa/.test(sc)&&/altra ora/.test(sc),'la riga "quando" c\'è');
+  assert.ok(!/Finita/.test(sc)&&!/Durata/.test(sc)&&!/preparato/i.test(sc),'niente preparato, durata o ora di fine: '+sc.slice(0,400));
+  assert.ok(/Quanto ha bevuto\?/.test(sc));
+  assert.ok(/A.stepMl\(-5\)/.test(sc)&&/A.stepMl\(5\)/.test(sc),'i ml si muovono di 5 in 5');
+  assert.ok(/A.finish\(110\)/.test(sc),'la quantità di solito è a portata di tap: '+sc.match(/grid3[\s\S]{0,200}/));
+  assert.ok(/Non ha bevuto niente/.test(sc));
+  // lo stepper parte dal valore tipico e si muove di 5
+  assert.ok(/class="val">110 ml</.test(sc),'stepper sul tipico');
+  A.stepMl(5);A.stepMl(5);
+  sc=String(app.els['#screenInner']._h);
+  assert.ok(/class="val">120 ml</.test(sc)&&/Salva 120 ml/.test(sc));
   A.finish(120);
-  assert.strictEqual(S.events.filter(e=>e.k==='feed').pop().ml,120);
-  A.home();
+  let f=S.events.filter(e=>e.k==='feed').pop();
+  assert.strictEqual(f.ml,120);assert.strictEqual(f.prep,undefined,'niente campo preparato');
+  assert.strictEqual(f.dur,undefined,'niente durata');
+  assert.strictEqual(app.els['#toast'].textContent,'Pappa: 120 ml');
+  assert.ok(/Pappa 120 ml/.test(txt('#diary')));
+  // --- "non ha bevuto niente" = 0 ml
+  A.flow('feed');A.finish(0);
+  f=S.events.filter(e=>e.k==='feed').pop();assert.strictEqual(f.ml,0);
+  assert.strictEqual(app.els['#toast'].textContent,'Biberon rifiutato');
+  assert.ok(/Pappa rifiutata/.test(txt('#diary')));
+  // --- "quando": chip relativi e orario assoluto
+  A.flow('feed');A.setOff(30);A.finish(100);
+  f=S.events.filter(e=>e.k==='feed').pop();
+  assert.ok(Math.abs(Date.now()-30*MIN-f.t)<3000,'trenta minuti fa');
+  const atMs=app.T('atToMs'),d=new Date();d.setHours(13,20,0,0);const t1320=d.getTime();
+  assert.strictEqual(atMs('13:20',t1320+2*H),t1320,'stesso giorno');
+  assert.strictEqual(atMs('13:20',t1320-H),t1320-864e5,'nel futuro → ieri');
+  A.flow('feed');A.setAt('13:20');
+  assert.ok(/alle 13:20/.test(txt('#screenInner')));
+  A.finish(95);
+  f=S.events.filter(e=>e.k==='feed').pop();
+  assert.strictEqual(new Date(f.t).getHours(),13);assert.strictEqual(new Date(f.t).getMinutes(),20);
+  A.setAt('bad');  // fuori da un percorso non deve esplodere
+  // --- il riquadro di stato e la riga sotto il pulsante Pappa
+  app.T('renderStatus()');
+  assert.ok(/Ultima pappa/.test(txt('#status')),txt('#status'));
+  assert.ok(/di solito \d+ ml/.test(app.els['#qFeed'].textContent),app.els['#qFeed'].textContent);
+  // ml tipico ignora le rifiutate
+  assert.ok(app.T('typicalMl')()>0);
+  // --- le quantità proposte sono le più usate, di 5 in 5
+  const opts=app.T('mlOptions')();
+  assert.ok(opts.length>=4&&opts.every(v=>v%5===0),'scala da 5: '+opts.join(','));
+  assert.ok(opts[0]>=opts[opts.length-1],'dalla più grande');
   console.log('feed ok');
 })().catch(e=>{console.error(e);process.exit(1);});

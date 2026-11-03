@@ -5,7 +5,7 @@ const {boot}=require('./stub');
 const MIN=6e4,H=36e5;
 (async()=>{
   const app=await boot({ext:['stats']});const {A,S,T,txt}=app;
-  const pctOf=T('pctOf'),xOfZ=T('xOfZ'),lmsAt=T('lmsAt'),niceTicks=T('niceTicks'),growthChart=T('growthChart'),nightSummary=T('nightSummary'),icsFor=T('icsFor'),milestonesDue=T('milestonesDue'),nextAppt=T('nextAppt'),describe=T('describe');
+  const pctOf=T('pctOf'),xOfZ=T('xOfZ'),lmsAt=T('lmsAt'),niceTicks=T('niceTicks'),growthChart=T('growthChart'),icsFor=T('icsFor'),milestonesDue=T('milestonesDue'),nextAppt=T('nextAppt'),describe=T('describe');
   S.settings.birth='2026-08-20';
   // --- OMS: valori noti delle tabelle (maschi): mediana a 0 giorni 3,35 kg, a 365 giorni 9,65 kg, lunghezza 49,9 → 75,7 cm
   assert.ok(Math.abs(lmsAt('wfa',0)[1]-3.3464)<1e-6);assert.ok(Math.abs(lmsAt('wfa',364)[1]-9.646)<0.05,'mediana 12 mesi');
@@ -65,38 +65,10 @@ const MIN=6e4,H=36e5;
   T('renderNext()');assert.ok(!/Vaccino/.test(app.els['#next']._h),'in Home solo se entro 14 giorni');
   A.apptDone(ap[0].id);assert.strictEqual(ap[0].done,true);assert.strictEqual(nextAppt(),null);
   T('renderDiary()');assert.ok(!/Visita/.test(txt('#diary')),'le visite non stanno nel diario');assert.ok(/Misure/.test(txt('#diary'))&&/Vitamina D/.test(txt('#diary')));
-  // --- riepilogo della notte (22–7): conta pappe, cambi, pianti, sonno; niente nel pomeriggio
-  const day=new Date();day.setHours(9,0,0,0);const now9=day.getTime(),n0=now9-2*H; // 07:00
-  S.events.push({id:'n1',k:'feed',t:n0-6*H,who:'Ilaria',prep:120,ml:100},{id:'n2',k:'feed',t:n0-2*H,who:'Fabio',prep:120,ml:90},{id:'n3',k:'diaper',t:n0-2*H+5*MIN,who:'Fabio',pipi:'normale',cacca:'no'},{id:'n4',k:'cry',t:n0-6*H-3*MIN,who:'Ilaria',label:'fame',dur:9},{id:'n5',k:'sleep',t:n0-8*H,who:'Ilaria'},{id:'n6',k:'wake',t:n0-6*H-5*MIN,who:'Ilaria'},{id:'n7',k:'sleep',t:n0-5.5*H,who:'Ilaria'},{id:'n8',k:'wake',t:n0-2.2*H,who:'Fabio'});
-  const ns=nightSummary(now9);assert.ok(ns);assert.strictEqual(ns.feeds,2);assert.strictEqual(ns.ml,190);assert.strictEqual(ns.diapers,1);assert.strictEqual(ns.cries,1);assert.deepStrictEqual(ns.cryLabels,['fame']);
-  assert.ok(Math.abs(ns.sleep-(1.9*H+3.3*H))<2*MIN,'sonno nella finestra: '+ns.sleep/H);assert.deepStrictEqual(ns.whos,{Ilaria:1,Fabio:2},'solo pappe, cambi, altro e medicine contano come alzata');
-  assert.strictEqual(ns.poo,0);assert.strictEqual(ns.wakes,2,'due risvegli segnati');assert.ok(ns.longest&&Math.abs(ns.longest.dur-3.3*H)<2*MIN,'tratto più lungo');
-  const pm=new Date();pm.setHours(15,0,0,0);assert.strictEqual(nightSummary(pm.getTime()),null);
-  // --- resoconto: frasi fattuali, numeri e voci della notte; si apre e si chiude con un tap
-  const story=T('nightStory')(ns);
-  assert.ok(/^Stanotte Alan ha dormito 5 h \d+ in tutto, il tratto più lungo 3 h \d+ dalle \d\d:\d\d\./.test(story),story);
-  assert.ok(/Si è svegliato 2 volte\./.test(story)&&/Ha mangiato 2 volte, 190 ml in tutto\./.test(story)&&/Un cambio\./.test(story),story);
-  assert.ok(/Un pianto \(1 fame\)\./.test(story)&&/Alzate: Ilaria 1, Fabio 2\./.test(story),story);
-  assert.ok(!/bene|male|poco|troppo|dovrebbe/.test(story),'nessun giudizio');
-  const realNow=Date.now;Date.now=()=>now9;
-  T('renderNight()');let nh=String(app.els['#night']._h);
-  assert.ok(/Com'è andata stanotte/.test(nh)&&/tocca per il resoconto/.test(nh)&&/aria-expanded="false"/.test(nh),nh.slice(0,300));
-  assert.ok(!/ng-story/.test(nh),'chiuso: nessun resoconto');
-  A.toggleNight();nh=String(app.els['#night']._h);
-  assert.ok(/ng-story/.test(nh)&&/aria-expanded="true"/.test(nh)&&/tocca per chiudere/.test(nh));
-  assert.ok(/ng-nums/.test(nh)&&/>Dormito</.test(nh)&&/>Pappe</.test(nh)&&/>Cambi</.test(nh)&&/>Pianti</.test(nh),'i numeri della notte');
-  assert.strictEqual((nh.match(/class="row tap"/g)||[]).length,ns.list.length,'ogni voce della notte è toccabile');
-  assert.ok(/A.edit\('n1'\)/.test(nh),'dal resoconto si apre la modifica');
-  S.events.find(e=>e.id==='n2').note='ha bevuto piano';
-  T('renderNight()');nh=String(app.els['#night']._h);assert.ok(/ng-notes/.test(nh)&&/«ha bevuto piano»/.test(nh),'le note della notte nel resoconto');
-  delete S.events.find(e=>e.id==='n2').note;
-  A.toggleNight();assert.ok(!/ng-story/.test(String(app.els['#night']._h)),'richiuso');
-  Date.now=realNow;
-  // --- rigurgito: spiega un pianto aperto come aria; conteggio in Pattern
-  S.events.push({id:'cr',k:'cry',t:Date.now()-2*MIN,who:'Fabio',label:null,ctx:{},bins:{f:-1,a:-1,h:1},feat:null,audio:false});S.openCry='cr';
-  S.events.push({id:'f9',k:'feed',t:Date.now()-10*MIN,who:'Fabio',prep:120,ml:100});
+  // --- rigurgito: si registra da "Altro" e si conta in Pattern
+  S.events.push({id:'f9',k:'feed',t:Date.now()-10*MIN,who:'Fabio',ml:100});
   A.flow('other');assert.ok(/Rigurgito/.test(txt('#screenInner')));A.finish('rigurgito');
-  assert.strictEqual(S.events.find(e=>e.id==='cr').label,'aria');
+  assert.strictEqual(S.events.filter(e=>e.k==='other'&&e.what==='rigurgito').length,1);
   T('renderStats()');assert.ok(/Rigurgiti: 1 in 7 giorni, 1 entro 30 min da una pappa/.test(txt('#stats')),txt('#stats').match(/Rigurgiti[^.]*|Pappa[^.]{0,120}/g));
   // --- pannello: si disegna con tutto dentro, nessun errore
   T('renderHealth()');const hh=txt('#health');assert.ok(/Crescita/.test(hh)&&/Vitamina D data/.test(hh)&&/38,2 °C/.test(hh)&&/Tappe in arrivo/.test(hh)&&/1 visita fatta/.test(hh));

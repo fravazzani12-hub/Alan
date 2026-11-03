@@ -2,36 +2,17 @@
 'use strict';
 var MIN=6e4, H=36e5;
 var LSKEY='alan.v2', LSV1='alan.v1', WHOKEY='alan.who';
-var S={settings:{name:'Alan',birth:'2026-08-20'},events:[],openCry:null};
+var S={settings:{name:'Alan',birth:'2026-08-20'},events:[]};
 var who='Io', A={}; window.A=A;
-var flow=null, rec=null, playing=null;
-var CAUSES=[
-  {id:'fame',label:'Fame',c:'var(--c-fame)'},
-  {id:'sonno',label:'Sonno',c:'var(--c-sonno)'},
-  {id:'cambio',label:'Pannolino',c:'var(--c-cambio)'},
-  {id:'aria',label:'Aria / pancia',c:'var(--c-aria)'},
-  {id:'contatto',label:'Contatto / altro',c:'var(--c-contatto)'}
-];
-var LABELS={fame:'fame',sonno:'sonno',cambio:'pannolino',aria:'aria / pancia',contatto:'contatto',solo:'passato da solo'};
+var flow=null;
 var OTHER=[['ruttino','Ruttino','aria'],['rigurgito','Rigurgito','aria'],['massaggio','Massaggio pancia','aria'],['ciuccio','Ciuccio','contatto'],['coccole','Coccole','contatto'],['passeggiata','Passeggiata','contatto'],['bagnetto','Bagnetto','contatto']];
-/* pipì/cacca: no, poca, normale, tanta. 'si' è il valore della versione 12 e si legge come normale. */
+/* quantità della cacca: no, poca, normale, tanta. 'si' è il valore della versione 12 e si legge come normale. */
 var LVL={no:'no',poca:'poca',normale:'normale',tanta:'tanta',si:'normale'};
 var LVL_ORDER=['poca','normale','tanta'];
-/* Cosa si può provare per ciascuna causa: apre il percorso normale, che registrando spiega anche il pianto.
-   Sono le azioni della giornata, non consigli: la causa resta un'ipotesi misurata sui vostri dati. */
-var TRY={fame:['feed','Pappa'],sonno:['sleep','Nanna'],cambio:['diaper','Pannolino'],aria:['other','Ruttino o massaggio'],contatto:['other','Coccole o ciuccio']};
 /* nota libera su una voce del diario: la scrive la schermata di modifica, la mostra js/note.js */
 var NOTE_MAX=200;
-var BANNER_HIDE='alan.cry.later';
-/* Con l'ascolto acceso i pianti sono tanti: l'app chiede la spiegazione solo per quelli che sente lei e che superano
-   questa durata. Quelli registrati a mano si chiedono sempre (li hai registrati apposta). Solo su questo dispositivo. */
-var EXPLAIN_KEY='alan.explain',EXPLAIN_OPTS=[[0,'sempre'],[30,'30 s'],[60,'1 min'],[120,'2 min'],[300,'5 min']];
-function explainMin(){var v=+(lsGet(EXPLAIN_KEY)||60);return EXPLAIN_OPTS.some(function(o){return o[0]===v;})?v:60;}
-function askExplain(e){return !!e&&e.k==='cry'&&!e.label&&(!e.auto||(e.dur||0)>=explainMin());}
-A.setExplainMin=function(v){lsSet(EXPLAIN_KEY,String(+v||0));renderHome();renderCries();};
 function noteClean(s){return String(s==null?'':s).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').replace(/^\s+|\s+$/g,'').slice(0,NOTE_MAX);}
 function lvlKey(v){return v==='si'?'normale':(LVL[v]?v:'no');}
-
 /* ---------- storage: IndexedDB with localStorage fallback ---------- */
 var db=null;
 function openDb(){
@@ -85,7 +66,7 @@ function load(){
     return idbGet('kv','state');
   }).then(function(raw){
     if(!raw)raw=lsGet(LSKEY);
-    if(raw){try{var o=JSON.parse(raw);if(o.settings)for(var k in o.settings)S.settings[k]=o.settings[k];S.events=Array.isArray(o.events)?o.events:[];S.openCry=o.openCry||null;}catch(e){}}
+    if(raw){try{var o=JSON.parse(raw);if(o.settings)for(var k in o.settings)S.settings[k]=o.settings[k];S.events=Array.isArray(o.events)?o.events:[];}catch(e){}}
     else{migrateV1();save();}
     who=lsGet(WHOKEY)||'Io';
   });
@@ -94,54 +75,24 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 /* ---------- sync hooks (js/sync.js, optional) ---------- */
 function touched(e){e._updated=new Date().toISOString();if(window.AlanSync)AlanSync.upsert(e);}
 function removed(e){e._updated=new Date().toISOString();if(window.AlanSync)AlanSync.remove(e);}
-/* Regola di SPEC §3: la prima azione registrata in [cry.t − 5 min, cry.t + 45 min] spiega il pianto aperto.
-   Vale sia per le azioni fatte su questo telefono (A.finish) sia per quelle che arrivano dall'altro (mergeRemote). */
 /* una pappa "vale" se ha ml > 0 (biberon rifiutato = 0 non conta) */
 function fedFeed(e){return e.k==='feed'&&e.ml>0;}
-function labelFor(e){
-  if(e.k==='feed')return fedFeed(e)?'fame':null;
-  if(e.k==='sleep')return 'sonno';
-  if(e.k==='diaper')return 'cambio';
-  if(e.k==='other'){var o=OTHER.filter(function(x){return x[0]===e.what;})[0];return o?o[2]:'contatto';}
-  return null;
-}
-/* Le azioni registrate intorno a un pianto che possono spiegarlo: da 5 minuti prima a 90 dopo. Serve ad associare a mano
-   quando l'azione si registra dopo, che è come va di solito: prima si consola, poi si scrive. */
-function explainers(cry){
-  if(!cry)return [];
-  return sorted().filter(function(e){
-    return e.id!==cry.id&&labelFor(e)&&e.t>=cry.t-5*MIN&&e.t-cry.t<=90*MIN;
-  });
-}
-/* pianti senza spiegazione delle ultime 24 ore, dal più recente */
-function pendingCries(now){
-  now=now||Date.now();
-  return sorted().filter(function(e){return askExplain(e)&&now-e.t<=24*H;}).reverse();
-}
-function tryLabelOpenCry(e,linkId){
-  var label=labelFor(e);if(!label)return null;
-  var cid=linkId||S.openCry,cry=cid?byId(cid):null;
-  if(cry&&cry.k==='cry'&&!cry.label&&e.t>=cry.t-5*MIN&&e.t-cry.t<=45*MIN){cry.label=label;touched(cry);if(S.openCry===cry.id)S.openCry=null;return cry;}
-  return null;
-}
+/* Le voci di tipo non più in uso (pianti e nanne delle versioni precedenti) restano nell'archivio e continuano a
+   sincronizzarsi: semplicemente non si mostrano e non si creano più. Nessun dato viene buttato. */
 function mergeRemote(list){
   var changed=false;
   list.forEach(function(r){
     var cur=byId(r.id);
     if(r._deleted){
-      if(cur){S.events=S.events.filter(function(x){return x.id!==r.id;});if(cur.k==='cry'){idbDel('audio',r.id);setAudioOutbox(audioOutbox().filter(function(x){return x!==r.id;}));}if(S.openCry===r.id)S.openCry=null;changed=true;}
+      if(cur){S.events=S.events.filter(function(x){return x.id!==r.id;});changed=true;}
       return;
     }
     if(!cur){
-      var n={};for(var k in r)if(k!=='_deleted')n[k]=r[k];n.audio=false;S.events.push(n);changed=true;
-      /* un pianto aperto registrato dall'altro telefono resta aperto anche qui: la prossima azione lo spiega da entrambi */
-      if(n.k==='cry'&&!n.label&&!S.openCry&&Date.now()-n.t<=45*MIN)S.openCry=n.id;
-      else if(n.k!=='cry')tryLabelOpenCry(n,null);
+      var n={};for(var k in r)if(k!=='_deleted')n[k]=r[k];S.events.push(n);changed=true;
       return;
     }
     if(cur._updated&&r._updated&&r._updated<=cur._updated)return;
-    for(var k2 in r)if(k2!=='_deleted'&&k2!=='audio')cur[k2]=r[k2];
-    if(cur.k==='cry'&&cur.label&&S.openCry===cur.id)S.openCry=null;
+    for(var k2 in r)if(k2!=='_deleted')cur[k2]=r[k2];
     changed=true;
   });
   if(changed){save();refreshViews();}
@@ -149,10 +100,8 @@ function mergeRemote(list){
 function refreshViews(){
   extEmit('change');
   if(!flow)renderHome();
-  renderCries();
   var pat=$('#v-pattern');if(pat&&pat.classList.contains('on'))renderStats();
   var sal=$('#v-salute');if(sal&&sal.classList.contains('on'))renderHealth();
-  if(flow&&flow.type==='cry'&&flow.phase==='after')renderCry();
 }
 /* impostazioni condivise: last-writer-wins su _updated; se il server non ha nulla, vincono quelle locali */
 var settingsPushed=false;
@@ -169,39 +118,20 @@ function pushSettings(){
   if(!S.settings._updated)S.settings._updated=new Date().toISOString();
   if(window.AlanSync)AlanSync.upsertSettings(S.settings);
 }
-window.AlanApp={mergeRemote:mergeRemote,events:function(){return S.events;},refresh:function(){renderHome();renderCries();renderAccount();}};
+window.AlanApp={mergeRemote:mergeRemote,events:function(){return S.events;},refresh:function(){renderHome();renderAccount();}};
 
-/* ---------- diagnostica: ogni passo del percorso audio lascia una riga leggibile in Altro ---------- */
-var DIAGKEY='alan.diag';
-var DIAG_STEPS=[['mic','Microfono nel browser'],['ctx','Motore audio (AudioContext) acceso nel tap'],['perm','Permesso microfono'],['rec','Registratore (MediaRecorder)'],['frames','Analisi in tempo reale'],['data','Dati audio registrati'],['feat','Impronta acustica'],['idb','Salvataggio sul telefono (IndexedDB)'],['up','Invio all\'altro telefono (cloud)'],['dl','Scaricamento dal cloud'],['play','Riascolto']];
-var DIAG=(function(){try{var o=JSON.parse(lsGet(DIAGKEY)||'null');if(o&&o.steps)return o;}catch(e){}return {steps:[],at:null};})();
-function diag(step,ok,detail){
-  var it={s:step,ok:ok,d:detail||'',t:Date.now()},i;
-  for(i=0;i<DIAG.steps.length;i++)if(DIAG.steps[i].s===step)break;
-  if(i<DIAG.steps.length)DIAG.steps[i]=it;else DIAG.steps.push(it);
-  lsSet(DIAGKEY,JSON.stringify(DIAG));
-  if(!flow)renderDiag();
-}
-function diagReset(){DIAG.steps=DIAG.steps.filter(function(x){return x.s==='dl'||x.s==='play';});DIAG.at=Date.now();lsSet(DIAGKEY,JSON.stringify(DIAG));}
-function diagGet(step){for(var i=0;i<DIAG.steps.length;i++)if(DIAG.steps[i].s===step)return DIAG.steps[i];return null;}
-function errStr(err){if(!err)return 'errore';return (err.name||'')+(err.message?(err.name?': ':'')+err.message:'')||String(err);}
-/* audio in IndexedDB come {buf:ArrayBuffer,mime}: i Blob dentro IndexedDB su iOS si sono rivelati fragili */
+/* ---------- diagnostica: versione, spazio e collegamento, da condividere quando qualcosa non torna ---------- */
+/* file binari (foto dei Momenti) letti come ArrayBuffer: i Blob dentro IndexedDB su iOS si sono rivelati fragili */
 function blobToBuf(blob){return new Promise(function(res,rej){try{if(blob.arrayBuffer){blob.arrayBuffer().then(res,rej);return;}var fr=new FileReader();fr.onload=function(){res(fr.result);};fr.onerror=function(){rej(fr.error||new Error('FileReader'));};fr.readAsArrayBuffer(blob);}catch(e){rej(e);}});}
-function audioPut(id,buf,mime){return idbPut('audio',id,{buf:buf,mime:mime||''});}
-function audioGet(id){
-  return idbGet('audio',id).then(function(v){
-    if(!v)return null;
-    if(v.buf)return {buf:v.buf,mime:v.mime||'',blob:new Blob([v.buf],{type:v.mime||''})};
-    if(typeof Blob!=='undefined'&&v instanceof Blob)return {buf:null,mime:v.type||'',blob:v};
-    return null;
-  });
-}
+function errStr(err){if(!err)return 'errore';return (err.name||'')+(err.message?(err.name?': ':'')+err.message:'')||String(err);}
 function busy(btn,on,label){
   if(!btn)return;
   if(on){if(btn._lbl==null)btn._lbl=btn.innerHTML;btn.disabled=true;btn.classList.add('busy');if(label)btn.textContent=label;}
   else{btn.disabled=false;btn.classList.remove('busy');if(btn._lbl!=null){btn.innerHTML=btn._lbl;btn._lbl=null;}}
 }
 
+function syncReady(){return !!(window.AlanSync&&AlanSync.status().family);}
+function isStandalone(){try{return navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);}catch(e){return false;}}
 /* ---------- helpers ---------- */
 function $(s){return document.querySelector(s);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
@@ -220,557 +150,73 @@ function sd(a){if(a.length<2)return 0;var m=mean(a);return Math.sqrt(a.reduce(fu
 function pct(a,p){if(!a.length)return null;var b=a.slice().sort(function(x,y){return x-y;});var i=Math.min(b.length-1,Math.max(0,Math.round(p*(b.length-1))));return b[i];}
 function median(a){return pct(a,0.5);}
 function typicalMl(){var f=sorted().filter(function(e){return e.k==='feed'&&e.ml;}).slice(-10).map(function(e){return e.ml;});return median(f);}
-function typicalPrep(){var f=sorted().filter(function(e){return e.k==='feed'&&e.prep;}).slice(-6).map(function(e){return e.prep;});return median(f)||90;}
 function toast(msg){var t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove('on');},2400);}
-function cause(id){for(var i=0;i<CAUSES.length;i++)if(CAUSES[i].id===id)return CAUSES[i];return null;}
 function byId(id){for(var i=0;i<S.events.length;i++)if(S.events[i].id===id)return S.events[i];return null;}
 
 /* ---------- norms & context ---------- */
-/* norme per età; se i genitori hanno scelto un intervallo pappe (Impostazioni), quello vale per tutti (modello, riquadri, previsioni, promemoria) */
-function norms(ad){var w=ad/7,o={feedH:w<6?3:(w<12?3.5:4),awakeMin:w<4?55:(w<8?70:(w<12?85:105))};if(S.settings.feedH>0)o.feedH=S.settings.feedH;return o;}
+/* norme per età; se i genitori hanno scelto un intervallo pappe (Impostazioni), quello vale per tutti (riquadri, previsioni, promemoria) */
+function norms(ad){var w=ad/7,o={feedH:w<6?3:(w<12?3.5:4)};if(S.settings.feedH>0)o.feedH=S.settings.feedH;return o;}
 function context(now){
   var ev=sorted().filter(function(e){return e.t<=now;});
-  var lastFeed=null,lastDiaper=null,lastSleep=null,lastWake=null;
-  ev.forEach(function(e){if(e.k==='feed'){if(fedFeed(e))lastFeed=e;}else if(e.k==='diaper')lastDiaper=e;else if(e.k==='sleep')lastSleep=e;else if(e.k==='wake')lastWake=e;});
-  var sleeping=!!(lastSleep&&(!lastWake||lastSleep.t>lastWake.t));
-  var awakeMin=null,sleepingMin=null,lastNapMin=null;
-  if(sleeping)sleepingMin=(now-lastSleep.t)/MIN;
-  else if(lastWake){awakeMin=(now-lastWake.t)/MIN;if(lastSleep&&lastSleep.t<lastWake.t)lastNapMin=(lastWake.t-lastSleep.t)/MIN;}
+  var lastFeed=null,lastDiaper=null;
+  ev.forEach(function(e){if(e.k==='feed'){if(fedFeed(e))lastFeed=e;}else if(e.k==='diaper')lastDiaper=e;});
   var ad=ageDays();
   return {now:now,ad:ad,n:norms(ad),
-    sinceFeedH:lastFeed?(now-lastFeed.t)/H:null,lastMl:lastFeed?lastFeed.ml:null,lastPrep:lastFeed?lastFeed.prep:null,lastFeedT:lastFeed?lastFeed.t:null,
+    sinceFeedH:lastFeed?(now-lastFeed.t)/H:null,lastMl:lastFeed?lastFeed.ml:null,lastFeedT:lastFeed?lastFeed.t:null,
     sinceDiaperH:lastDiaper?(now-lastDiaper.t)/H:null,lastDiaper:lastDiaper,
-    sleeping:sleeping,sleepingMin:sleepingMin,awakeMin:awakeMin,lastNapMin:lastNapMin,wakeT:lastWake?lastWake.t:null,sleepT:lastSleep?lastSleep.t:null,
     hour:new Date(now).getHours(),typicalMl:typicalMl()};
 }
-function snapshot(c){return {sinceFeedH:c.sinceFeedH,lastMl:c.lastMl,lastPrep:c.lastPrep,typicalMl:c.typicalMl,sinceDiaperH:c.sinceDiaperH,awakeMin:c.awakeMin,lastNapMin:c.lastNapMin,hour:c.hour,ad:c.ad,n:c.n};}
-function bins(c){
-  var f=-1,a=-1;
-  if(c.sinceFeedH!=null){var r=c.sinceFeedH/c.n.feedH;f=r<0.5?0:(r<0.85?1:(r<1.15?2:3));}
-  if(c.awakeMin!=null){var q=c.awakeMin/c.n.awakeMin;a=q<0.5?0:(q<1?1:2);}
-  return {f:f,a:a,h:c.hour<6?0:(c.hour<12?1:(c.hour<17?2:3))};
-}
 
-/* ---------- context model ---------- */
-function sig(x){return 1/(1+Math.exp(-x));}
-function modelScores(c){
-  if(!c.n)c.n=norms(c.ad!=null?c.ad:30);
-  var s={},expH=c.n.feedH;
-  if(c.sinceFeedH==null)s.fame=0.45;
-  else{
-    if(c.lastMl&&c.typicalMl&&c.lastMl<0.7*c.typicalMl)expH*=0.75;
-    if(c.lastPrep&&c.lastMl!=null){var dr=c.lastMl/c.lastPrep;if(dr<0.4)expH*=0.7;else if(dr<0.7)expH*=0.85;}
-    s.fame=0.05+0.9*sig((c.sinceFeedH/expH-0.75)*8);
-  }
-  if(c.awakeMin==null)s.sonno=0.35;
-  else{s.sonno=0.05+0.85*sig((c.awakeMin/c.n.awakeMin-0.8)*6);if(c.awakeMin<10&&c.lastNapMin!=null&&c.lastNapMin<40)s.sonno=Math.max(s.sonno,0.55);}
-  s.cambio=0.08+(c.sinceDiaperH==null?0.15:0.45*sig((c.sinceDiaperH/2.5-1)*4));
-  if(c.sinceFeedH!=null&&c.sinceFeedH<0.5)s.cambio+=0.2;
-  s.aria=0.05+((c.sinceFeedH!=null&&c.sinceFeedH<0.75)?0.35*(1-c.sinceFeedH/0.75):0);
-  s.contatto=(c.hour>=17&&c.hour<23)?0.35:0.18;
-  var tot=0;for(var k in s)tot+=s[k];for(var k2 in s)s[k2]/=tot;
-  return s;
-}
-function labeledCries(){return S.events.filter(function(e){return e.k==='cry'&&e.label&&cause(e.label);});}
-function outcomeCounts(filter){var c={fame:0,sonno:0,cambio:0,aria:0,contatto:0},n=0;labeledCries().forEach(function(e){if(filter&&!filter(e))return;c[e.label]++;n++;});return {c:c,n:n};}
-function contextPosterior(snap,b,excludeId){
-  var m=modelScores(snap);
-  var g=outcomeCounts(function(e){return e.id!==excludeId;});
-  var sim=outcomeCounts(function(e){return e.id!==excludeId&&e.bins&&e.bins.f===b.f&&e.bins.a===b.a;});
-  var p={};
-  CAUSES.forEach(function(c){var gc=(g.c[c.id]+6*m[c.id])/(g.n+6);p[c.id]=(sim.c[c.id]+4*gc)/(sim.n+4);});
-  return {p:p,model:m,simN:sim.n,sim:sim.c,globalN:g.n};
-}
-function why(id,c){
-  if(!c.n)c.n=norms(c.ad!=null?c.ad:30);
-  var n=c.n;
-  if(id==='fame'){if(c.sinceFeedH==null)return 'nessuna pappa registrata';var s='ultima pappa '+fmtDur(c.sinceFeedH*H)+' fa'+(c.lastMl?' ('+c.lastMl+' ml'+(c.lastPrep&&c.lastMl<c.lastPrep?' su '+c.lastPrep:'')+')':'');return s+' · a questa età circa ogni '+n.feedH+' h';}
-  if(id==='sonno'){if(c.awakeMin==null)return 'nessuna nanna registrata';if(c.awakeMin<10&&c.lastNapMin!=null&&c.lastNapMin<40)return 'sveglio dopo un pisolino di soli '+Math.round(c.lastNapMin)+' min';return 'sveglio da '+fmtDur(c.awakeMin*MIN)+' · finestra di veglia ~'+n.awakeMin+' min';}
-  if(id==='cambio'){var s2=c.sinceDiaperH==null?'nessun cambio registrato':'ultimo cambio '+fmtDur(c.sinceDiaperH*H)+' fa';if(c.sinceFeedH!=null&&c.sinceFeedH<0.5)s2+=' · subito dopo la pappa';return s2;}
-  if(id==='aria'){return (c.sinceFeedH!=null&&c.sinceFeedH<0.75)?'pappa finita da '+fmtDur(c.sinceFeedH*H):'lontano dalla pappa';}
-  if(id==='contatto'){return (c.hour>=17&&c.hour<23)?'fascia serale: orario tipico del pianto senza causa (picco a 6–8 settimane)':'nessun segnale specifico';}
-  return '';
-}
-
-/* ---------- audio model: k-NN on acoustic fingerprints ---------- */
-function audioSet(excludeId){return labeledCries().filter(function(e){return e.feat&&e.feat.vec&&e.id!==excludeId;});}
-function zstats(set,extra){
-  var d=extra?extra.length:set[0].feat.vec.length,mu=[],sg=[];
-  for(var i=0;i<d;i++){var col=set.map(function(e){return e.feat.vec[i];});if(extra)col.push(extra[i]);var m=mean(col)||0,s=sd(col)||1;mu.push(m);sg.push(s>1e-6?s:1);}
-  return {mu:mu,sg:sg};
-}
-function dist(a,b,z){var s=0;for(var i=0;i<a.length;i++){var x=(a[i]-z.mu[i])/z.sg[i]-(b[i]-z.mu[i])/z.sg[i];s+=x*x;}return Math.sqrt(s/a.length);}
-function audioVote(vec,excludeId){
-  var set=audioSet(excludeId);if(set.length<3||!vec)return null;
-  var z=zstats(set,vec);
-  var ds=set.map(function(e){return {id:e.id,label:e.label,d:dist(vec,e.feat.vec,z),t:e.t};}).sort(function(x,y){return x.d-y.d;});
-  var k=Math.min(5,ds.length),p={fame:0,sonno:0,cambio:0,aria:0,contatto:0},tot=0;
-  for(var i=0;i<k;i++){var w=1/(ds[i].d+0.35);p[ds[i].label]+=w;tot+=w;}
-  for(var c in p)p[c]=(p[c]+0.02*tot)/(tot*1.1);
-  return {p:p,n:set.length,nearest:ds.slice(0,3),meanD:mean(ds.slice(0,k).map(function(x){return x.d;}))};
-}
-function accuracy(){
-  var set=labeledCries(),ctxOk=0,ctxN=0,audOk=0,audN=0,bothOk=0,bothN=0,cnt={};
-  set.forEach(function(e){cnt[e.label]=(cnt[e.label]||0)+1;});
-  var maj=0;for(var c in cnt)maj=Math.max(maj,cnt[c]);
-  var base=set.length?maj/set.length:0;
-  set.forEach(function(e){
-    var cp=null,ap=null;
-    if(e.ctx&&e.bins){cp=contextPosterior(e.ctx,e.bins,e.id).p;ctxN++;if(argmax(cp)===e.label)ctxOk++;}
-    if(e.feat&&e.feat.vec){var v=audioVote(e.feat.vec,e.id);if(v){ap=v.p;audN++;if(argmax(ap)===e.label)audOk++;}}
-    if(cp&&ap){bothN++;if(argmax(fuseRaw(cp,ap,0.5))===e.label)bothOk++;}
-  });
-  return {n:set.length,base:base,ctx:ctxN?ctxOk/ctxN:null,ctxN:ctxN,aud:audN?audOk/audN:null,audN:audN,both:bothN?bothOk/bothN:null,bothN:bothN};
-}
-function argmax(p){var b=null;for(var k in p)if(b==null||p[k]>p[b])b=k;return b;}
-function fuseRaw(cp,ap,w){var p={},tot=0;for(var k in cp){p[k]=Math.pow(cp[k],1-w)*Math.pow(Math.max(ap[k],0.02),w);tot+=p[k];}for(var k2 in p)p[k2]/=tot;return p;}
-function audioWeight(){
-  var acc=accuracy();
-  if(!acc.audN)return {w:0,calib:0,acc:acc};
-  var base=Math.min(0.6,acc.audN/(acc.audN+12)),calib;
-  if(acc.audN<8)calib=0.5;
-  else calib=Math.max(0,Math.min(1,(acc.aud-acc.base)/0.3));
-  return {w:base*calib,calib:calib,acc:acc};
-}
-function hypotheses(snap,b,vec){
-  var cx=contextPosterior(snap,b,null),av=vec?audioVote(vec,null):null,aw=av?audioWeight():{w:0,calib:0};
-  var p=av?fuseRaw(cx.p,av.p,aw.w):cx.p;
-  var list=CAUSES.map(function(c){return {id:c.id,label:c.label,c:c.c,p:p[c.id],ctxP:cx.p[c.id],audP:av?av.p[c.id]:null,why:why(c.id,snap),simN:cx.simN,simC:cx.sim[c.id]};}).sort(function(x,y){return y.p-x.p;});
-  return {list:list,simN:cx.simN,audio:av,w:aw.w,calib:aw.calib};
-}
-
-/* ---------- acoustic feature extraction ---------- */
-function pitchAC(buf,sr){
-  var n=buf.length,r0=0,i;for(i=0;i<n;i++)r0+=buf[i]*buf[i];r0/=n;
-  if(r0<4e-5)return null;
-  var minLag=Math.floor(sr/1000),maxLag=Math.min(n-64,Math.floor(sr/150)),best=-1,bestLag=-1,lag;
-  for(lag=minLag;lag<=maxLag;lag+=1){var s=0;for(i=0;i<n-lag;i+=2)s+=buf[i]*buf[i+lag];s/=((n-lag)/2);if(s>best){best=s;bestLag=lag;}}
-  if(bestLag<0||best/r0<0.45)return null;
-  return sr/bestLag;
-}
-function analyseFrame(an,tbuf,fbuf,sr){
-  an.getFloatTimeDomainData(tbuf);
-  var n=tbuf.length,rms=0,zc=0,i;
-  for(i=0;i<n;i++){rms+=tbuf[i]*tbuf[i];if(i&&(tbuf[i]>=0)!==(tbuf[i-1]>=0))zc++;}
-  rms=Math.sqrt(rms/n);
-  an.getByteFrequencyData(fbuf);
-  var binHz=sr/(2*fbuf.length),maxBin=Math.min(fbuf.length,Math.floor(5000/binHz)),num=0,den=0;
-  for(i=1;i<maxBin;i++){num+=fbuf[i]*i*binHz;den+=fbuf[i];}
-  return {rms:rms,zcr:zc/n*sr/2,cent:den?num/den:0,f0:pitchAC(tbuf,sr)};
-}
-/* Collegamento del microfono al motore audio.
-   Su iPad il Web Audio a volte non riceve nulla anche con il contesto in funzione: due cause note su Safari,
-   la stessa MediaStream usata insieme dal registratore e dal motore audio, e un nodo che non arriva all'uscita
-   e quindi non viene "tirato". Quindi: traccia clonata (modo 0) e sempre un guadagno a zero verso l'uscita.
-   Se resta muto si riprova con la traccia originale (modo 1) e poi con un contesto nuovo (modo 2, in startRec). */
-function micGraph(ctx,stream,mode){
-  if(!ctx||!stream)return null;
-  var ms=stream,mine=null;
-  if(!mode){
-    try{
-      var tr=stream.getAudioTracks?stream.getAudioTracks()[0]:null;
-      if(tr&&tr.clone&&typeof MediaStream!=='undefined'){mine=new MediaStream([tr.clone()]);ms=mine;}
-    }catch(e){ms=stream;mine=null;}
-  }
-  var src=ctx.createMediaStreamSource(ms);
-  var an=ctx.createAnalyser();an.fftSize=2048;an.smoothingTimeConstant=0;
-  var sink=ctx.createGain();sink.gain.value=0;
-  src.connect(an);an.connect(sink);sink.connect(ctx.destination);
-  return {src:src,an:an,sink:sink,own:mine,mode:mode||0,tbuf:new Float32Array(an.fftSize),fbuf:new Uint8Array(an.frequencyBinCount)};
-}
-function micGraphStop(g){
-  if(!g)return;
-  try{g.src.disconnect();}catch(e){}
-  try{g.an.disconnect();}catch(e){}
-  try{g.sink.disconnect();}catch(e){}
-  if(g.own){try{g.own.getTracks().forEach(function(t){t.stop();});}catch(e){}}
-}
-function features(frames){
-  if(frames.length<16)return null;
-  var rmsArr=frames.map(function(f){return f.rms;}),p95=pct(rmsArr,0.95),thr=Math.max(0.006,p95*0.25);
-  var act=frames.map(function(f){return f.rms>thr;});
-  var actFr=frames.filter(function(f,i){return act[i];});
-  if(actFr.length<6)return null;
-  var voiced=actFr.filter(function(f){return f.f0;}),f0s=voiced.map(function(f){return f.f0;});
-  var meanF0=mean(f0s)||0,sdF0=sd(f0s),rangeF0=f0s.length>3?pct(f0s,0.9)-pct(f0s,0.1):0;
-  var actRms=actFr.map(function(f){return f.rms;}),meanRms=mean(actRms)||0,rmsCV=meanRms?sd(actRms)/meanRms:0;
-  var bursts=[],pauses=[],cur=null,pau=null,i;
-  for(i=0;i<frames.length;i++){
-    if(act[i]){if(cur==null)cur=frames[i].t;if(pau!=null){pauses.push(frames[i].t-pau);pau=null;}}
-    else{if(cur!=null){bursts.push(frames[i].t-cur);cur=null;}if(pau==null)pau=frames[i].t;}
-  }
-  if(cur!=null)bursts.push(frames[frames.length-1].t-cur);
-  bursts=bursts.filter(function(x){return x>=120;});pauses=pauses.filter(function(x){return x>=120;});
-  var durS=Math.max(1,(frames[frames.length-1].t-frames[0].t)/1000);
-  var slopes=[],run=[];
-  for(i=0;i<=frames.length;i++){
-    var f=frames[i];
-    if(f&&act[i]&&f.f0)run.push(f);
-    else{if(run.length>=4){var xs=run.map(function(r){return (r.t-run[0].t)/1000;}),ys=run.map(function(r){return r.f0;}),mx=mean(xs),my=mean(ys),num=0,den=0;for(var j=0;j<xs.length;j++){num+=(xs[j]-mx)*(ys[j]-my);den+=(xs[j]-mx)*(xs[j]-mx);}if(den>0)slopes.push(num/den);}run=[];}
-  }
-  var vec=[actFr.length/frames.length,meanF0,sdF0,rangeF0,meanRms,rmsCV,bursts.length/durS*10,mean(bursts)||0,mean(pauses)||0,mean(actFr.map(function(f){return f.cent;}))||0,mean(actFr.map(function(f){return f.zcr;}))||0,mean(slopes)||0];
-  return {vec:vec,durS:durS,meanF0:meanF0,sdF0:sdF0,meanRms:meanRms,bursts10:bursts.length/durS*10,meanBurst:mean(bursts)||0,meanPause:mean(pauses)||0,voiced:f0s.length/frames.length,cent:vec[9]};
-}
-
-/* ---------- recorder ----------
-   Ordine pensato per iOS (PWA da Safari): l'AudioContext nasce e viene ripreso DENTRO il tap, prima di getUserMedia
-   (fuori dal gesto resterebbe sospeso); il MediaRecorder parte senza timeslice (su Safari i pezzi intermedi in
-   audio/mp4 non sono affidabili); l'audio finisce in IndexedDB come {buf,mime}. Ogni passo scrive in diag(). */
-function startRec(){
-  diagReset();
-  rec={t:Date.now(),frames:[],chunks:[],blob:null,mime:'',status:'starting',err:null,stream:null,ctx:null,an:null,src:null,graph:null,tries:0,mr:null,timer:null,stopped:false,bytes:0};
-  var hasMic=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
-  diag('mic',hasMic,hasMic?'getUserMedia disponibile':'navigator.mediaDevices.getUserMedia assente'+(isStandalone()?' (app installata: serve iOS 14.3 o più recente)':''));
-  if(!hasMic){rec.status='nomic';rec.err='Questo browser non espone il microfono.';return;}
-  var AC=window.AudioContext||window.webkitAudioContext;
-  if(!AC)diag('ctx',false,'Web Audio non disponibile: registro senza impronta');
-  else{
-    try{
-      rec.ctx=new AC();
-      if(rec.ctx.state!=='running'&&rec.ctx.resume)rec.ctx.resume().catch(function(){});
-      diag('ctx',true,'stato '+rec.ctx.state+', '+rec.ctx.sampleRate+' Hz');
-      rec.ctx.onstatechange=function(){var c=rec&&rec.ctx;if(!c)return;if(!rec.stopped&&c.state!=='running'&&c.resume)c.resume().catch(function(){});diag('ctx',c.state==='running',(c.state==='running'?'in funzione':'stato '+c.state)+', '+c.sampleRate+' Hz');};
-    }catch(e){rec.ctx=null;diag('ctx',false,errStr(e));}
-  }
-  var cons={audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}};
-  navigator.mediaDevices.getUserMedia(cons).catch(function(){return navigator.mediaDevices.getUserMedia({audio:true});}).then(function(stream){
-    if(!rec||rec.stopped){stream.getTracks().forEach(function(t){t.stop();});return;}
-    rec.stream=stream;
-    var tr=stream.getAudioTracks()[0],ts=null;try{ts=tr&&tr.getSettings?tr.getSettings():null;}catch(e){}
-    diag('perm',true,'ok'+(tr&&tr.label?', '+tr.label:'')+(ts&&ts.sampleRate?', '+ts.sampleRate+' Hz':''));
-    attachAnalyser();
-    try{
-      var cands=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'];
-      var mime=window.MediaRecorder&&MediaRecorder.isTypeSupported?cands.filter(function(m){return MediaRecorder.isTypeSupported(m);})[0]:'';
-      if(!window.MediaRecorder){diag('rec',false,'MediaRecorder assente: salvo solo l\'impronta');}
-      else{
-        var mr=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
-        rec.mime=mr.mimeType||mime||'';
-        mr.ondataavailable=function(ev){if(ev.data&&ev.data.size){rec.chunks.push(ev.data);rec.bytes+=ev.data.size;}};
-        mr.onerror=function(ev){diag('rec',false,'errore durante la registrazione: '+errStr(ev&&ev.error));};
-        mr.start();rec.mr=mr;
-        diag('rec',true,'in corso, formato '+(rec.mime||'predefinito del browser'));
-      }
-    }catch(e){rec.mr=null;diag('rec',false,errStr(e));}
-    rec.status='live';rec.t=Date.now();
-    rec.timer=setInterval(function(){
-      if(!rec||rec.stopped)return;
-      var fr=rec.an?analyseFrame(rec.an,rec.tbuf,rec.fbuf,rec.ctx.sampleRate):{rms:0,zcr:0,cent:0,f0:null};
-      fr.t=Date.now()-rec.t;rec.frames.push(fr);
-      var m=$('#meter');if(m)m.style.width=Math.min(100,Math.round(fr.rms*400))+'%';
-      if(rec.frames.length%20===0)framesDiag();
-      if(fr.t>=30000)A.stopRec();
-    },50);
-    renderCry();
-  }).catch(function(err){
-    if(!rec)return;
-    rec.status='denied';
-    rec.err=(err&&err.name==='NotAllowedError')?'Microfono non consentito in questa finestra.':'Microfono non disponibile ('+(err&&err.name||'errore')+').';
-    diag('perm',false,errStr(err)+(err&&err.name==='NotAllowedError'?' (Impostazioni iPhone → Safari → Microfono, oppure riapri l\'app da Safari e reinstallala)':''));
-    renderCry();
-  });
-}
-function attachAnalyser(mode){
-  if(!rec||!rec.stream)return;
-  try{
-    if(rec.graph){micGraphStop(rec.graph);rec.graph=null;rec.an=null;}
-    if(mode===2){
-      /* contesto nuovo, creato dopo il permesso: su iPad quello nato prima a volte resta sordo */
-      var AC=window.AudioContext||window.webkitAudioContext;
-      try{if(rec.ctx){rec.ctx.onstatechange=null;rec.ctx.close();}}catch(e2){}
-      rec.ctx=new AC();
-      if(rec.ctx.state!=='running'&&rec.ctx.resume)rec.ctx.resume().catch(function(){});
-    }
-    if(!rec.ctx)return;
-    var g=micGraph(rec.ctx,rec.stream,mode||0);
-    rec.graph=g;rec.an=g.an;rec.tbuf=g.tbuf;rec.fbuf=g.fbuf;rec.src=g.src;
-    if(rec.ctx.state!=='running'&&rec.ctx.resume)rec.ctx.resume().catch(function(){});
-  }catch(e){rec.an=null;diag('ctx',false,'collegamento del microfono al motore audio fallito: '+errStr(e));}
-}
-var MIC_TRY=['microfono collegato con la traccia clonata','microfono collegato con la traccia originale','motore audio ricreato dopo il permesso'];
-function framesDiag(){
-  if(!rec)return;
-  var n=rec.frames.length,act=0,voiced=0,live=0,i;
-  for(i=0;i<n;i++){if(rec.frames[i].rms>0)live++;if(rec.frames[i].rms>0.004)act++;if(rec.frames[i].f0)voiced++;}
-  var el=(Date.now()-rec.t)/1000;
-  if(!rec.an){diag('frames',false,'nessun motore audio: l\'impronta non si calcola');return;}
-  /* tutti i campioni esattamente a zero = il motore audio non riceve nulla (un microfono vero non è mai muto così):
-     si risale la scala dei collegamenti, un gradino ogni 1,5 s */
-  var tries=rec.tries||0;
-  if(live===0&&el>=1.5*(tries+1)&&tries<2){
-    rec.tries=tries+1;
-    attachAnalyser(rec.tries);
-    diag('frames',null,'nessun segnale nei primi '+Math.round(el)+' s (contesto '+rec.ctx.state+'): '+MIC_TRY[rec.tries]);
-    return;
-  }
-  var how=live>0&&(rec.tries||0)>0?' · '+MIC_TRY[rec.tries]:'';
-  diag('frames',act>0?true:(el<2?null:false),n+' frame, '+act+' con suono, tono trovato in '+voiced+
-    (live===0&&el>=2?' · il motore audio non riceve segnale (contesto '+rec.ctx.state+')'+(tries>=2?': prova a spegnere il rumore bianco, chiudere l\'app e riaprirla':''):(act===0&&el>=2?' · segnale presente ma sotto la soglia: era silenzio?':''))+how);
-}
-function finishRec(){
-  return new Promise(function(res){
-    if(!rec){res();return;}
-    rec.stopped=true;clearInterval(rec.timer);
-    var done=function(){
-      try{micGraphStop(rec.graph);}catch(e){}
-      try{if(rec.stream)rec.stream.getTracks().forEach(function(t){t.stop();});}catch(e){}
-      try{if(rec.ctx)rec.ctx.close();}catch(e){}
-      if(rec.chunks.length){rec.blob=new Blob(rec.chunks,{type:rec.mime||(rec.chunks[0]&&rec.chunks[0].type)||'audio/mp4'});if(!rec.mime)rec.mime=rec.blob.type||'';}
-      if(rec.mr)diag('data',!!rec.blob,rec.blob?Math.round(rec.blob.size/1024)+' kB, '+rec.chunks.length+(rec.chunks.length===1?' blocco':' blocchi')+', '+(rec.mime||'tipo sconosciuto'):'il registratore non ha consegnato dati');
-      framesDiag();
-      res();
-    };
-    if(rec.mr&&rec.mr.state!=='inactive'){
-      var t=setTimeout(function(){diag('data',false,'il registratore non si è fermato entro 3 s');done();},3000);
-      rec.mr.onstop=function(){clearTimeout(t);done();};
-      try{rec.mr.stop();}catch(e){clearTimeout(t);done();}
-    }
-    else done();
-  });
-}
-function isStandalone(){try{return navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);}catch(e){return false;}}
-
-/* ---------- cry flow ---------- */
-A.openCry=function(){
-  if(S.openCry&&byId(S.openCry)){flow={type:'cry',phase:'after',id:S.openCry};showScreen();renderCry();return;}
-  flow={type:'cry',phase:'rec',id:null,liveHy:null};
-  showScreen();renderCry();startRec();
-  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
-  flow.liveT=setInterval(function(){if(flow&&flow.type==='cry'&&flow.phase==='rec')renderCry(true);},1000);
-};
-A.stopRec=function(){
-  if(!flow||flow.type!=='cry'||flow.phase!=='rec'||flow.stopping)return;
-  flow.stopping=true;clearInterval(flow.liveT);
-  var startT=rec?rec.t:Date.now();
-  finishRec().then(function(){
-    var now=Date.now(),c=context(startT);
-    if(c.sleeping){var w=({id:uid(),k:'wake',t:startT,who:who});S.events.push(w);touched(w);c=context(startT);}
-    var feat=rec?features(rec.frames):null;
-    if(rec)diag('feat',!!feat,feat?'tono medio '+Math.round(feat.meanF0)+' Hz, '+Math.round(feat.bursts10*10)/10+' raffiche/10 s':(rec.frames.length<16?'registrazione troppo corta ('+rec.frames.length+' frame)':'troppo poco suono sopra la soglia'));
-    var recErr=null;if(rec){var dr=diagGet('rec'),dp=diagGet('perm');recErr=rec.err||(dp&&dp.ok===false?dp.d:null)||(dr&&dr.ok===false?dr.d:null);}
-    var info={mime:rec?rec.mime:'',bytes:rec&&rec.blob?rec.blob.size:0,frames:rec?rec.frames.length:0,err:rec?recErr:'nessuna registrazione'};
-    var e={id:uid(),k:'cry',t:startT,dur:(now-startT)/1000,who:who,label:null,ctx:snapshot(c),bins:bins(c),feat:feat,audio:!!(rec&&rec.blob),mime:rec?rec.mime:'',rec:info};
-    S.events.push(e);S.openCry=e.id;touched(e);save();
-    var blob=rec&&rec.blob,mime=rec?rec.mime:'';
-    if(blob)toast('Pianto salvato · audio '+Math.round(blob.size/1024)+' kB'+(feat?'':' · troppo corto per l\'impronta'));
-    else toast('Pianto salvato senza audio'+(info.err?': '+info.err:''));
-    rec=null;flow.phase='after';flow.id=e.id;renderCry();renderHome();
-    if(blob)storeAudio(e,blob,mime);
-    else if(diagGet('rec')&&diagGet('rec').ok!==false)diag('idb',null,'niente audio da salvare');
-  });
-};
-function storeAudio(e,blob,mime){
-  blobToBuf(blob).then(function(buf){
-    return audioPut(e.id,buf,mime).then(function(ok){
-      if(!ok){e.audio=false;save();diag('idb',false,'IndexedDB non ha accettato il file'+(db?'':' (database non aperto)'));renderCry();return;}
-      diag('idb',true,Math.round(buf.byteLength/1024)+' kB, '+(mime||'tipo sconosciuto'));
-      queueUpload(e.id);
-    });
-  }).catch(function(err){e.audio=false;save();diag('idb',false,'lettura del file fallita: '+errStr(err));renderCry();});
-}
-/* upload nel bucket "cries": subito se collegati, altrimenti resta in coda (alan.audio.outbox) finché non torna la rete */
-var AUDIO_OUTBOX='alan.audio.outbox',uploading={};
-function audioOutbox(){try{return JSON.parse(lsGet(AUDIO_OUTBOX)||'[]');}catch(e){return [];}}
-function setAudioOutbox(a){lsSet(AUDIO_OUTBOX,JSON.stringify(a));}
-function queueUpload(id){var ob=audioOutbox();if(ob.indexOf(id)<0){ob.push(id);setAudioOutbox(ob);}flushAudio();}
-function syncReady(){return !!(window.AlanSync&&AlanSync.status().family);}
-function flushAudio(){
-  var ob=audioOutbox();if(!ob.length)return;
-  if(!syncReady()){var st=window.AlanSync?AlanSync.status():null;diag('up',null,!st||!st.available?(st&&st.configured&&!st.lib?'libreria di sync non caricata: riprovo alla prossima apertura':'sync non configurato: l\'audio resta su questo telefono'):(!st.signedIn?'non hai fatto l\'accesso: l\'audio resta su questo telefono':'in attesa del collegamento'));renderCry();return;}
-  ob.forEach(function(id){
-    if(uploading[id])return;
-    var e=byId(id);
-    if(!e){setAudioOutbox(audioOutbox().filter(function(x){return x!==id;}));return;}
-    uploading[id]=true;renderCry();
-    audioGet(id).then(function(a){
-      if(!a){setAudioOutbox(audioOutbox().filter(function(x){return x!==id;}));diag('up',false,'file non trovato sul telefono');return;}
-      var mime=a.mime||e.mime||'application/octet-stream';
-      diag('up',null,'invio in corso…');
-      return AlanSync.uploadAudio(id,a.blob,mime).then(function(r){
-        if(!r||r.error||!r.path){var msg=r&&r.error?String(r.error):'nessuna risposta';diag('up',false,msg+(msg.indexOf('ucket')>=0?' (bucket "cries" mancante: esegui il blocco 5 di supabase/schema.sql)':''));lsSet('alan.lastUpload',msg);return;}
-        e.audioPath=r.path;e.mime=mime;touched(e);save();
-        setAudioOutbox(audioOutbox().filter(function(x){return x!==id;}));
-        diag('up',true,r.path+' caricato'+(a.blob&&a.blob.size?', '+Math.round(a.blob.size/1024)+' kB':''));
-      });
-    }).catch(function(err){diag('up',false,errStr(err));}).then(function(){delete uploading[id];renderCry();renderCries();});
-  });
-}
-function audioStatusLine(e){
-  if(!e)return '';
-  var st;
-  if(e.audio)st='Audio salvato su questo telefono';
-  else if(e.audioPath)st='Audio sull\'altro telefono (si scarica al primo ascolto)';
-  else{var d=diagGet('idb'),r=diagGet('rec');st=(r&&r.ok===false)?'Senza audio: '+r.d:((d&&d.ok===false)?'Audio non salvato: '+d.d:'Senza audio');}
-  if(e.audio){
-    if(e.audioPath)st+=' · condiviso con l\'altro telefono';
-    else if(uploading[e.id])st+=' · invio in corso…';
-    else if(audioOutbox().indexOf(e.id)>=0){var u=diagGet('up');st+=' · '+(u&&u.ok===false?'invio fallito, riprovo: '+u.d:(u&&u.d?u.d:'invio in attesa'));}
-  }
-  return '<p class="hint" id="audioSt">'+esc(st)+'</p>';
-}
-A.cancelCry=function(){
-  clearInterval(flow&&flow.liveT);
-  if(rec){rec.stopped=true;clearInterval(rec.timer);try{if(rec.stream)rec.stream.getTracks().forEach(function(t){t.stop();});if(rec.ctx)rec.ctx.close();}catch(e){}rec=null;}
-  if(flow&&flow.id){var id=flow.id,ce=byId(id);S.events=S.events.filter(function(e){return e.id!==id;});dropAudio(ce||{id:id});if(S.openCry===id)S.openCry=null;if(ce)removed(ce);save();}
-  flow=null;A.home();toast('Pianto cancellato');
-};
-function dropAudio(e){
-  if(!e)return;
-  idbDel('audio',e.id);setAudioOutbox(audioOutbox().filter(function(x){return x!==e.id;}));
-  if(e.audioPath&&window.AlanSync)AlanSync.removeAudio(e.audioPath).catch(function(){});
-}
-A.labelCry=function(id,label){
-  var e=byId(id);if(!e)return;
-  e.label=label;if(S.openCry===id)S.openCry=null;touched(e);save();
-  toast('Segnato: '+LABELS[label]);
-};
-A.solo=function(){if(flow&&flow.id)A.labelCry(flow.id,'solo');A.home();};
-A.soloOpen=function(){if(S.openCry)A.labelCry(S.openCry,'solo');renderHome();};
-/* spiega un pianto con un'azione già nel diario: la causa è quella dell'azione, e resta scritto con quale */
-A.explainWith=function(cid,eid){
-  var cry=byId(cid),ev=byId(eid);if(!cry||!ev)return;
-  var label=labelFor(ev);if(!label)return;
-  cry.label=label;cry.by=ev.id;touched(cry);
-  if(S.openCry===cry.id)S.openCry=null;
-  save();renderHome();renderCries();
-  toast('Pianto spiegato: '+LABELS[label].toLowerCase()+' ('+describe(ev,null)[0].toLowerCase()+' delle '+fmtTime(ev.t)+')');
-  A.cryDetail(cid);
-};
-/* nasconde il banner per un paio d'ore senza spiegare niente: il pianto resta lì e si cataloga con calma */
-A.laterCry=function(){lsSet(BANNER_HIDE,String(Date.now()+2*H));renderHome();};
-A.leaveOpen=function(){A.home();};
-function renderCry(liveOnly){
-  if(!flow||flow.type!=='cry')return;
-  var el=$('#screenInner'),h='';
-  if(flow.phase==='rec'){
-    var st=rec?rec.status:'nomic',elapsed=rec?(Date.now()-rec.t)/1000:0;
-    var live=st==='live';
-    h+='<div class="bar"><button class="back" onclick="A.cancelCry()" aria-label="Annulla">×</button><div class="title">Sta piangendo</div></div>';
-    h+='<div class="rec"><div class="dot '+(live?'live':'off')+'"></div><div class="t">'+fmtSec(live?elapsed:0)+'</div><div class="meter"><i id="meter"></i></div>';
-    if(st==='starting')h+='<div class="st">Sto accendendo il microfono…</div>';
-    else if(st==='live')h+='<div class="st">Registro fino a 30 secondi. Ferma quando vuoi: bastano 5–10 secondi di pianto.</div>';
-    else h+='<div class="st">'+esc(rec?rec.err:'Microfono non disponibile.')+' Il pianto viene segnato lo stesso, solo senza impronta acustica.</div>';
-    h+='</div>';
-    var c=context(rec?rec.t:Date.now()),snap=snapshot(c),b=bins(c);
-    var vec=null,note='';
-    if(live&&rec.frames.length>=80){var f=features(rec.frames);if(f)vec=f.vec;}
-    var hy=hypotheses(snap,b,vec);
-    if(live&&!vec)note='Dopo 4–5 secondi confronto anche il suono con i pianti già registrati.';
-    else if(vec&&!hy.audio)note='Ascolto in corso. Servono almeno 3 pianti etichettati per confrontare il suono: per ora conta solo il contesto.';
-    else if(vec&&hy.audio)note='Suono confrontato con '+hy.audio.n+' pianti etichettati (peso '+Math.round(hy.w*100)+'%).';
-    h+=hypList(hy);
-    if(note)h+='<p class="hint">'+note+'</p>';
-    h+='<button class="btn huge" onclick="A.stopRec()">'+(live?'Ferma e salva':'Salva il pianto')+'</button>';
-  }else{
-    var e=byId(flow.id);if(!e){A.home();return;}
-    h+='<div class="bar"><button class="back" onclick="A.leaveOpen()" aria-label="Chiudi">×</button><div class="title">Pianto delle '+fmtTime(e.t)+'</div></div>';
-    var hy2=hypotheses(e.ctx,e.bins,e.feat?e.feat.vec:null);
-    h+=hypList(hy2);
-    if(e.feat)h+='<p class="hint">Impronta: tono medio '+Math.round(e.feat.meanF0)+' Hz · '+Math.round(e.feat.bursts10*10)/10+' raffiche ogni 10 s · voce nel '+Math.round(e.feat.voiced*100)+'% del tempo'+(hy2.audio?' · pianti simili: '+hy2.audio.nearest.map(function(x){return LABELS[x.label]+' '+fmtTime(x.t);}).join(', '):'')+'.</p>';
-    h+=audioStatusLine(e);
-    h+='<div class="note">Adesso fai quello che ti sembra giusto. Quello che registri da qui spiega questo pianto.</div>';
-    h+='<div class="grid2">';
-    h+='<button style="border-bottom:4px solid var(--c-fame)" onclick="A.flow(\'feed\',\''+e.id+'\')">Pappa</button>';
-    h+='<button style="border-bottom:4px solid var(--c-sonno)" onclick="A.flow(\'sleep\',\''+e.id+'\')">Nanna</button>';
-    h+='<button style="border-bottom:4px solid var(--c-cambio)" onclick="A.flow(\'diaper\',\''+e.id+'\')">Pannolino</button>';
-    h+='<button style="border-bottom:4px solid var(--c-contatto)" onclick="A.flow(\'other\',\''+e.id+'\')">Altro</button>';
-    h+='</div><div class="spacer"></div>';
-    h+='<button class="btn ghost" onclick="A.solo()">Si è calmato da solo</button>';
-    h+='<button class="btn ghost" onclick="A.leaveOpen()">Decido dopo</button>';
-    h+='<button class="btn warn" onclick="A.cancelCry()">Falso allarme, cancella</button>';
-  }
-  if(liveOnly){var box=$('#hyBox');if(box){var c2=context(rec?rec.t:Date.now());var v2=null;if(rec&&rec.status==='live'&&rec.frames.length>=80){var f2=features(rec.frames);if(f2)v2=f2.vec;}box.outerHTML=hypList(hypotheses(snapshot(c2),bins(c2),v2));var tt=$('#recT');if(tt&&rec)tt.textContent=fmtSec((Date.now()-rec.t)/1000);}return;}
-  el.innerHTML=h.replace('<div class="t">','<div class="t" id="recT">');
-}
-function hypList(hy){
-  var h='<div id="hyBox">';
-  hy.list.forEach(function(x){
-    h+='<div class="hyp" style="--hc:'+x.c+'"><div class="h"><span class="name">'+x.label+'</span><span class="pct">'+Math.round(x.p*100)+'%</span></div>';
-    h+='<div class="bar2"><i style="width:'+Math.max(3,Math.round(x.p*100))+'%"></i>'+(x.audP!=null&&hy.w>0?'<em style="left:'+Math.round(x.ctxP*100)+'%" title="solo contesto"></em>':'')+'</div>';
-    h+='<div class="why">'+esc(x.why)+(hy.simN?' · in '+hy.simN+' episodi simili: '+x.simC:'')+(x.audP!=null&&hy.w>0?' · suono '+Math.round(x.audP*100)+'%':'')+'</div></div>';
-  });
-  return h+'</div>';
-}
-
-/* ---------- tap flows ---------- */
+/* ---------- tap flows ----------
+   Due percorsi soli, una schermata ciascuno: Pappa (quando + quanto) e Cacca (quando + quanta). "Altro" resta per
+   ruttino, ciuccio e coccole. Niente passaggi intermedi: dal tocco in Home al salvataggio ci sono due tap. */
 A.flow=function(type,linkId,data){
   flow={type:type,step:0,off:0,data:data||{},link:linkId||null};
   showScreen();renderFlow();
 };
 A.setOff=function(o){if(flow){flow.off=o;flow.at=null;renderFlow();}};
-/* "altra ora": orario di inizio scritto con il selettore (HH:MM); se è nel futuro di oltre 5 minuti vale per ieri.
-   Solo per la Pappa anche "finita alle": la differenza diventa la durata (dur, secondi). */
-A.setAt=function(v){if(!flow)return;flow.at=/^\d{2}:\d{2}$/.test(v||'')?v:null;if(!flow.at)flow.end=null;renderFlow();};
-A.setEnd=function(v){if(!flow)return;flow.end=/^\d{2}:\d{2}$/.test(v||'')?v:null;renderFlow();};
+/* "altra ora": orario scritto con il selettore (HH:MM); se è nel futuro di oltre 5 minuti vale per ieri */
+A.setAt=function(v){if(!flow)return;flow.at=/^\d{2}:\d{2}$/.test(v||'')?v:null;renderFlow();};
 function atToMs(hhmm,now){
   now=now||Date.now();var p=hhmm.split(':'),d=new Date(now);d.setHours(+p[0],+p[1],0,0);
   var t=d.getTime();if(t>now+5*MIN)t-=864e5;return t;
 }
 function flowStart(){return flow.at?atToMs(flow.at):Date.now()-flow.off*MIN;}
-function flowTime(){
-  if(!flow||(!flow.at&&!flow.end))return null;
-  var t=flowStart(),dur=null;
-  if(flow.end){var e=atToMs(flow.end,t+12*H);if(e<t)e+=864e5;dur=Math.round((e-t)/1000);if(dur<=0||dur>6*3600)dur=null;}
-  return {t:t,dur:dur};
-}
 A.pick=function(key,val){if(!flow)return;flow.data[key]=val;flow.step++;renderFlow();}
-var ML_STEP=5;                 /* i ml si contano di 5 in 5, dappertutto */
-function ml5(v){return Math.round(v/ML_STEP)*ML_STEP;}
-A.stepPrep=function(d){if(!flow)return;flow.data.prepCustom=Math.max(ML_STEP,Math.min(400,(flow.data.prepCustom||ml5(typicalPrep()))+d));renderFlow();};
-A.home=function(){
-  if(flow&&flow.type==='cry'&&flow.phase==='rec'){A.cancelCry();return;}
-  flow=null;$('#screen').classList.remove('on');renderHome();renderCries();
-};
+var ML_STEP=5;                 /* i ml si contano di 5 in 5 */
+function ml5(v){return Math.round((v||0)/ML_STEP)*ML_STEP;}
+/* i ml più usati di recente: un tap per la quantità solita, lo stepper per tutto il resto */
+function mlOptions(){
+  var cnt={},vals;
+  sorted().filter(function(e){return e.k==='feed'&&e.ml>0;}).slice(-40).forEach(function(e){var v=ml5(e.ml);cnt[v]=(cnt[v]||0)+1;});
+  vals=Object.keys(cnt).map(Number).sort(function(a,b){return cnt[b]-cnt[a]||b-a;}).slice(0,6);
+  if(vals.length<4)vals=[60,90,120,150];
+  return vals.sort(function(a,b){return b-a;});
+}
+function mlCur(){return flow.data.mlCustom!=null?flow.data.mlCustom:ml5(typicalMl()||90);}
+A.stepMl=function(d){if(!flow)return;flow.data.mlCustom=Math.max(0,Math.min(400,mlCur()+d));renderFlow();};
+A.home=function(){flow=null;$('#screen').classList.remove('on');renderHome();};
 function showScreen(){$('#screen').classList.add('on');$('#screen').scrollTop=0;}
 function whenRow(){
   var opts=[[0,'adesso'],[15,'15 min fa'],[30,'30 min fa'],[60,'1 h fa']],at=flow.at||null;
   var h='<div class="when"><span>Quando</span>'+opts.map(function(o){return '<button class="'+(!at&&flow.off===o[0]?'on':'')+'" onclick="A.setOff('+o[0]+')">'+o[1]+'</button>';}).join('');
-  h+='<label class="datechip'+(at?' on':'')+'">'+(at?'alle '+esc(at):'altra ora')+'<input type="time" value="'+esc(at||fmtTime(Date.now()))+'" onchange="A.setAt(this.value)" aria-label="Orario di inizio"></label></div>';
-  /* la pappa può sempre dire quando è finita, anche se è cominciata "adesso" o "30 min fa": la differenza è la durata */
-  if(flow.type==='feed'){
-    var ft=flowTime();
-    h+='<div class="when"><span>Finita</span><label class="datechip'+(flow.end?' on':'')+'">'+(flow.end?'alle '+esc(flow.end):'quando è finita?')+'<input type="time" value="'+esc(flow.end||fmtTime(flowStart()))+'" onchange="A.setEnd(this.value)" aria-label="Orario di fine"></label>'+(ft&&ft.dur?'<span>'+Math.round(ft.dur/60)+' min</span>':'')+(flow.end?'<button onclick="A.setEnd(\'\')">togli</button>':'')+'</div>';
-  }
+  h+='<label class="datechip'+(at?' on':'')+'">'+(at?'alle '+esc(at):'altra ora')+'<input type="time" value="'+esc(at||fmtTime(Date.now()))+'" onchange="A.setAt(this.value)" aria-label="Orario"></label></div>';
   return h;
 }
-/* "Durata": un tap per avere il tempo della pappa anche senza cronometro. Se la durata arriva dal cronometro o dall'ora
-   di fine, la riga la mostra e basta. */
-var DURS=[5,10,15,20,30,45];
-function durRow(){
-  /* flow.data.dur arriva dal cronometro in secondi; la scelta a mano sta in durMin (minuti) */
-  var ft=flowTime(),fixed=(ft&&ft.dur)?ft.dur:(flow.data.dur||null);
-  if(fixed)return '<div class="when"><span>Durata</span><button class="on" disabled>'+Math.round(fixed/60)+' min</button></div>';
-  var cur=flow.data.durMin||0;
-  return '<div class="when"><span>Durata</span>'+DURS.map(function(m){return '<button class="'+(cur===m?'on':'')+'" onclick="A.setDur('+m+')">'+m+'</button>';}).join('')+'<button onclick="A.setDur(0)">non lo so</button></div>';
-}
-A.setDur=function(m){if(!flow)return;flow.data.durMin=(flow.data.durMin===m?0:m)||0;renderFlow();};
 function backBtn(){return '<button class="back" onclick="A.home()" aria-label="Indietro">‹</button>';}
 function renderFlow(){
-  if(!flow||flow.type==='cry')return;
-  var el=$('#screenInner'),h='',d=flow.data,tp=typicalPrep();
+  if(!flow)return;
+  var el=$('#screenInner'),h='';
   if(flow.type==='feed'){
+    var cv=mlCur();
     h+='<div class="bar">'+backBtn()+'<div class="title">Pappa</div></div>'+whenRow();
-    if(flow.step===0){
-      var opts=[60,90,115,120,125,150,180,210];
-      h+='<h2>Quanto hai preparato?</h2><div class="grid3">'+opts.map(function(m){return '<button class="'+(Math.round(tp)===m?'on':'')+'" onclick="A.pick(\'prep\','+m+')">'+m+'<small>ml</small></button>';}).join('')+'</div>';
-      var cv=d.prepCustom||ml5(tp);
-      h+='<div class="stepper"><button onclick="A.stepPrep(-'+ML_STEP+')">−'+ML_STEP+'</button><div class="val">'+cv+' ml</div><button onclick="A.stepPrep('+ML_STEP+')">+'+ML_STEP+'</button></div><button class="btn ghost" onclick="A.pick(\'prep\','+cv+')">Avanti con '+cv+' ml</button>';
-    }else{
-      /* scala da 5 ml: con il passo da 10 un preparato da 125 non permetteva di segnare 120 */
-      var prep=d.prep,vals=[];for(var v=prep;v>0;v-=ML_STEP)vals.push(v);vals.push(0);
-      h+=durRow();
-      h+='<h2>Quanto ne ha bevuto? <span style="font-size:15px;color:var(--muted);font-weight:400">su '+prep+' ml</span></h2><div class="grid3">'+vals.map(function(v){return '<button onclick="A.finish('+v+')">'+(v===prep?'Tutto<small>'+v+' ml</small>':(v===0?'Niente<small>rifiutato</small>':v+'<small>ml</small>'))+'</button>';}).join('')+'</div>';
-    }
+    h+='<h2>Quanto ha bevuto?</h2><div class="grid3">'+mlOptions().map(function(v){return '<button onclick="A.finish('+v+')">'+v+'<small>ml</small></button>';}).join('')+'</div>';
+    h+='<div class="stepper"><button onclick="A.stepMl(-'+ML_STEP+')">−'+ML_STEP+'</button><div class="val">'+cv+' ml</div><button onclick="A.stepMl('+ML_STEP+')">+'+ML_STEP+'</button></div>';
+    h+='<button class="btn" onclick="A.finish('+cv+')">Salva '+cv+' ml</button>';
+    h+='<div class="spacer"></div><button class="btn ghost" onclick="A.finish(0)">Non ha bevuto niente</button>';
   }else if(flow.type==='diaper'){
-    h+='<div class="bar">'+backBtn()+'<div class="title">Pannolino</div></div>'+whenRow();
-    if(flow.step===0)h+='<h2>Pipì?</h2><div class="grid2">'+['poca','normale','tanta','no'].map(function(o){return '<button onclick="A.pick(\'pipi\',\''+o+'\')">'+LVL[o].charAt(0).toUpperCase()+LVL[o].slice(1)+'</button>';}).join('')+'</div>';
-    else h+='<h2>Cacca?</h2><div class="grid2">'+['poca','normale','tanta','no'].map(function(o){return '<button onclick="A.finish(\''+o+'\')">'+LVL[o].charAt(0).toUpperCase()+LVL[o].slice(1)+'</button>';}).join('')+'</div>';
-  }else if(flow.type==='sleep'){
-    var c=context(Date.now());
-    h+='<div class="bar">'+backBtn()+'<div class="title">Nanna</div></div>'+whenRow();
-    if(c.sleeping)h+='<h2>Dorme da '+fmtDur(c.sleepingMin*MIN)+'</h2><button class="btn huge" onclick="A.finish(\'wake\')">Si è svegliato</button>';
-    else h+='<h2>'+(c.awakeMin!=null?'Sveglio da '+fmtDur(c.awakeMin*MIN):'Nessuna nanna registrata')+'</h2><button class="btn huge" onclick="A.finish(\'sleep\')">Si è addormentato</button>';
-    if(flow.link)h+='<div class="spacer"></div><p class="hint">Se il pianto era sonno ma non si è ancora addormentato, torna indietro e scegli "Decido dopo": lo colleghi quando dorme.</p>';
+    h+='<div class="bar">'+backBtn()+'<div class="title">Cacca</div></div>'+whenRow();
+    h+='<h2>Quanta?</h2><div class="grid3">'+LVL_ORDER.map(function(o){return '<button onclick="A.finish(\''+o+'\')">'+o.charAt(0).toUpperCase()+o.slice(1)+'</button>';}).join('')+'</div>';
   }else if(flow.type==='other'){
     h+='<div class="bar">'+backBtn()+'<div class="title">Altro</div></div>'+whenRow();
     h+='<h2>Cosa hai fatto?</h2><div class="grid2">'+OTHER.map(function(o){return '<button style="border-bottom:4px solid var(--c-'+o[2]+')" onclick="A.finish(\''+o[0]+'\')">'+o[1]+'</button>';}).join('')+'</div>';
@@ -783,25 +229,18 @@ function renderFlow(){
 A.finish=function(val){
   if(!flow)return;
   if(flow.type==='edit'){editSave(val);return;}
-  var t=Date.now()-flow.off*MIN,d=flow.data,e=null,msg='',ft=flowTime();
-  if(ft)t=ft.t;
-  if(flow.type==='feed'){var ml=Number(val);e={k:'feed',prep:d.prep,ml:ml};msg=ml>0?'Pappa: '+ml+' ml su '+d.prep:'Biberon rifiutato';}
-  else if(flow.type==='diaper'){e={k:'diaper',pipi:d.pipi,cacca:val};msg='Cambio: pipì '+LVL[d.pipi]+', cacca '+LVL[val];}
-  else if(flow.type==='sleep'){e={k:val};msg=val==='sleep'?'Buona nanna':'Si è svegliato';}
+  var t=flowStart(),e=null,msg='';
+  if(flow.type==='feed'){var ml=Number(val)||0;e={k:'feed',ml:ml};msg=ml>0?'Pappa: '+ml+' ml':'Biberon rifiutato';}
+  else if(flow.type==='diaper'){e={k:'diaper',cacca:val};msg='Cacca '+LVL[val];}
   else if(flow.type==='other'){var o=OTHER.filter(function(x){return x[0]===val;})[0];e={k:'other',what:val};msg=o?o[1]+' registrato':'Registrato';}
   else if(HEALTH_TYPES[flow.type]){var hr=healthFinish(val);if(!hr){toast('Niente da salvare');return;}e=hr.e;t=hr.t;msg=hr.msg;}
   else if(EXT.flows[flow.type]){var xr=EXT.flows[flow.type].finish(flow,val,API);if(xr===false){return;}if(!xr||!xr.e){toast('Niente da salvare');return;}e=xr.e;if(xr.t)t=xr.t;msg=xr.msg||'Salvato';}
   if(!e)return;
-  if(e.k==='feed'){
-    var fdur=(ft&&ft.dur)?ft.dur:(d.dur||(d.durMin?d.durMin*60:0));
-    if(fdur>0){e.dur=fdur;e.src='biberon';}
-  }
   e.id=uid();e.t=t;e.who=who;S.events.push(e);touched(e);
-  var linked=tryLabelOpenCry(e,flow.link);
   save();
   flow=null;$('#screen').classList.remove('on');renderHome();
   var vs=$('#v-salute');if(vs&&vs.classList.contains('on'))renderHealth();
-  toast(linked?msg+' · il pianto delle '+fmtTime(linked.t)+' era '+LABELS[linked.label]:msg);
+  toast(msg);
 };
 
 /* ---------- home ---------- */
@@ -824,41 +263,16 @@ function renderHeader(){
 function renderStatus(){
   var now=Date.now(),c=context(now),h='';
   h+=statusTile('Ultima pappa',c.lastFeedT?fmtDur(now-c.lastFeedT)+' fa':'—',c.lastFeedT?(c.lastMl?c.lastMl+' ml, '+fmtTime(c.lastFeedT):fmtTime(c.lastFeedT)):'nessuna','var(--c-fame)',c.sinceFeedH!=null&&c.sinceFeedH>c.n.feedH,'A.flow(\'feed\')');
-  if(c.sleeping)h+=statusTile('Dorme da',fmtDur(c.sleepingMin*MIN),'dalle '+fmtTime(c.sleepT),'var(--c-sonno)',false,'A.flow(\'sleep\')');
-  else h+=statusTile('Sveglio da',c.awakeMin!=null?fmtDur(c.awakeMin*MIN):'—',c.awakeMin!=null?'finestra ~'+c.n.awakeMin+' min':'nessuna nanna','var(--c-sonno)',c.awakeMin!=null&&c.awakeMin>c.n.awakeMin,'A.flow(\'sleep\')');
   var ld=c.lastDiaper;
-  h+=statusTile('Ultimo cambio',c.sinceDiaperH!=null?fmtDur(c.sinceDiaperH*H)+' fa':'—',ld?('pipì '+LVL[ld.pipi]+', cacca '+LVL[ld.cacca]):'nessuno','var(--c-cambio)',c.sinceDiaperH!=null&&c.sinceDiaperH>3,'A.flow(\'diaper\')');
+  h+=statusTile('Ultima cacca',c.sinceDiaperH!=null?fmtDur(c.sinceDiaperH*H)+' fa':'—',ld?lvlKey(ld.cacca):'nessuna','var(--c-cambio)',c.sinceDiaperH!=null&&c.sinceDiaperH>24,'A.flow(\'diaper\')');
   $('#status').innerHTML=h;
-  var oc=S.openCry?byId(S.openCry):null,bn=$('#openCryBanner');
-  var hideUntil=+(lsGet(BANNER_HIDE)||0);
-  /* un pianto già spiegato, o troppo breve per essere chiesto, esce dall'attesa e il banner sparisce */
-  if(oc&&!askExplain(oc)){S.openCry=null;oc=null;}
-  if(oc&&Date.now()>=hideUntil){
-    var hy=null;try{hy=hypotheses(oc.ctx||snapshot(context(oc.t)),oc.bins||bins(context(oc.t)),oc.feat?oc.feat.vec:null);}catch(e9){}
-    var top=hy&&hy.list.length?hy.list.slice(0,2):[];
-    var bh='<div class="banner"><div class="bn-txt"><b>Pianto delle '+fmtTime(oc.t)+'</b>'+(oc.auto?' <span class="tag-auto">sentito dall\'app</span>':'');
-    bh+=top.length?'<span>probabilmente '+esc(top[0].label.toLowerCase())+' ('+Math.round(top[0].p*100)+'%) · prova:</span>':'<span>senza spiegazione: la prossima cosa che registri lo etichetta.</span>';
-    bh+='</div><div class="bn-acts">';
-    top.forEach(function(x){var t=TRY[x.id];if(t)bh+='<button onclick="A.flow(\''+t[0]+'\',\''+oc.id+'\')">'+esc(t[1])+'</button>';});
-    bh+='<button class="ghost" onclick="A.soloOpen()">Da solo</button><button class="ghost" onclick="A.laterCry()">Dopo</button></div>';
-    var pend=pendingCries().length;
-    if(pend>1)bh+='<button class="bn-more" onclick="A.goCries()">'+pend+' pianti da spiegare · falli con calma</button>';
-    bh+='</div>';
-    bn.innerHTML=bh;
-  }
-  else{bn.innerHTML='';if(oc&&oc.label)S.openCry=null;}
-  if(oc&&oc.label)lsSet(BANNER_HIDE,'0');
-  $('#qSleep').innerHTML=c.sleeping?'Sveglio<small>si è svegliato</small>':'Nanna<small>si è addormentato</small>';
-  var tp=typicalPrep();$('#qFeed').textContent='di solito '+Math.round(tp)+' ml';
+  var tm=typicalMl();$('#qFeed').textContent=tm?'di solito '+ml5(tm)+' ml':'quanto ha bevuto';
 }
 function describe(e,prev){
   if(EXT.describe[e.k])return EXT.describe[e.k](e,API);
-  if(e.k==='feed')return ['Pappa','<span class="detail">'+(e.ml>0?e.ml+' ml'+(e.prep&&e.ml<e.prep?' su '+e.prep:''):'rifiutata'+(e.prep?' ('+e.prep+' ml)':''))+'</span>'];
-  if(e.k==='diaper')return ['Cambio','<span class="detail">pipì '+LVL[e.pipi]+', cacca '+LVL[e.cacca]+'</span>'];
-  if(e.k==='sleep')return ['Nanna',''];
-  if(e.k==='wake'){var d='';if(prev&&prev.k==='sleep')d='<span class="detail">ha dormito '+fmtDur(e.t-prev.t)+'</span>';return ['Sveglio',d];}
+  if(e.k==='feed')return ['Pappa','<span class="detail">'+(e.ml>0?e.ml+' ml':'rifiutata')+'</span>'];
+  if(e.k==='diaper')return ['Cacca','<span class="detail">'+lvlKey(e.cacca)+'</span>'];
   if(e.k==='other'){var o=OTHER.filter(function(x){return x[0]===e.what;})[0];return [o?o[1]:'Altro',''];}
-  if(e.k==='cry'){var d2=e.label?LABELS[e.label]:'senza spiegazione';if(e.dur)d2+=' · '+fmtSec(e.dur);return ['Pianto','<span class="detail">'+d2+'</span>'];}
   if(e.k==='measure'){var mp=[];if(e.w!=null)mp.push(METRICS.w.fmt(e.w));if(e.l!=null)mp.push(METRICS.l.fmt(e.l));return ['Misure','<span class="detail">'+esc(mp.join(' · '))+'</span>'];}
   if(e.k==='temp')return ['Temperatura','<span class="detail">'+fmtTemp(e.c)+'</span>'];
   if(e.k==='med')return [esc(medName(e)),''];
@@ -869,8 +283,6 @@ function describe(e,prev){
 function kindDot(e){
   if(e.k==='feed')return 'var(--c-fame)';
   if(e.k==='diaper')return 'var(--c-cambio)';
-  if(e.k==='sleep'||e.k==='wake')return 'var(--c-sonno)';
-  if(e.k==='cry')return 'var(--danger)';
   if(e.k==='other'){var o=OTHER.filter(function(x){return x[0]===e.what;})[0];return o&&o[2]==='aria'?'var(--c-aria)':'var(--c-contatto)';}
   return 'var(--muted)';
 }
@@ -883,15 +295,18 @@ function diaryRow(e,prev,noWho){
     '<div class="what"><i class="dot" style="--dc:'+kindDot(e)+'"></i>'+d[0]+' '+d[1]+x+'</div>'+
     '<span class="meta">'+(!noWho&&e.who?'<span class="who">'+esc(e.who)+'</span>':'')+'<span class="chev">›</span></span></button>';
 }
+/* Il diario mostra i tipi ancora in uso. Le voci delle versioni precedenti (pianti, nanne) restano nell'archivio e
+   si sincronizzano come prima, ma non si mostrano più. */
+var SHOWN={feed:1,diaper:1,other:1,measure:1,temp:1,med:1};
+function shown(e){return !!(SHOWN[e.k]||EXT.describe[e.k])&&!EXT.hidden[e.k];}
 function renderDiary(){
-  var ev=sorted().filter(function(e){return e.k!=='appt'&&!EXT.hidden[e.k];}),vis=ev.slice(-12);
-  if(!vis.length){$('#diary').innerHTML='<div class="list"><div class="empty">Ancora vuoto. Tocca Pappa, Pannolino o Nanna: due tap e la voce è registrata.</div></div>';return;}
+  var ev=sorted().filter(shown),vis=ev.slice(-12);
+  if(!vis.length){$('#diary').innerHTML='<div class="list"><div class="empty">Ancora vuoto. Tocca Pappa o Cacca: due tap e la voce è registrata.</div></div>';return;}
   var h='',day=null;
   for(var i=vis.length-1;i>=0;i--){
-    var e=vis[i],prev=null;for(var j=ev.indexOf(e)-1;j>=0;j--){if(ev[j].k==='sleep'||ev[j].k==='wake'){prev=ev[j];break;}}
-    var k=dayKey(e.t);
+    var e=vis[i],k=dayKey(e.t);
     if(k!==day){if(day!==null)h+='</div>';h+='<h4 class="dy-head">'+esc(dayHead(e.t))+'</h4><div class="list">';day=k;}
-    h+=diaryRow(e,prev);
+    h+=diaryRow(e,null);
   }
   $('#diary').innerHTML=h+'</div>';
 }
@@ -900,10 +315,8 @@ function renderDiary(){
    lettera) qui cambiano solo ora e nota: il resto lo gestisce l'estensione che le ha create. */
 function editFields(e){
   var lv=[['poca','Poca'],['normale','Normale'],['tanta','Tanta'],['no','No']];
-  if(e.k==='feed')return [{key:'prep',label:'Preparato',type:'step',steps:[50,ML_STEP],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
-                          {key:'ml',label:'Bevuto',type:'step',steps:[50,ML_STEP],min:0,max:400,fmt:function(v){return (v||0)+' ml';}},
-                          {key:'dur',label:'Durata',type:'step',steps:[300,60],min:60,max:7200,start:600,fmt:function(v){return Math.round(v/60)+' min';},nullable:true}];
-  if(e.k==='diaper')return [{key:'pipi',label:'Pipì',type:'chips',opts:lv,norm:lvlKey},{key:'cacca',label:'Cacca',type:'chips',opts:lv,norm:lvlKey}];
+  if(e.k==='feed')return [{key:'ml',label:'Bevuto',type:'step',steps:[50,ML_STEP],min:0,max:400,fmt:function(v){return (v||0)+' ml';}}];
+  if(e.k==='diaper')return [{key:'cacca',label:'Quanta',type:'chips',opts:lv,norm:lvlKey}];
   if(e.k==='other')return [{key:'what',label:'Cosa',type:'chips',opts:OTHER.map(function(o){return [o[0],o[1]];})}];
   if(e.k==='temp')return [{key:'c',label:'Temperatura',type:'step',steps:[1,0.1],min:33,max:43,fmt:fmtTemp}];
   if(e.k==='med')return [{key:'what',label:'Medicina',type:'chips',opts:MEDS}];
@@ -913,7 +326,6 @@ function editFields(e){
 }
 A.edit=function(id){
   var e=byId(id);if(!e){toast('Questa voce non c\'è più');return;}
-  if(e.k==='cry'){A.cryDetail(id);return;}
   var d=new Date(e.t),v={};
   editFields(e).forEach(function(f){var x=e[f.key];v[f.key]=f.norm?f.norm(x):(x==null?null:x);});
   flow={type:'edit',step:0,off:0,data:{id:id,day:isoDay(e.t),tm:pad(d.getHours())+':'+pad(d.getMinutes()),v:v,note:(typeof e.note==='string'?e.note:'')},link:null};
@@ -990,156 +402,24 @@ function editSave(val){
   });
   var note=noteClean(d.note),had=typeof e.note==='string'?e.note:'';
   if(note!==had){if(note){e.note=note;e.noteBy=who;}else{delete e.note;delete e.noteBy;}ch=true;}
-  if(e.k==='feed'&&e.ml>e.prep)e.prep=e.ml;
   if(ch){touched(e);save();}
   flow=null;$('#screen').classList.remove('on');
-  renderHome();renderCries();refreshViews();
+  renderHome();refreshViews();
   toast(ch?'Voce aggiornata':'Nessuna modifica');
 }
 A.del=function(id){
   if(!window.confirm('Eliminare questa voce?'))return;
   var e=byId(id);S.events=S.events.filter(function(x){return x.id!==id;});
   if(e)removed(e);
-  if(e&&e.k==='cry')dropAudio(e);
-  if(S.openCry===id)S.openCry=null;save();renderHome();renderCries();
+  save();renderHome();refreshViews();
 };
-function renderHome(){renderHeader();renderStatus();renderNext();renderNight();renderDiary();renderExtHome();}
+function renderHome(){renderHeader();renderStatus();renderNext();renderDiary();renderExtHome();}
 
-/* ---------- cries tab ---------- */
-function renderCries(){
-  var el=$('#cries');if(!el)return;
-  var acc=accuracy(),h='';
-  h+='<div class="card"><h3>Quanto ci azzecca</h3>';
-  if(acc.n<4)h+='<p class="hint">Servono almeno 4 pianti con una spiegazione per misurarlo. Ogni pianto spiegato da un\'azione successiva conta.</p>';
-  else{
-    var f=function(x){return x==null?'—':Math.round(x*100)+'%';};
-    h+='<div class="kv"><div>Solo contesto</div><div>'+f(acc.ctx)+' <span class="m">su '+acc.ctxN+'</span></div>';
-    h+='<div>Solo suono</div><div>'+f(acc.aud)+' <span class="m">su '+acc.audN+'</span></div>';
-    h+='<div>Insieme</div><div>'+f(acc.both)+' <span class="m">su '+acc.bothN+'</span></div>';
-    h+='<div>Tirando a indovinare</div><div>'+f(acc.base)+' <span class="m">causa più frequente</span></div></div>';
-    var aw=audioWeight();
-    h+='<p class="hint">Misurato a posteriori: per ogni pianto, l\'app prova a indovinarlo usando solo gli altri. Peso attuale del suono nelle ipotesi: '+Math.round(aw.w*100)+'%'+(acc.audN>=8&&aw.calib===0?' (il suono per ora non batte il caso, quindi è escluso)':'')+'.</p>';
-  }
-  h+='</div>';
-  var pend=pendingCries().length,em=explainMin();
-  h+='<div class="card"><h3>Da spiegare</h3>';
-  h+='<p class="st-read">'+(pend?pend+(pend===1?' pianto in attesa':' pianti in attesa')+', con calma':'Nessun pianto in attesa')+'</p>';
-  h+='<p class="hint">Dei pianti che sente l\'app, chiedi solo quelli più lunghi di:</p>';
-  h+='<div class="seg wide">'+EXPLAIN_OPTS.map(function(o){return '<button class="'+(o[0]===em?'on':'')+'" onclick="A.setExplainMin('+o[0]+')">'+o[1]+'</button>';}).join('')+'</div>';
-  h+='<p class="hint">I pianti che registri tu con "Piange" si chiedono sempre. Gli altri restano nel diario e nei numeri: puoi spiegarli quando vuoi, o mai.</p></div>';
-  var cries=sorted().filter(function(e){return e.k==='cry';}).reverse();
-  if(!cries.length){h+='<div class="list"><div class="empty">Nessun pianto registrato. Alla prossima crisi tocca "Piange".</div></div>';}
-  else{
-    h+='<div class="list">';
-    cries.slice(0,60).forEach(function(e){
-      var tag=e.label?'<span class="tag" style="--hc:'+(cause(e.label)?cause(e.label).c:'var(--muted)')+'">'+LABELS[e.label]+'</span>':'<span class="tag" style="--hc:var(--muted)">'+(askExplain(e)?'da spiegare':'breve')+'</span>';
-      var det=(e.dur?fmtSec(e.dur):'')+(e.feat?' · '+Math.round(e.feat.meanF0)+' Hz · '+Math.round(e.feat.bursts10*10)/10+' raffiche/10 s':((e.audio||e.audioPath)?' · troppo corto per l\'impronta':' · senza audio'));
-      h+='<div class="row" onclick="A.cryDetail(\''+e.id+'\')"><div class="time">'+(dayKey(e.t)===dayKey(Date.now())?'':'<small>'+dayLabel(e.t)+'</small><br>')+fmtTime(e.t)+'</div><div class="what">'+tag+' <span class="detail">'+det+'</span></div>'+(e.audio||e.audioPath?'<button class="play'+(e.audio?'':' cloud')+'" aria-label="'+(e.audio?'Ascolta':'Scarica e ascolta')+'" onclick="event.stopPropagation();A.play(\''+e.id+'\',this)">▶</button>':'<span></span>')+'</div>';
-    });
-    h+='</div>';
-  }
-  el.innerHTML=h;
-}
-/* Riascolto. iOS lascia partire l'audio solo da un tap: l'elemento viene "sbloccato" subito con un wav muto,
-   poi riceve la sorgente vera quando arriva da IndexedDB o dal cloud. */
-var player=null,SILENT='data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YRAAAAAAAAAAAAAAAAAAAAAAAAAA';
-function getPlayer(){if(!player){player=new Audio();player.setAttribute('playsinline','');player.preload='auto';}return player;}
-A.play=function(id,btn){
-  var e=byId(id),p=getPlayer(),objUrl=null;
-  try{p.pause();}catch(_){}
-  try{p.src=SILENT;var pr=p.play();if(pr&&pr.catch)pr.catch(function(){});}catch(_){}
-  busy(btn,true,e&&!e.audio?'…':null);
-  audioGet(id).then(function(a){
-    if(a)return a;
-    if(!e||!e.audioPath)return null;
-    if(!syncReady()){diag('dl',false,'non collegato al cloud');toast(window.AlanSync&&AlanSync.status().signedIn?'Non collegato: riprova con la rete':'Serve l\'accesso in Altro → Account');return null;}
-    diag('dl',null,'scarico '+e.audioPath+'…');
-    return AlanSync.downloadAudio(e.audioPath).then(function(r){
-      if(r.error||!r.data){diag('dl',false,errStr(r.error||{message:'risposta vuota'}));toast('Audio non scaricato');return null;}
-      return blobToBuf(r.data).then(function(buf){
-        var mime=e.mime||r.data.type||'audio/mp4';
-        return audioPut(id,buf,mime).then(function(ok){
-          e.audio=!!ok;save();diag('dl',true,Math.round(buf.byteLength/1024)+' kB'+(ok?', salvato sul telefono':', non salvato sul telefono'));
-          if(!flow)renderCries();
-          return {buf:buf,mime:mime,blob:new Blob([buf],{type:mime})};
-        });
-      });
-    });
-  }).then(function(a){
-    busy(btn,false);
-    if(!a){if(e&&!e.audioPath)toast('Audio non presente su questo telefono');return;}
-    try{p.pause();}catch(_){}
-    objUrl=URL.createObjectURL(a.blob);p.src=objUrl;
-    p.onended=function(){if(objUrl)URL.revokeObjectURL(objUrl);objUrl=null;};
-    p.onerror=function(){diag('play',false,'il browser non riproduce '+(a.mime||'questo formato'));toast('Il browser non riproduce questo formato');};
-    var pr=p.play();
-    if(pr&&pr.then)pr.then(function(){diag('play',true,'in riproduzione, '+(a.mime||'formato sconosciuto'));},function(err){diag('play',false,errStr(err));toast(err&&err.name==='NotAllowedError'?'Tocca di nuovo ▶ per ascoltare':'Il browser non riproduce questo formato');});
-  }).catch(function(err){busy(btn,false);diag('dl',false,errStr(err));toast('Audio non disponibile: '+errStr(err));});
-};
-A.cryDetail=function(id){
-  var e=byId(id);if(!e)return;
-  flow={type:'crydetail',id:id};showScreen();
-  var h='<div class="bar">'+backBtn()+'<div class="title">Pianto delle '+fmtTime(e.t)+' · '+dayLabel(e.t)+'</div></div>';
-  if(e.audio||e.audioPath)h+='<button class="btn ghost" onclick="A.play(\''+id+'\',this)">▶ '+(e.audio?'Ascolta':'Scarica e ascolta')+'</button><div class="spacer"></div>';
-  if(e.rec)h+='<p class="hint">Registrazione: '+(e.rec.bytes?Math.round(e.rec.bytes/1024)+' kB, '+esc(e.rec.mime||'?'):'nessun audio')+' · '+e.rec.frames+' campioni'+(e.rec.err?' · '+esc(e.rec.err):'')+(e.audioPath?' · in cloud':(e.audio?' · solo su questo telefono':''))+'</p>';
-  h+=hypList(hypotheses(e.ctx||snapshot(context(e.t)),e.bins||bins(context(e.t)),e.feat?e.feat.vec:null));
-  var cand=explainers(e);
-  if(cand.length){
-    h+='<h2 style="font-size:18px">Cosa avete fatto dopo</h2><p class="hint">Tocca l\'azione che lo ha calmato: la spiegazione la prende da lì. Si può fare quando vuoi, anche a distanza di ore.</p><div class="list">';
-    cand.forEach(function(x){
-      var d=describe(x,null),lb=labelFor(x),mine=(e.by===x.id);
-      h+='<button class="row tap'+(mine?' on':'')+'" onclick="A.explainWith(\''+id+'\',\''+x.id+'\')"><div class="time">'+fmtTime(x.t)+'</div>'+
-        '<div class="what"><i class="dot" style="--dc:'+kindDot(x)+'"></i>'+d[0]+' '+d[1]+'</div>'+
-        '<span class="meta"><span class="who">'+esc(LABELS[lb])+'</span><span class="chev">'+(mine?'✓':'›')+'</span></span></button>';
-    });
-    h+='</div>';
-  }
-  h+='<h2 style="font-size:18px">Spiegazione</h2><div class="chips">'+['fame','sonno','cambio','aria','contatto','solo'].map(function(l){return '<button class="'+(e.label===l?'on':'')+'" onclick="A.labelCry(\''+id+'\',\''+l+'\');A.cryDetail(\''+id+'\')">'+LABELS[l]+'</button>';}).join('')+'</div>';
-  if(e.feat)h+='<p class="hint">Tono medio '+Math.round(e.feat.meanF0)+' Hz (variazione ±'+Math.round(e.feat.sdF0)+') · intensità '+Math.round(e.feat.meanRms*1000)/10+' · '+Math.round(e.feat.bursts10*10)/10+' raffiche/10 s, lunghe in media '+Math.round(e.feat.meanBurst)+' ms con pause di '+Math.round(e.feat.meanPause)+' ms · voce nel '+Math.round(e.feat.voiced*100)+'% del tempo.</p>';
-  h+='<div class="spacer"></div><button class="btn warn" onclick="A.del(\''+id+'\');A.home()">Elimina questo pianto</button>';
-  $('#screenInner').innerHTML=h;
-};
+/* ---------- pattern tab ----------
+   Solo le schede delle estensioni (La settimana, Pappa, Cacca): niente altro da ricordare. */
+function renderStats(){$('#stats').innerHTML=extHtml('stats');}
 
-/* ---------- pattern tab ---------- */
-/* Pattern: prima le schede delle estensioni (La settimana, Pappa, Nanna, Pannolini, Ritmo, cronometro), poi "Perché piangeva"
-   con le tabelle di dettaglio (fasce orarie, contesto → causa, suono → causa) a scomparsa. */
-var statsDetailsOpen=false;
-A.statsDetails=function(){statsDetailsOpen=!statsDetailsOpen;renderStats();};
-function renderStats(){
-  var now=Date.now(),h='';
-  var n=norms(ageDays());
-  h+=extHtml('stats');
-  var g2=outcomeCounts(null);
-  h+='<div class="card"><h3>Perché piangeva</h3>';
-  if(!g2.n)h+='<p class="hint">Nessun pianto spiegato ancora. Registra il pianto, poi fai la cosa giusta: la registrazione dell\'azione lo spiega.</p>';
-  else{
-    var mx=0;CAUSES.forEach(function(c){mx=Math.max(mx,g2.c[c.id]);});
-    CAUSES.forEach(function(c){h+='<div class="obar" style="--hc:'+c.c+'"><div class="l">'+c.label+'</div><div class="b"><i style="width:'+(mx?Math.round(g2.c[c.id]/mx*100):0)+'%"></i></div><div class="n">'+g2.c[c.id]+'</div></div>';});
-    var solo=S.events.filter(function(e){return e.k==='cry'&&e.label==='solo';}).length;if(solo)h+='<p class="hint">Più '+solo+' passati da soli.</p>';
-    h+='<button class="st-more" aria-expanded="'+(statsDetailsOpen?'true':'false')+'" onclick="A.statsDetails()">'+(statsDetailsOpen?'Nascondi i dettagli':'Dettagli: fasce orarie, contesto e suono')+'</button><div class="st-details"'+(statsDetailsOpen?'':' hidden')+'>';
-    var bands=['notte 0–6','mattina 6–12','pomeriggio 12–17','sera 17–24'];
-    h+='<h3 style="margin-top:14px">Per fascia oraria</h3><table><tr><th>Fascia</th><th class="n">Ep.</th><th>Più frequente</th></tr>';
-    for(var bi=0;bi<4;bi++){var oc=outcomeCounts(function(e){return e.bins&&e.bins.h===bi;});if(!oc.n)continue;var best=argmax(oc.c);h+='<tr><td>'+bands[bi]+'</td><td class="n">'+oc.n+'</td><td>'+cause(best).label+' ('+oc.c[best]+'/'+oc.n+')</td></tr>';}
-    h+='</table>';
-    var fh=n.feedH,aw2=n.awakeMin,fH=function(x){return fmtDur(x*H);};
-    var fl=['pappa meno di '+fH(0.5*fh)+' fa','pappa da '+fH(0.5*fh)+' a '+fH(0.85*fh)+' fa','pappa da '+fH(0.85*fh)+' a '+fH(1.15*fh)+' fa','pappa oltre '+fH(1.15*fh)+' fa'];
-    var al=['sveglio meno di '+Math.round(0.5*aw2)+' min','sveglio '+Math.round(0.5*aw2)+'–'+aw2+' min','sveglio oltre '+aw2+' min'];
-    var rows='';
-    for(var f=-1;f<4;f++)for(var a=-1;a<3;a++){(function(f,a){var oc2=outcomeCounts(function(e){return e.bins&&e.bins.f===f&&e.bins.a===a;});if(oc2.n<2)return;var b2=argmax(oc2.c);rows+='<tr><td>'+(f<0?'pappa non registrata':fl[f])+' · '+(a<0?'nanna non registrata':al[a])+'</td><td class="n">'+oc2.n+'</td><td>'+cause(b2).label+' ('+oc2.c[b2]+'/'+oc2.n+')</td></tr>';})(f,a);}
-    if(rows)h+='<h3 style="margin-top:14px">Contesto → causa</h3><table><tr><th>Contesto</th><th class="n">Ep.</th><th>Esito</th></tr>'+rows+'</table>';
-    var withF=labeledCries().filter(function(e){return e.feat;});
-    if(withF.length>=4){
-      h+='<h3 style="margin-top:14px">Suono → causa</h3><p class="hint">Medie dell\'impronta acustica per spiegazione. Se le righe si somigliano, il suono non distingue le cause.</p><table><tr><th>Causa</th><th class="n">Ep.</th><th class="n">Tono Hz</th><th class="n">Raffiche/10 s</th><th class="n">Voce %</th></tr>';
-      CAUSES.forEach(function(c){var s=withF.filter(function(e){return e.label===c.id;});if(!s.length)return;h+='<tr><td>'+c.label+'</td><td class="n">'+s.length+'</td><td class="n">'+Math.round(mean(s.map(function(e){return e.feat.meanF0;})))+'</td><td class="n">'+(Math.round(mean(s.map(function(e){return e.feat.bursts10;}))*10)/10)+'</td><td class="n">'+Math.round(mean(s.map(function(e){return e.feat.voiced;}))*100)+'</td></tr>';});
-      h+='</table>';
-    }
-    h+='</div>';
-  }
-  h+='</div>';
-  $('#stats').innerHTML=h;
-}
-
-/* ---------- settings, mic, storage ---------- */
+/* ---------- settings e archivio ---------- */
 function fillFeedSeg(){var seg=$('#feedSeg');if(!seg)return;var cur=S.settings.feedH>0?String(S.settings.feedH):'auto',bs=seg.querySelectorAll('button');for(var i=0;i<bs.length;i++)bs[i].classList.toggle('on',bs[i].getAttribute('data-h')===cur);}
 A.setFeedH=function(v){var n=Number(v);S.settings.feedH=n>0?n:null;S.settings._updated=new Date().toISOString();save();pushSettings();fillFeedSeg();renderHome();toast(n>0?'Pappa prevista ogni '+fmtDur(n*H):'Intervallo pappe automatico per età');};
 function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value=S.settings.birth||'';fillFeedSeg();applyTheme(themePref());renderDiag();renderAccount();fillExtAltro();}
@@ -1147,8 +427,8 @@ function fillSettings(){$('#sName').value=S.settings.name||'';$('#sBirth').value
 function syncInit(){
   if(!window.AlanSync)return Promise.resolve();
   AlanSync.setPresence({who:who,at:Date.now()});
-  return AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:function(){syncWho();renderHeader();renderAccount();},onReady:flushAudio})
-    .then(function(){syncWho();renderHeader();renderAccount();flushAudio();});
+  return AlanSync.init({onEvents:mergeRemote,onSettings:mergeRemoteSettings,onStatus:function(){syncWho();renderHeader();renderAccount();}})
+    .then(function(){syncWho();renderHeader();renderAccount();});
 }
 /* La libreria di sync arriva da un CDN: se quel singolo file non si carica (rete ballerina al momento giusto)
    l'accesso non si può nemmeno tentare. Questo la richiede di nuovo, senza dover chiudere e riaprire l'app. */
@@ -1201,7 +481,7 @@ A.login=function(btn){
     else{lsSet('alan.email',em);toast('Accesso fatto');setTimeout(renderAccount,800);}
   },function(err){busy(btn,false);toast('Accesso non riuscito: '+errStr(err));});
 };
-A.syncNow=function(btn){busy(btn,true,'Sincronizzo…');AlanSync.flush().then(function(){return AlanSync.pullAll();}).then(function(ok){busy(btn,false);toast(ok?'Sincronizzato':'Sync non riuscito, riprovo più tardi');renderAccount();flushAudio();},function(){busy(btn,false);toast('Sync non riuscito');});};
+A.syncNow=function(btn){busy(btn,true,'Sincronizzo…');AlanSync.flush().then(function(){return AlanSync.pullAll();}).then(function(ok){busy(btn,false);toast(ok?'Sincronizzato':'Sync non riuscito, riprovo più tardi');renderAccount();},function(){busy(btn,false);toast('Sync non riuscito');});};
 A.signOut=function(btn){busy(btn,true,'Esco…');AlanSync.signOut().then(function(){toast('Uscito');renderAccount();},function(){busy(btn,false);toast('Uscita non riuscita');});};
 function renderDiag(){
   var el=$('#diag');if(!el)return;
@@ -1209,20 +489,11 @@ function renderDiag(){
   env.push(['Versione app',swVersion?swVersion:('serviceWorker' in navigator?'in attesa del service worker':'senza service worker')]);
   env.push(['Modalità',isStandalone()?'app installata (icona in Home)':'nel browser']);
   env.push(['Sistema',uaShort()]);
-  var mr=window.MediaRecorder,ok=function(m){try{return mr&&mr.isTypeSupported&&mr.isTypeSupported(m);}catch(e){return false;}};
-  env.push(['Formati registrabili',mr?[['audio/mp4','mp4'],['audio/webm;codecs=opus','webm']].filter(function(x){return ok(x[0]);}).map(function(x){return x[1];}).join(', ')||'nessuno dichiarato (uso il predefinito)':'MediaRecorder assente']);
-  env.push(['Archivio',db?'IndexedDB attivo':'IndexedDB non disponibile (solo memoria del browser, senza audio)']);
-  var cries=S.events.filter(function(e){return e.k==='cry';}),withA=cries.filter(function(e){return e.audio;}).length,inCloud=cries.filter(function(e){return e.audioPath;}).length;
-  env.push(['Pianti',cries.length+' · con audio qui: '+withA+' · nel cloud: '+inCloud+(audioOutbox().length?' · da inviare: '+audioOutbox().length:'')]);
+  env.push(['Archivio',db?'IndexedDB attivo':'IndexedDB non disponibile (solo memoria del browser)']);
+  env.push(['Voci nel diario',S.events.length+' in tutto · '+S.events.filter(shown).length+' mostrate']);
   if(window.AlanSync){var st=AlanSync.status();env.push(['Sync',!st.available?(st.configured&&!st.lib?'libreria non caricata (rete?)':'non configurato'):(!st.signedIn?'non collegato (fai l\'accesso)':(!st.family?'account senza famiglia':'famiglia ok · tempo reale '+(st.channel==='SUBSCRIBED'?'attivo':st.channel.toLowerCase())+(st.pending?' · '+st.pending+' voci da inviare':'')))]);}
   env.push(['Spazio usato','<span id="diagSpace">…</span>']);
-  h+='<div class="kv small">'+env.map(function(x){return '<div>'+x[0]+'</div><div>'+x[1]+'</div>';}).join('')+'</div>';
-  h+='<h4>Ultima registrazione'+(DIAG.at?' · '+fmtTime(DIAG.at)+(dayKey(DIAG.at)!==dayKey(Date.now())?' '+dayLabel(DIAG.at):''):'')+'</h4>';
-  DIAG_STEPS.forEach(function(st){
-    var it=diagGet(st[0]),cls=!it||it.ok==null?'na':(it.ok?'ok':'ko'),sym=!it?'–':(it.ok==null?'…':(it.ok?'✓':'✗'));
-    h+='<div class="it '+cls+'"><div class="sym">'+sym+'</div><div><div>'+st[1]+'</div>'+(it?'<div class="d">'+esc(it.d)+'</div>':'<div class="d">non eseguito</div>')+'</div></div>';
-  });
-  h+='</div>';
+  h+='<div class="kv small">'+env.map(function(x){return '<div>'+x[0]+'</div><div>'+x[1]+'</div>';}).join('')+'</div></div>';
   el.innerHTML=h;
   if(navigator.storage&&navigator.storage.estimate)navigator.storage.estimate().then(function(q){var sp=$('#diagSpace');if(sp&&q&&q.usage!=null)sp.textContent=Math.round(q.usage/1048576*10)/10+' MB'+(q.quota?' su '+Math.round(q.quota/1048576)+' MB':'');},function(){});
   else{var sp=$('#diagSpace');if(sp)sp.textContent='non misurabile';}
@@ -1237,7 +508,6 @@ function uaShort(){
 function diagText(){
   var lines=['Diagnostica Alan · '+new Date().toLocaleString('it-IT')];
   var el=$('#diag');if(el)lines.push(String(el.textContent||'').replace(/\s+/g,' ').trim());
-  DIAG_STEPS.forEach(function(st){var it=diagGet(st[0]);lines.push((!it?'– ':(it.ok==null?'… ':(it.ok?'✓ ':'✗ ')))+st[1]+': '+(it?it.d:'non eseguito'));});
   if(window.AlanSync){var s2=AlanSync.status();if(s2.lastError)lines.push('Ultimo errore sync ('+s2.lastError.where+'): '+s2.lastError.msg);}
   lines.push(navigator.userAgent||'');
   return lines.join('\n');
@@ -1247,16 +517,6 @@ A.copyDiag=function(btn){
   var fallback=function(){var ta=$('#impTxt');if(ta){ta.value=txt;toast('Testo messo nel riquadro "Incolla qui un codice"');}else toast('Copia non riuscita');};
   if(navigator.share){navigator.share({text:txt}).then(function(){toast('Diagnostica condivisa');},function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast('Diagnostica copiata');},fallback);else fallback();});return;}
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast('Diagnostica copiata');},fallback);else fallback();
-};
-A.testMic=function(btn){
-  var hasMic=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
-  diag('mic',hasMic,hasMic?'getUserMedia disponibile':'navigator.mediaDevices.getUserMedia assente');
-  if(!hasMic){toast('Microfono non esposto da questo browser');return;}
-  busy(btn,true,'Chiedo il permesso…');
-  navigator.mediaDevices.getUserMedia({audio:true}).then(function(s){
-    var tr=s.getAudioTracks()[0];diag('perm',true,'ok (prova)'+(tr&&tr.label?', '+tr.label:''));
-    s.getTracks().forEach(function(t){t.stop();});busy(btn,false);toast('Microfono ok');
-  }).catch(function(e){busy(btn,false);diag('perm',false,errStr(e)+' (prova)');toast(e&&e.name==='NotAllowedError'?'Microfono bloccato in questa finestra':'Microfono non disponibile: '+(e&&e.name));});
 };
 /* tema: auto (segue il sistema), chiaro, scuro. Salvato in localStorage e applicato prima del primo disegno (script inline in index.html). */
 var THEMEKEY='alan.theme';
@@ -1271,7 +531,7 @@ A.saveSettings=function(){S.settings.name=$('#sName').value.trim()||'Alan';S.set
 A.resetAll=function(){
   if(!window.confirm('Cancellare diario, pianti e audio su questo telefono? Non si può annullare.'))return;
   S.events.filter(function(e){return e.k==='cry';}).forEach(function(e){idbDel('audio',e.id);});
-  S.events=[];S.openCry=null;save();try{localStorage.removeItem(LSV1);localStorage.removeItem('alan.sync.since');localStorage.removeItem(AUDIO_OUTBOX);}catch(e){}renderHome();toast('Dati cancellati da questo telefono');
+  S.events=[];save();try{localStorage.removeItem(LSV1);localStorage.removeItem('alan.sync.since');}catch(e){}renderHome();toast('Dati cancellati da questo telefono');
 };
 
 /* ---------- export / import ---------- */
@@ -1303,8 +563,7 @@ A.importData=function(){
       else if(e.k==='cry'&&e.label&&!cur.label){cur.label=e.label;upd++;}
     });
     if(o.settings&&o.settings.birth&&!S.settings.birth)S.settings.birth=o.settings.birth;
-    if(S.openCry){var oc=byId(S.openCry);if(!oc||oc.label)S.openCry=null;}
-    save();renderHome();renderCries();$('#impTxt').value='';
+    save();renderHome();refreshViews();$('#impTxt').value='';
     toast('Uniti: '+added+' nuove voci'+(upd?', '+upd+' spiegazioni aggiornate':''));
   };
   var bytes;try{bytes=b64dec(m[2]);}catch(e){toast('Codice danneggiato');return;}
@@ -1593,76 +852,6 @@ function renderNext(){
   el.innerHTML=rows?'<div class="card nx"><h3>Prossime tappe</h3>'+rows+'</div>':'';
 }
 A.goHealth=function(){showView('salute');};
-A.goCries=function(){showView('pianti');};
-function nightWindow(now){var d=new Date(now);var end=new Date(d.getFullYear(),d.getMonth(),d.getDate(),7,0,0).getTime();if(now<end)end=now;var start=end-9*H;return {start:start,end:end};}
-/* Riepilogo di una finestra notturna qualsiasi (start–end): pappe, ml, cambi, pianti, sonno e tratto più lungo, risvegli,
-   note e alzate per genitore. Lo usano il riquadro in Home (la notte appena passata) e il diario notturno in Pattern. */
-function nightStats(start,end,now){
-  now=now||Date.now();
-  var w={start:start,end:end},ev=sorted(),inW=ev.filter(function(e){return e.t>=w.start&&e.t<=w.end&&e.k!=='appt'&&e.k!=='measure';});
-  var feeds=inW.filter(function(e){return e.k==='feed';}),ml=feeds.reduce(function(s,e){return s+(e.ml||0);},0);
-  var diapers=inW.filter(function(e){return e.k==='diaper';}).length,cries=inW.filter(function(e){return e.k==='cry';});
-  var sleep=0,cur=null;ev.forEach(function(e){if(e.k==='sleep')cur=e.t;else if(e.k==='wake'&&cur!=null){var a=Math.max(cur,w.start),b=Math.min(e.t,w.end);if(b>a)sleep+=b-a;cur=null;}});
-  if(cur!=null){var a2=Math.max(cur,w.start),b2=Math.min(now,w.end);if(b2>a2)sleep+=b2-a2;}
-  var whos={};inW.forEach(function(e){if(e.who&&e.who!=='Io'&&(e.k==='feed'||e.k==='diaper'||e.k==='other'||e.k==='med'))whos[e.who]=(whos[e.who]||0)+1;});
-  /* tratto di sonno più lungo dentro la finestra, risvegli segnati e note scritte stanotte: servono al resoconto */
-  var best=null,c2=null;
-  ev.forEach(function(e){
-    if(e.k==='sleep'){c2=e.t;return;}
-    if(e.k!=='wake'||c2==null)return;
-    var a=Math.max(c2,w.start),b=Math.min(e.t,w.end);if(b>a&&(!best||b-a>best.dur))best={dur:b-a,start:a};c2=null;
-  });
-  if(c2!=null){var a3=Math.max(c2,w.start),b3=Math.min(now,w.end);if(b3>a3&&(!best||b3-a3>best.dur))best={dur:b3-a3,start:a3};}
-  var poo=inW.filter(function(e){return e.k==='diaper'&&lvlKey(e.cacca)!=='no';}).length;
-  var notes=inW.filter(function(e){return typeof e.note==='string'&&e.note.trim();});
-  return {start:w.start,end:w.end,feeds:feeds.length,ml:ml,diapers:diapers,poo:poo,cries:cries.length,cryLabels:cries.map(function(c){return c.label?LABELS[c.label]:'?';}),
-    sleep:sleep,longest:best,wakes:inW.filter(function(e){return e.k==='wake';}).length,notes:notes,whos:whos,list:inW};
-}
-/* la notte appena passata, solo di mattina (5–13) e solo se c'è qualcosa dentro */
-function nightSummary(now){
-  now=now||Date.now();var hr=new Date(now).getHours();if(hr<5||hr>=13)return null;
-  var w=nightWindow(now),n=nightStats(w.start,w.end,now);
-  return n.list.length?n:null;
-}
-var nightOpen=false;
-A.toggleNight=function(){nightOpen=!nightOpen;renderNight();};
-/* Resoconto della notte in frasi, per chi si è svegliato senza averla vissuta: solo fatti, nessun giudizio. */
-function nightStory(n){
-  var name=esc(S.settings.name||'Alan'),p=[];
-  if(n.sleep>0){
-    var s='Stanotte '+name+' ha dormito '+fmtDur(n.sleep)+' in tutto';
-    if(n.longest&&n.longest.dur<n.sleep)s+=', il tratto più lungo '+fmtDur(n.longest.dur)+' dalle '+fmtTime(n.longest.start);
-    else if(n.longest)s+=', dalle '+fmtTime(n.longest.start);
-    p.push(s+'.');
-    if(n.wakes>1)p.push('Si è svegliato '+n.wakes+' volte.');
-  }else p.push('Stanotte nessuna nanna segnata con Nanna e Sveglio.');
-  if(n.feeds)p.push('Ha mangiato '+(n.feeds===1?'una volta':n.feeds+' volte')+(n.ml?', '+n.ml+' ml in tutto':'')+'.');
-  if(n.diapers)p.push(n.diapers===1?('Un cambio'+(n.poo?', con cacca':'')+'.'):(n.diapers+' cambi'+(n.poo?', '+n.poo+' con cacca':'')+'.'));
-  if(n.cries){
-    var lab={},bits=[];n.cryLabels.forEach(function(l){lab[l]=(lab[l]||0)+1;});
-    for(var k in lab)if(k!=='?')bits.push(lab[k]+' '+k.toLowerCase());
-    p.push((n.cries===1?'Un pianto':n.cries+' pianti')+(bits.length?' ('+esc(bits.join(', '))+')':'')+'.');
-  }
-  var ws=Object.keys(n.whos);
-  if(ws.length)p.push('Alzate: '+ws.map(function(k){return esc(k)+' '+n.whos[k];}).join(', ')+'.');
-  return p.join(' ');
-}
-function renderNight(){
-  var el=$('#night');if(!el)return;
-  var n=nightSummary();if(!n){el.innerHTML='';return;}
-  var bits=[];bits.push(n.feeds+(n.feeds===1?' pappa':' pappe')+(n.ml?' ('+n.ml+' ml)':''));bits.push(n.diapers+(n.diapers===1?' cambio':' cambi'));if(n.cries)bits.push(n.cries+(n.cries===1?' pianto':' pianti'));bits.push('dormito '+fmtDur(n.sleep));
-  var h='<div class="night'+(nightOpen?' open':'')+'"><button class="nh" onclick="A.toggleNight()" aria-expanded="'+(nightOpen?'true':'false')+'"><div><div class="lbl">Com\'è andata stanotte <span class="hint">'+fmtTime(n.start)+'–'+fmtTime(n.end)+'</span></div><div class="sum">'+esc(bits.join(' · '))+'</div><div class="hint">'+(nightOpen?'tocca per chiudere':'tocca per il resoconto')+'</div></div><span class="chev">'+(nightOpen?'▴':'▾')+'</span></button>';
-  if(nightOpen){
-    h+='<div class="ng-body"><p class="ng-story">'+nightStory(n)+'</p>';
-    h+='<div class="ng-nums">'+[['Dormito',fmtDur(n.sleep)],['Pappe',n.feeds+(n.ml?' <small>'+n.ml+' ml</small>':'')],['Cambi',n.diapers+(n.poo?' <small>'+n.poo+' con cacca</small>':'')],['Pianti',String(n.cries)]].map(function(x){return '<div><div class="l">'+x[0]+'</div><div class="v">'+x[1]+'</div></div>';}).join('')+'</div>';
-    if(n.notes.length)h+='<p class="ng-notes">'+n.notes.map(function(e){return '<span>'+fmtTime(e.t)+' '+esc(describe(e,null)[0])+': «'+esc(e.note.trim())+'»</span>';}).join('')+'</p>';
-    h+='</div><div class="list">';
-    n.list.slice().reverse().forEach(function(e){h+=diaryRow(e,null,true);});
-    h+='</div>';
-  }
-  el.innerHTML=h+'</div>';
-}
-
 /* ---------- estensioni: ogni funzione aggiuntiva vive in js/<nome>.js e si registra su window.AlanExt ----------
    Contratto: le estensioni NON toccano app.js. Registrano percorsi a tap (flow), blocchi in Home (home), tab intere (tab),
    riquadri in Pattern/Salute/Altro (slot), descrizioni nel diario (describe), voci da nascondere nel diario (hide),
@@ -1679,17 +868,22 @@ function renderExtHome(){
     try{el.innerHTML=b.fn(API)||'';}catch(e){el.innerHTML='';}}
 }
 var API={
-  MIN:MIN,H:H,LABELS:LABELS,CAUSES:CAUSES,OTHER:OTHER,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
-  state:function(){return S;},events:function(){return S.events;},settings:function(){return S.settings;},who:function(){return who;},flow:function(){return flow;},
-  touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,snapshot:snapshot,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
-  fedFeed:fedFeed,explainers:explainers,pendingCries:pendingCries,askExplain:askExplain,explainMin:explainMin,typicalPrep:typicalPrep,typicalMl:typicalMl,labeledCries:labeledCries,hypotheses:hypotheses,analyseFrame:analyseFrame,micGraph:micGraph,micGraphStop:micGraphStop,features:features,bins:bins,nightSummary:nightSummary,nightStats:nightStats,nightStory:nightStory,nightWindow:nightWindow,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
-  fmtTime:fmtTime,fmtDur:fmtDur,fmtSec:fmtSec,fmtDate:fmtDate,fmtTemp:fmtTemp,dayKey:dayKey,dayLabel:dayLabel,isoDay:isoDay,noon:noon,inDays:inDays,pad:pad,esc:esc,mean:mean,median:median,pct:pct,niceTicks:niceTicks,
-  toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,nextRow:nextRow,queueUpload:queueUpload,TRY:TRY,renderNext:renderNext,noteClean:noteClean,NOTE_MAX:NOTE_MAX,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
-  q:function(s){return $(s);},lsGet:lsGet,lsSet:lsSet,
+  MIN:MIN,H:H,OTHER:OTHER,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
+  events:function(){return S.events;},settings:function(){return S.settings;},state:function(){return S;},who:function(){return who;},flow:function(){return flow;},
+  touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
+  fedFeed:fedFeed,typicalMl:typicalMl,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
+  esc:esc,pad:pad,fmtDur:fmtDur,fmtSec:fmtSec,fmtTime:fmtTime,fmtDate:fmtDate,fmtTemp:fmtTemp,dayKey:dayKey,dayLabel:dayLabel,isoDay:isoDay,noon:noon,inDays:inDays,mean:mean,median:median,pct:pct,sd:sd,niceTicks:niceTicks,
+  toast:toast,busy:busy,showScreen:showScreen,backBtn:backBtn,whenRow:whenRow,dayChips:dayChips,nextRow:nextRow,renderNext:renderNext,noteClean:noteClean,NOTE_MAX:NOTE_MAX,home:function(){A.home();},renderHome:renderHome,renderStatus:renderStatus,refreshViews:refreshViews,showView:showView,curView:function(){return curView;},describe:describe,
+  q:function(sel){return $(sel);},lsGet:lsGet,lsSet:lsSet,
+  idbGet:idbGet,idbPut:idbPut,idbDel:idbDel,
+  blobToBuf:blobToBuf,
   fileGet:function(k){return idbGet('files',k);},filePut:function(k,v){return idbPut('files',k,v);},fileDel:function(k){return idbDel('files',k);},
-  blobToBuf:blobToBuf,audioGet:audioGet,audioPut:audioPut,
-  sync:function(){return window.AlanSync||null;},syncReady:syncReady,cloudUpload:function(id,blob,mime){return window.AlanSync?AlanSync.uploadAudio(id,blob,mime):Promise.resolve({path:null,error:'non collegato'});},cloudDownload:function(path){return window.AlanSync?AlanSync.downloadAudio(path):Promise.resolve({data:null,error:{message:'non collegato'}});},cloudRemove:function(path){return window.AlanSync?AlanSync.removeAudio(path):Promise.resolve({});},
-  diag:diag,isStandalone:isStandalone,openCry:function(){A.openCry();}
+  /* foto dei Momenti nel bucket condiviso: le stesse funzioni di prima, senza l'audio */
+  sync:function(){return window.AlanSync||null;},syncReady:syncReady,
+  cloudUpload:function(id,blob,mime){return window.AlanSync?AlanSync.uploadAudio(id,blob,mime):Promise.resolve({path:null,error:'non collegato'});},
+  cloudDownload:function(path){return window.AlanSync?AlanSync.downloadAudio(path):Promise.resolve({data:null,error:{message:'non collegato'}});},
+  cloudRemove:function(path){return window.AlanSync?AlanSync.removeAudio(path):Promise.resolve({});},
+  isStandalone:isStandalone
 };
 window.AlanExt={
   flow:function(type,def){EXT.flows[type]=def;},
@@ -1754,7 +948,7 @@ A.applyUpdate=function(btn){
 function showView(v){
   var tabs=document.querySelectorAll('nav.tabs button');for(var i=0;i<tabs.length;i++)tabs[i].classList.toggle('on',tabs[i].getAttribute('data-v')===v);
   ['oggi','pianti','pattern','salute','altro'].concat(Object.keys(EXT.tabs)).forEach(function(x){var el=$('#v-'+x);if(el)el.classList.toggle('on',x===v);});
-  if(v==='pianti')renderCries();if(v==='pattern')renderStats();if(v==='salute')renderHealth();if(v==='altro')fillSettings();
+  if(v==='pattern')renderStats();if(v==='salute')renderHealth();if(v==='altro')fillSettings();
   if(EXT.tabs[v])try{EXT.tabs[v](API);}catch(e){}
   curView=v;
   window.scrollTo(0,0);
@@ -1778,10 +972,8 @@ function adoptName(name){
 load().then(function(){
   document.querySelectorAll('nav.tabs button').forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-v'));});});
   applyTheme(themePref());extReady=true;renderHome();initUpdates();
-  try{if(/[?&]cry=1/.test(location.search)){history.replaceState(null,'',location.pathname);A.openCry();}}catch(e){}
   syncInit();
-  window.addEventListener('online',function(){setTimeout(flushAudio,1500);});
   setInterval(function(){if(!flow)renderStatus();},30000);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden){if(!flow)renderHome();setTimeout(flushAudio,1500);}});
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&!flow)renderHome();});
 });
 })();
