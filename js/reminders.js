@@ -1,5 +1,5 @@
 /* Estensione "reminders": promemoria interni, senza notifiche push.
-   In Home (blocco 'mid', sopra a "Piange") al massimo due righe, in quest'ordine:
+   In Home (blocco 'mid') al massimo due righe, in quest'ordine:
    1. Bandiera rossa febbre: temperatura ≥ 38 °C nelle ultime 6 ore sotto i 90 giorni (testo identico a quello in Altro, nessun altro copy, non si nasconde).
    2. Visita oggi o domani (prima non fatta), con ora e luogo.
    3. Pappa oltre l'atteso di più di 30 min: informazione neutra ("Ultima pappa 4 h 10 fa, di solito ogni 3 h").

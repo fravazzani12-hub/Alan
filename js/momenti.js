@@ -81,28 +81,19 @@ function firsts(){
   done.sort(function(a,b){return a.e.t-b.e.t;});
   return {done:done,todo:todo};
 }
-/* ultimi 7 giorni: fatti, non giudizi. Notti = finestre 22–7 come il riepilogo in Home. */
+/* ultimi 7 giorni: fatti, non giudizi. Le alzate si contano nelle finestre 22–7. */
 function week(now){
   now=now||Date.now();var from=now-7*DAY,ev=API.sorted();
   var inW=ev.filter(function(e){return e.t>=from&&e.t<=now;});
   var feeds=inW.filter(function(e){return e.k==='feed'&&API.fedFeed(e);}).length;
-  var cries=inW.filter(function(e){return e.k==='cry';}),explained=cries.filter(function(e){return !!e.label;}).length;
+  var poo=inW.filter(function(e){return e.k==='diaper'&&API.lvlKey(e.cacca)!=='no';}).length;
   var mom=inW.filter(function(e){return e.k==='moment';}).length,let_=inW.filter(function(e){return e.k==='letter';}).length;
   var d=new Date(now),today7=new Date(d.getFullYear(),d.getMonth(),d.getDate(),7,0,0).getTime();
   var nights=[],k;
-  for(k=0;k<7;k++){var end7=today7-k*DAY,start=end7-9*H,end=Math.min(end7,now);if(start<end)nights.push({start:start,end:end,sleep:0});}
-  var cur=null;
-  ev.forEach(function(e){
-    if(e.k==='sleep'){cur=e.t;return;}
-    if(e.k!=='wake'||cur==null)return;
-    nights.forEach(function(n){var a=Math.max(cur,n.start),b=Math.min(e.t,n.end);if(b>a)n.sleep+=b-a;});cur=null;
-  });
-  if(cur!=null)nights.forEach(function(n){var a=Math.max(cur,n.start),b=Math.min(now,n.end);if(b>a)n.sleep+=b-a;});
-  var slept=nights.filter(function(n){return n.sleep>0;}),avg=null;
-  if(slept.length)avg=slept.reduce(function(s,n){return s+n.sleep;},0)/slept.length;
+  for(k=0;k<7;k++){var end7=today7-k*DAY,start=end7-9*H,end=Math.min(end7,now);if(start<end)nights.push({start:start,end:end});}
   var ups={},total=0;
   nights.forEach(function(n){ev.forEach(function(e){if(e.t<n.start||e.t>n.end)return;if(!(e.k==='feed'||e.k==='diaper'||e.k==='other'||e.k==='med'))return;if(!e.who||e.who==='Io')return;ups[e.who]=(ups[e.who]||0)+1;total++;});});
-  return {feeds:feeds,cries:cries.length,explained:explained,moments:mom,letters:let_,sleepAvg:avg,nights:slept.length,ups:ups,upsTotal:total};
+  return {feeds:feeds,poo:poo,moments:mom,letters:let_,ups:ups,upsTotal:total};
 }
 function teamText(w){
   var names=Object.keys(w.ups).sort(function(a,b){return w.ups[b]-w.ups[a]||(a<b?-1:1);});
@@ -345,8 +336,7 @@ function albumHtml(){
 function weekHtml(){
   var w=week(),h='<div class="card mo-card mo-week"><h3>Questa settimana in numeri</h3><p class="hint">Gli ultimi sette giorni, così come li avete scritti.</p><div class="mo-nums">';
   h+='<div><b>'+w.feeds+'</b><span>'+(w.feeds===1?'pappa':'pappe')+'</span></div>';
-  h+='<div><b>'+(w.sleepAvg!=null?API.fmtDur(w.sleepAvg):'—')+'</b><span>di sonno a notte'+(w.nights?'<br><small>media su '+w.nights+(w.nights===1?' notte':' notti')+'</small>':'')+'</span></div>';
-  h+='<div><b>'+(w.cries?w.explained+' su '+w.cries:'0')+'</b><span>'+(w.cries?'pianti spiegati':'pianti')+'</span></div>';
+  h+='<div><b>'+w.poo+'</b><span>'+(w.poo===1?'cacca':'cacche')+'</span></div>';
   h+='<div><b>'+w.moments+'</b><span>'+(w.moments===1?'momento':'momenti')+(w.letters?'<br><small>'+w.letters+(w.letters===1?' lettera':' lettere')+'</small>':'')+'</span></div>';
   h+='</div><p class="mo-team">'+teamText(w)+'</p></div>';
   return h;

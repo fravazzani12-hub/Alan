@@ -19,14 +19,10 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   // pappe 16/9: 110, 100, 130, 100
   ev({k:'feed',t:d(16,7),prep:120,ml:110});ev({k:'feed',t:d(16,10,30),prep:120,ml:100});ev({k:'feed',t:d(16,14,30),prep:150,ml:130});ev({k:'feed',t:d(16,20),prep:120,ml:100});
   // sonno: notte 15 (00:30–05:00 = 4 h 30), pisolino 13–14; notte 16 (22:30 del 15 → 06:30 = 8 h), pisolini 9–10 e 15–16:30
-  ev({k:'sleep',t:d(15,0,30)});ev({k:'wake',t:d(15,5)});ev({k:'sleep',t:d(15,13)});ev({k:'wake',t:d(15,14)});
-  ev({k:'sleep',t:d(15,22,30)});ev({k:'wake',t:d(16,6,30)});ev({k:'sleep',t:d(16,9)});ev({k:'wake',t:d(16,10)});ev({k:'sleep',t:d(16,15)});ev({k:'wake',t:d(16,16,30)});
   // cambi: 6 in due giorni, 5 con pipì, 3 con cacca
-  ev({k:'diaper',t:d(15,7),pipi:'tanta',cacca:'no'});ev({k:'diaper',t:d(15,12),pipi:'poca',cacca:'poca'});ev({k:'diaper',t:d(15,19),pipi:'no',cacca:'tanta'});
-  ev({k:'diaper',t:d(16,6),pipi:'tanta',cacca:'no'});ev({k:'diaper',t:d(16,13),pipi:'tanta',cacca:'tanta'});ev({k:'diaper',t:d(16,21),pipi:'poca',cacca:'no'});
+  ev({k:'diaper',t:d(15,7),cacca:'no'});ev({k:'diaper',t:d(15,12),cacca:'poca'});ev({k:'diaper',t:d(15,19),cacca:'tanta'});
+  ev({k:'diaper',t:d(16,6),cacca:'no'});ev({k:'diaper',t:d(16,13),cacca:'tanta'});ev({k:'diaper',t:d(16,21),cacca:'no'});
   // pianti: 5, 4 spiegati (fame 2, sonno 1, da solo 1), uno senza; durate 120/60/90/30
-  ev({k:'cry',t:d(15,7,50),label:'fame',dur:120,audio:false});ev({k:'cry',t:d(15,12,50),label:'sonno',dur:60,audio:false});ev({k:'cry',t:d(15,17),label:null,dur:90,audio:false});
-  ev({k:'cry',t:d(16,6,50),label:'fame',dur:30,audio:false});ev({k:'cry',t:d(16,18),label:'solo',audio:false});
   // temperature: una ieri, una oggi (entra nell'elenco), una del 1/8 (fuori dai 30 giorni)
   ev({k:'temp',t:d(16,20),c:37.2});ev({k:'temp',t:d(17,8),c:36.8});ev({k:'temp',t:new Date(2026,7,1,8).getTime(),c:37.9});
   // medicine: vitamina D 15, 16 e oggi; paracetamolo una volta
@@ -55,19 +51,11 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   assert.strictEqual(f.n,8);assert.strictEqual(f.biberon,8);assert.strictEqual(f.seno,undefined);assert.strictEqual(f.refused,2);
   assert.strictEqual(f.perDay,4);assert.strictEqual(f.ml,850);assert.strictEqual(f.mlPerDay,425);near(f.mlPerFeed,106.25,0.01,'ml per biberon');
   near(f.gap,4.3333*H,MIN,'intervallo medio (3+3+7+3,5+4+5,5)/6 h, la notte di 10 h esclusa');
-  // sonno: notti 4 h 30 e 8 h → 6 h 15; 3 pisolini (1,5 al giorno) di 70 min; nelle 24 ore 7 h e 9 h → 8 h
-  const s=r.sleep;
-  assert.strictEqual(s.nights,2);assert.strictEqual(s.nightMean,6.25*H);
-  assert.strictEqual(s.naps,3);assert.strictEqual(s.napsPerDay,1.5);assert.strictEqual(s.napMean,70*MIN);
-  assert.strictEqual(s.daysRec,2);assert.strictEqual(s.dayMean,8*H);
-  // cambi
+  // cacca: 3 nel periodo (le voci "no" non contano), 1,5 al giorno
   const dp=r.diapers;
-  assert.strictEqual(dp.n,6);assert.strictEqual(dp.perDay,3);assert.strictEqual(dp.wet,5);assert.strictEqual(dp.wetPerDay,2.5);assert.strictEqual(dp.poo,3);assert.strictEqual(dp.pooPerDay,1.5);
-  // pianti
-  const c=r.cries;
-  assert.strictEqual(c.n,5);assert.strictEqual(c.perDay,2.5);assert.strictEqual(c.labeled,4);assert.strictEqual(c.unlabeled,1);assert.strictEqual(c.durMean,75);
-  assert.deepStrictEqual(c.causes.map(x=>[x.id,x.n,x.pct]),[['fame',2,50],['sonno',1,25],['solo',1,25]]);
-  assert.strictEqual(c.causes[2].label,'passato da solo');
+  assert.strictEqual(dp.n,6,'sei cambi registrati');assert.strictEqual(dp.poo,3);assert.strictEqual(dp.pooPerDay,1.5);
+  assert.ok(!('wet' in dp),'niente più pipì nel riepilogo');
+  assert.strictEqual(r.sleep,undefined);assert.strictEqual(r.cries,undefined);
   // temperature: oggi compresa, la vecchia no, più recente per prima
   assert.deepStrictEqual(r.temps.map(x=>x.c),[36.8,37.2]);assert.strictEqual(r.tempMax,37.2);
   // medicine
@@ -85,7 +73,7 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
 
   // ================= finestre diverse =================
   const r7=R.compute(7,now);assert.strictEqual(r7.from,d(10,0));assert.strictEqual(r7.covered,2);assert.strictEqual(r7.feeds.n,8);
-  const r1=R.compute(1,now);assert.strictEqual(r1.covered,1);assert.strictEqual(r1.feeds.n,4,'solo il 16');assert.strictEqual(r1.feeds.ml,440);assert.strictEqual(r1.sleep.nights,1);assert.strictEqual(r1.sleep.nightMean,8*H);
+  const r1=R.compute(1,now);assert.strictEqual(r1.covered,1);assert.strictEqual(r1.feeds.n,4,'solo il 16');assert.strictEqual(r1.feeds.ml,440);
   assert.strictEqual(r1.appts.done.length,0,'la visita del 10/9 è fuori da una finestra di un giorno');assert.strictEqual(r1.measures.length,5,'le misure sono sempre le ultime 5');
   assert.strictEqual(R.compute('boh',now).days,30,'periodo non valido → 30');
 
@@ -94,22 +82,20 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   assert.ok(/^ALAN — RIEPILOGO PER IL PEDIATRA\n/.test(t),t.split('\n')[0]);
   assert.ok(/Nato il 20\/08\/2026 · 4 settimane \(28 giorni\)/.test(t));
   assert.ok(/Riepilogo del 17\/09\/2026 10:30 · ultimi 30 giorni \(dal 18\/8 al 16\/9\), 2 giorni con il diario/.test(t),t);
-  ['MISURE','PAPPE','SONNO','CAMBI','PIANTI','TEMPERATURE','MEDICINE','VISITE E VACCINI'].forEach(sec=>assert.ok(t.indexOf('\n'+sec+'\n')>=0,'sezione '+sec));
+  ['MISURE','PAPPE','CACCA','TEMPERATURE','MEDICINE','VISITE E VACCINI'].forEach(sec=>assert.ok(t.indexOf('\n'+sec+'\n')>=0,'sezione '+sec));
+  ['SONNO','PIANTI','CAMBI'].forEach(sec=>assert.ok(t.indexOf('\n'+sec+'\n')<0,'sezione '+sec+' dismessa'));
   assert.ok(/mer 16\/9 · 3 sett · 4,30 kg \(\d+°\) · 54,5 cm \(\d+°\)/.test(t),t);
   assert.ok(/gio 3\/9 · 2 sett · 3,90 kg \(\d+°\) · 52,5 cm/.test(t));
   assert.ok(/Ultimo peso: \+400 g in 13 giorni/.test(t));
   assert.ok(/Pappe al giorno: 4 \(in tutto 8\)/.test(t));assert.ok(/Latte al biberon al giorno: 425 ml/.test(t));assert.ok(/Per biberon: 106 ml, su 8 biberon/.test(t));
   assert.ok(!/seno/.test(t));assert.ok(/Intervallo medio: 4 h 20/.test(t));assert.ok(/Biberon rifiutati: 2/.test(t));
-  assert.ok(/Notte \(22–7\), in media: 6 h 15 su 2 notti/.test(t));assert.ok(/Pisolini al giorno: 1,5, di 1 h 10 l'uno/.test(t));assert.ok(/Sonno nelle 24 ore, in media: 8 h su 2 giorni/.test(t));
-  assert.ok(/Cambi al giorno: 3 \(in tutto 6\)/.test(t));assert.ok(/Con pipì, al giorno: 2,5/.test(t));assert.ok(/Con cacca, al giorno: 1,5/.test(t));
-  assert.ok(/Pipì poca \/ normale \/ tanta: 2 \/ 0 \/ 3/.test(t),'quantità pipì: '+t);assert.ok(/Cacca poca \/ normale \/ tanta: 1 \/ 0 \/ 2/.test(t),'quantità cacca: '+t);
-  assert.ok(/Pianti al giorno: 2,5 \(in tutto 5\)/.test(t));assert.ok(/Durata media registrata: 01:15/.test(t));assert.ok(/Senza spiegazione: 1/.test(t));
-  assert.ok(/Cosa voleva, sui 4 pianti spiegati:\nFame: 2 \(50%\)\nSonno: 1 \(25%\)\nPassato da solo: 1 \(25%\)/.test(t),t);
+  assert.ok(/Cacca al giorno: 1,5 \(in tutto 3\)/.test(t),'cacca: '+t);
+  assert.ok(/Poca \/ normale \/ tanta: 1 \/ 0 \/ 2/.test(t),'quantità cacca: '+t);
   assert.ok(/gio 17\/9 08:00: 36,8 °C\nmer 16\/9 20:00: 37,2 °C\nLa più alta: 37,2 °C\./.test(t),t);
   assert.ok(/Vitamina D: 3 volte, l'ultima gio 17\/9\nParacetamolo: 1 volta, l'ultima mer 16\/9/.test(t));
   assert.ok(/Fatte:\ngio 10\/9: Bilancio di salute · Bilancio 1° mese · Studio dott\. Rossi/.test(t));
   assert.ok(/In programma:\nmar 20\/10 09:00: Vaccino · ASL · esavalente/.test(t),'titolo uguale al tipo non si ripete: '+t);
-  assert.ok(!/passato da solo va/.test(t)&&!/bene|poco|troppo/i.test(t)&&!/normale/i.test(t.replace(/poca \/ normale \/ tanta/g,'')),'nessun giudizio nel testo ("normale" solo come quantità del pannolino)');
+  assert.ok(!/bene|troppo/i.test(t)&&!/normale/i.test(t.replace(/Poca \/ normale \/ tanta/g,'')),'nessun giudizio nel testo ("normale" solo come quantità della cacca)');
 
   // ================= schermata =================
   T('fillExtAltro()');
@@ -123,7 +109,7 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   let fl=T('flow');assert.ok(fl&&fl.type==='report','percorso report aperto');assert.strictEqual(fl.data.days,30);assert.strictEqual(fl.data.now,now);
   let sc=txt('#screenInner'),html=String(app.els['#screenInner']._h);
   assert.ok(/Per il pediatra/.test(sc)&&/Riepilogo del/.test(sc),sc);
-  ['Misure','Pappe','Sonno','Cambi','Pianti','Temperature','Medicine','Visite e vaccini'].forEach(sec=>assert.ok(new RegExp('<h3>'+sec+'</h3>').test(html),'sezione '+sec));
+  ['Misure','Pappe','Cacca','Temperature','Medicine','Visite e vaccini'].forEach(sec=>assert.ok(new RegExp('<h3>'+sec+'</h3>').test(html),'sezione '+sec));
   assert.ok(/id="rpPage"/.test(html)&&/class="rp-t"/.test(html)&&/<th>Peso<\/th>/.test(html),'tabella delle misure');assert.ok(/class="rp-kv rp-list"/.test(html)&&/class="rp-kv">/.test(html),'liste e chiave→valore');
   assert.ok(/Stampa o salva PDF/.test(sc)&&/Condividi come testo/.test(sc));
   assert.ok(/Pappe al giorno 4 \(in tutto 8\)/.test(sc),sc);
@@ -135,7 +121,7 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   const nEv=S.events.length;A.finish('x');assert.strictEqual(S.events.length,nEv);assert.ok(T('flow')&&T('flow').type==='report','ancora aperto');
   // il riepilogo aperto si ridisegna a ogni salvataggio o merge
   R.setPeriod(30);assert.strictEqual(T('flow').data.now,now,'setPeriod conserva l\'istante fissato');
-  ev({k:'feed',t:d(16,23),prep:120,ml:60});T('extEmit')('change');
+  ev({k:'feed',t:d(16,23),ml:60});T('extEmit')('change');
   assert.ok(/Pappe al giorno 4,5 \(in tutto 9\)/.test(txt('#screenInner')),txt('#screenInner'));
   S.events.pop();
   A.home();assert.strictEqual(T('flow'),null);
@@ -162,7 +148,7 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
 
   // ================= diario cominciato oggi: vale la sola giornata =================
   const keep=S.events.splice(0);
-  ev({k:'feed',t:d(17,8),prep:120,ml:100});ev({k:'diaper',t:d(17,8,30),pipi:'tanta',cacca:'no'});
+  ev({k:'feed',t:d(17,8),ml:100});ev({k:'diaper',t:d(17,8,30),cacca:'normale'});
   const rp=R.compute(30,now);
   assert.strictEqual(rp.partial,true);assert.strictEqual(rp.covered,1);assert.strictEqual(rp.feeds.n,1);assert.strictEqual(rp.diapers.perDay,1);
   assert.ok(/solo oggi, dalle 00:00 alle 10:30/.test(R.text(30,now)));
@@ -171,7 +157,7 @@ const d=(dd,hh,mm)=>new Date(2026,8,dd,hh,mm||0,0,0).getTime(); // settembre 202
   const re=R.compute(30,now);
   assert.strictEqual(re.hasData,false);assert.strictEqual(re.covered,0);assert.strictEqual(re.feeds.perDay,null);assert.strictEqual(re.measures.length,0);
   const te=R.text(30,now);
-  assert.ok(/Nessuna misura registrata/.test(te)&&/Nessuna pappa registrata nel periodo/.test(te)&&/Nessun pianto registrato/.test(te)&&/Nessuna visita registrata/.test(te));
+  assert.ok(/Nessuna misura registrata/.test(te)&&/Nessuna pappa registrata nel periodo/.test(te)&&/Nessuna cacca registrata/.test(te)&&/Nessuna visita registrata/.test(te));
   R.open(7,now);assert.ok(/non ha ancora voci in questo periodo/.test(txt('#screenInner')));A.home();
   S.events.push(...keep);
   console.log('report ok');

@@ -7,27 +7,31 @@ const {boot}=require('./stub');
   const app=await boot({AlanSync:{init:()=>Promise.resolve({ok:true}),upsert:e=>{sent.push(['up',JSON.parse(JSON.stringify(e))]);return Promise.resolve(true);},remove:e=>{sent.push(['rm',e.id,e._updated]);return Promise.resolve(true);},status:()=>({family:'F'}),upsertSettings:s=>{sent.push(['set',JSON.parse(JSON.stringify(s))]);return Promise.resolve(true);},removeAudio:()=>Promise.resolve({}),setPresence(){}}});
   const {S}=app,mergeRemote=app.T('mergeRemote'),mergeRemoteSettings=app.T('mergeRemoteSettings'),byId=app.T('byId');
   const t0=Date.now()-3600e3;
-  // nuovo evento remoto: entra con audio=false anche se il jsonb diceva audio true; cloud e mime restano
-  mergeRemote([{id:'r1',k:'cry',t:t0,who:'Ilaria',label:'fame',dur:9,audio:true,audioPath:'F/r1.m4a',mime:'audio/mp4',_updated:'2026-09-17T10:00:00.000Z'}]);
-  const r1=byId('r1');assert.ok(r1);assert.strictEqual(r1.audio,false);assert.strictEqual(r1.audioPath,'F/r1.m4a');assert.strictEqual(r1.mime,'audio/mp4');assert.strictEqual(r1._deleted,undefined);
+  // nuovo evento remoto: entra così com'è
+  mergeRemote([{id:'r1',k:'feed',t:t0,who:'Ilaria',ml:90,_updated:'2026-09-17T10:00:00.000Z'}]);
+  const r1=byId('r1');assert.ok(r1);assert.strictEqual(r1.ml,90);assert.strictEqual(r1._deleted,undefined);
   // versione più vecchia: ignorata
-  mergeRemote([{id:'r1',k:'cry',t:t0,who:'Ilaria',label:'sonno',_updated:'2026-09-17T09:59:59.999Z'}]);
-  assert.strictEqual(byId('r1').label,'fame');
+  mergeRemote([{id:'r1',k:'feed',t:t0,who:'Ilaria',ml:50,_updated:'2026-09-17T09:59:59.999Z'}]);
+  assert.strictEqual(byId('r1').ml,90);
   // stessa versione (eco del proprio upsert): ignorata
-  mergeRemote([{id:'r1',k:'cry',t:t0,who:'Ilaria',label:'sonno',_updated:'2026-09-17T10:00:00.000Z'}]);
-  assert.strictEqual(byId('r1').label,'fame');
-  // versione più nuova: applicata, ma audio locale non toccato
-  r1.audio=true;
-  mergeRemote([{id:'r1',k:'cry',t:t0,who:'Ilaria',label:'sonno',audio:false,_updated:'2026-09-17T10:00:01.000Z'}]);
-  assert.strictEqual(byId('r1').label,'sonno');assert.strictEqual(byId('r1').audio,true);assert.strictEqual(byId('r1')._updated,'2026-09-17T10:00:01.000Z');
+  mergeRemote([{id:'r1',k:'feed',t:t0,who:'Ilaria',ml:50,_updated:'2026-09-17T10:00:00.000Z'}]);
+  assert.strictEqual(byId('r1').ml,90);
+  // versione più nuova: applicata
+  mergeRemote([{id:'r1',k:'feed',t:t0,who:'Ilaria',ml:110,_updated:'2026-09-17T10:00:01.000Z'}]);
+  assert.strictEqual(byId('r1').ml,110);assert.strictEqual(byId('r1')._updated,'2026-09-17T10:00:01.000Z');
+  // le voci dei tipi dismessi continuano ad arrivare e a restare salvate: non si buttano, non si mostrano
+  mergeRemote([{id:'old1',k:'cry',t:t0,who:'Ilaria',label:'fame',_updated:'2026-09-17T10:00:00.000Z'}]);
+  assert.ok(byId('old1'),'un vecchio pianto dall\'altro telefono resta nell\'archivio');
+  app.els['#diary']._h='';app.T('renderDiary()');
+  assert.ok(!/Pianto/.test(String(app.els['#diary']._h)),'ma non compare nel diario');
   // evento locale senza _updated (vecchia versione dell'app): il remoto vince
-  S.events.push({id:'l1',k:'feed',t:t0,who:'Fabio',prep:120,ml:90});
-  mergeRemote([{id:'l1',k:'feed',t:t0,who:'Fabio',prep:120,ml:100,_updated:'2026-09-17T10:00:00.000Z'}]);
+  S.events.push({id:'l1',k:'feed',t:t0,who:'Fabio',ml:90});
+  mergeRemote([{id:'l1',k:'feed',t:t0,who:'Fabio',ml:100,_updated:'2026-09-17T10:00:00.000Z'}]);
   assert.strictEqual(byId('l1').ml,100);
-  // soft delete: sparisce, chiude il pianto aperto, e la lista viene ridisegnata
-  S.openCry='r1';app.els['#diary']._h='';
+  // soft delete: sparisce e la lista viene ridisegnata
+  app.els['#diary']._h='';
   mergeRemote([{id:'r1',_deleted:true,_updated:'2026-09-17T10:00:02.000Z'}]);
-  assert.strictEqual(byId('r1'),null);assert.strictEqual(S.openCry,null);assert.ok(app.els['#diary']._h.length>0,'diario ridisegnato');
+  assert.strictEqual(byId('r1'),null);assert.ok(app.els['#diary']._h.length>0,'diario ridisegnato');
   // soft delete di una voce sconosciuta: nessun effetto, nessun errore
   const before=S.events.length;mergeRemote([{id:'nope',_deleted:true}]);assert.strictEqual(S.events.length,before);
   // cancellazione locale → removed() con _updated fresco (serve al pull incrementale dell'altro telefono)
@@ -46,7 +50,7 @@ const {boot}=require('./stub');
   document.querySelector('#sName').value='Alan';document.querySelector('#sBirth').value='2026-08-20';app.A.saveSettings();
   const last=sent.filter(x=>x[0]==='set').pop();assert.strictEqual(last[1].name,'Alan');assert.ok(Date.parse(last[1]._updated)>Date.parse(newer)-10000);
   // primo accesso: le voci locali "Io" prendono il nome del profilo e vengono rispedite; un secondo cambio nome non le tocca
-  S.events.push({id:'io1',k:'feed',t:t0,who:'Io',prep:120,ml:90},{id:'io2',k:'sleep',t:t0+1,who:''},{id:'r9',k:'feed',t:t0+2,who:'Fabio',prep:100,ml:100});
+  S.events.push({id:'io1',k:'feed',t:t0,who:'Io',ml:90},{id:'io2',k:'other',t:t0+1,who:'',what:'ruttino'},{id:'r9',k:'feed',t:t0+2,who:'Fabio',ml:100});
   app.T("who='Io'");app.T("window.AlanSync.status=function(){return {family:'F',name:'Ilaria'};}");
   sent.length=0;app.T('syncWho()');
   assert.strictEqual(app.T('who'),'Ilaria');

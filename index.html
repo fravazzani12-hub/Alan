@@ -28,15 +28,11 @@
   <section class="view on" id="v-oggi">
     <div id="extTop"></div>
     <div class="status" id="status"></div>
-    <div id="openCryBanner"></div>
     <div id="next"></div>
-    <div id="night"></div>
     <div id="extMid"></div>
-    <button class="cry" id="cryBtn" onclick="A.openCry()">Piange<small>registra e ascolta</small></button>
     <div class="home-grid">
-      <button style="--tc:var(--c-fame)" onclick="A.flow('feed')">Pappa<small id="qFeed"></small></button>
-      <button style="--tc:var(--c-cambio)" onclick="A.flow('diaper')">Pannolino<small>pipì e cacca</small></button>
-      <button style="--tc:var(--c-sonno)" onclick="A.flow('sleep')" id="qSleep">Nanna<small></small></button>
+      <button class="wide" style="--tc:var(--c-fame)" onclick="A.flow('feed')">Pappa<small id="qFeed"></small></button>
+      <button style="--tc:var(--c-cambio)" onclick="A.flow('diaper')">Cacca<small>poca, normale, tanta</small></button>
       <button style="--tc:var(--c-contatto)" onclick="A.flow('other')">Altro<small>ruttino, ciuccio, coccole…</small></button>
     </div>
     <h2>Ultime voci</h2>
@@ -44,7 +40,6 @@
     <div id="extBottom"></div>
   </section>
 
-  <section class="view" id="v-pianti"><div id="cries"></div></section>
   <section class="view" id="v-pattern"><div id="stats"></div></section>
   <section class="view" id="v-salute"><div id="health"></div></section>
   <section class="view" id="v-momenti"><div id="momenti"></div></section>
@@ -61,14 +56,12 @@
         <li>Respiro affannoso, rientramenti tra le costole, labbra o pelle bluastre, pause nel respiro.</li>
         <li>Colorito grigiastro o marezzato, eruzione che non sbianca premendo.</li>
       </ul>
-      <p class="hint">L'app confronta il pianto con quelli già registrati di Alan e con il contesto. Non fa diagnosi: nel dubbio vincono l'istinto dei genitori e il pediatra.</p>
+      <p class="hint">L'app non fa diagnosi e non dà consigli clinici: nel dubbio vincono l'istinto dei genitori e il pediatra.</p>
     </div>
     <div class="card">
       <h3>Diagnostica</h3>
-      <p class="hint">Cosa è riuscito e cosa no nell'ultima registrazione e nel riascolto, passo per passo. Se l'audio non funziona, guarda qui.</p>
+      <p class="hint">Versione, spazio e stato del collegamento. Serve se qualcosa non torna.</p>
       <div id="diag"></div>
-      <div class="spacer"></div>
-      <button class="btn ghost" onclick="A.testMic(this)">Prova il microfono</button>
       <div class="spacer"></div>
       <button class="btn ghost" onclick="A.copyDiag(this)">Condividi la diagnostica</button>
     </div>
@@ -78,7 +71,7 @@
     </div>
     <div class="card">
       <h3>Sincronizza con l'altro telefono</h3>
-      <p class="hint">Con l'account attivo diario, impostazioni e audio dei pianti si allineano da soli tra i telefoni. Il codice serve solo come riserva (o senza account) e non porta gli audio.</p>
+      <p class="hint">Con l'account attivo diario e impostazioni si allineano da soli tra i telefoni. Il codice serve solo come riserva, o senza account.</p>
       <button class="btn" onclick="A.exportData()">Condividi i dati di questo telefono</button>
       <label class="f" for="impTxt">Incolla qui un codice ricevuto</label>
       <textarea class="f" id="impTxt" placeholder="AZ2:…"></textarea>
@@ -96,7 +89,7 @@
       <input class="f" id="sBirth" type="date">
       <label class="f">Intervallo tra le pappe</label>
       <div class="seg wide" id="feedSeg"><button data-h="auto" onclick="A.setFeedH(null)">Per età</button><button data-h="3" onclick="A.setFeedH(3)">3 h</button><button data-h="3.5" onclick="A.setFeedH(3.5)">3,5 h</button><button data-h="4" onclick="A.setFeedH(4)">4 h</button><button data-h="4.5" onclick="A.setFeedH(4.5)">4,5 h</button></div>
-      <p class="hint">Il vostro ritmo: vale per la pappa prevista, il riquadro "Ultima pappa", i promemoria e le ipotesi sul pianto. Condiviso tra i telefoni. Se ha fame prima, la pappa si registra come sempre.</p>
+      <p class="hint">Il vostro ritmo: vale per la pappa prevista, il riquadro "Ultima pappa" e i promemoria. Condiviso tra i telefoni. Se ha fame prima, la pappa si registra come sempre.</p>
       <div class="spacer"></div>
       <button class="btn ghost" onclick="A.saveSettings()">Salva impostazioni</button>
       <div class="spacer"></div>
@@ -107,7 +100,6 @@
 
 <nav class="tabs">
   <button class="on" data-v="oggi">Oggi</button>
-  <button data-v="pianti">Pianti</button>
   <button data-v="pattern">Pattern</button>
   <button data-v="salute">Salute</button>
   <button data-v="momenti">Momenti</button>
@@ -121,7 +113,6 @@
 <script src="./js/config.js"></script>
 <script src="./js/sync.js"></script>
 <script src="./js/app.js"></script>
-<script src="./js/timer.js"></script>
 <script src="./js/predict.js"></script>
 <script src="./js/reminders.js"></script>
 <script src="./js/stats.js"></script>
@@ -130,6 +121,5 @@
 <script src="./js/momenti.js"></script>
 <script src="./js/note.js"></script>
 <script src="./js/noise.js"></script>
-<script src="./js/ascolto.js"></script>
 </body>
 </html>

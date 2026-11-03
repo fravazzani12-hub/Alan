@@ -1,5 +1,5 @@
-// Modifica di una voce del diario: ora, valori per tipo, nota, elimina; diario raggruppato per giorno e riga toccabile;
-// scheda "Prossime tappe" e resoconto della notte. node tests/edit.test.js
+// Modifica di una voce del diario: ora, valori per tipo, nota, elimina; diario raggruppato per giorno e riga toccabile.
+// node tests/edit.test.js
 'use strict';
 const assert=require('assert');
 const {boot}=require('./stub');
@@ -15,8 +15,8 @@ const H=36e5,MIN=6e4,DAY=864e5;
   const hhmm=t=>{const d=new Date(t);return T('pad')(d.getHours())+':'+T('pad')(d.getMinutes());};
 
   // --- diario: una intestazione per giornata, righe toccabili con pallino e chi, niente pulsante elimina
-  const f=add({k:'feed',t:now-3*H,prep:120,ml:100});
-  const d=add({k:'diaper',t:now-2*H,pipi:'tanta',cacca:'no',who:'Ilaria'});
+  const f=add({k:'feed',t:now-3*H,ml:100});
+  const d=add({k:'diaper',t:now-2*H,cacca:'normale',who:'Ilaria'});
   add({k:'other',t:now-26*H,what:'ruttino'});
   add({k:'appt',t:now+3*DAY,kind:'vaccino',title:'Esavalente',done:false});
   T('renderHome()');
@@ -33,8 +33,8 @@ const H=36e5,MIN=6e4,DAY=864e5;
   let sc=screen();
   assert.ok(/<div class="title">Modifica<\/div>/.test(sc)&&/Pappa/.test(sc)&&/registrata da Fabio/.test(sc),sc.slice(0,400));
   assert.ok(/Quando/.test(sc)&&new RegExp('type="date" value="'+isoDay(f.t)+'"').test(sc)&&new RegExp('type="time" value="'+hhmm(f.t)+'"').test(sc),'data e ora precompilate');
-  assert.ok(/>Preparato</.test(sc)&&/>Bevuto</.test(sc)&&/>120 ml</.test(sc)&&/>100 ml</.test(sc),'valori attuali');
-  assert.ok(/>Durata</.test(sc)&&/>—</.test(sc),'durata modificabile anche se non c\'era');
+  assert.ok(/>Bevuto</.test(sc)&&/>100 ml</.test(sc),'valore attuale');
+  assert.ok(!/>Preparato</.test(sc)&&!/>Durata</.test(sc),'niente preparato né durata: '+sc.slice(0,400));
   assert.ok(/id="edNote"/.test(sc)&&/Salva le modifiche/.test(sc)&&/Elimina la voce/.test(sc));
   // --- stepper: ±50 e ±10, con i limiti
   assert.ok(/A.editStep\('ml',5\)/.test(sc)&&/A.editStep\('ml',-5\)/.test(sc),'anche qui i ml si muovono di 5 in 5');
@@ -52,31 +52,24 @@ const H=36e5,MIN=6e4,DAY=864e5;
   const before=f._updated;
   A.finish('save');
   assert.strictEqual(app.T('flow'),null,'schermata chiusa');
-  assert.strictEqual(f.ml,10);assert.strictEqual(f.prep,120);
+  assert.strictEqual(f.ml,10);
   assert.strictEqual(new Date(f.t).getHours(),7);assert.strictEqual(new Date(f.t).getMinutes(),5);assert.strictEqual(isoDay(f.t),day,'spostata a ieri');
   assert.strictEqual(f.note,'ha bevuto piano');assert.strictEqual(f.noteBy,'Io');
   assert.ok(f._updated>before,'touched: la modifica si sincronizza');
   assert.strictEqual(app.els['#toast'].textContent,'Voce aggiornata');
   assert.ok(/class="nt">ha bevuto piano/.test(diary()),'la nota si vede nel diario');
-  // --- durata aggiunta a posteriori a una pappa che non ce l'aveva
-  A.edit(f.id);A.editStep('dur',60);A.editStep('dur',300);
-  assert.ok(/>16 min</.test(screen()),'da 10 min di partenza: '+screen().match(/Durata[\s\S]{0,200}/));
-  A.finish('save');assert.strictEqual(f.dur,960);
-  A.edit(f.id);A.editClear('dur');A.finish('save');assert.strictEqual(f.dur,undefined,'si può togliere');
   // --- nessuna modifica: niente touched
   const u1=f._updated;
   A.edit(f.id);A.finish('save');
   assert.strictEqual(f._updated,u1,'nessuna modifica: timestamp invariato');assert.strictEqual(app.els['#toast'].textContent,'Nessuna modifica');
-  // --- ml oltre il preparato: il preparato si adegua
-  A.edit(f.id);A.editStep('ml',50);A.editStep('ml',50);A.editStep('ml',50);A.editStep('ml',50);A.finish('save');
-  assert.strictEqual(f.ml,210);assert.strictEqual(f.prep,210,'preparato allineato ai ml bevuti');
-  // --- pannolino: quattro scelte per pipì e cacca, il valore vecchio "si" si legge come normale
-  d.pipi='si';
+  // --- cacca: quattro scelte, il valore vecchio "si" si legge come normale
+  d.cacca='si';
   A.edit(d.id);sc=screen();
-  assert.ok(/>Pipì</.test(sc)&&/>Cacca</.test(sc)&&(sc.match(/class="seg wide"/g)||[]).length===2);
-  assert.ok(/class="on" onclick="A.editPick\('pipi','normale'\)/.test(sc),'"si" già selezionato come normale');
+  assert.ok(/>Quanta</.test(sc)&&!/>Pipì</.test(sc),'solo la quantità della cacca: '+sc.slice(0,300));
+  assert.strictEqual((sc.match(/class="seg wide"/g)||[]).length,1);
+  assert.ok(/class="on" onclick="A.editPick\('cacca','normale'\)/.test(sc),'"si" già selezionato come normale');
   A.editPick('cacca','poca');A.finish('save');
-  assert.strictEqual(d.cacca,'poca');assert.strictEqual(d.pipi,'normale','il valore vecchio si normalizza al salvataggio');
+  assert.strictEqual(d.cacca,'poca','il valore si salva normalizzato');
   // --- altre voci: temperatura, medicina, misure (con "togli")
   const tp=add({k:'temp',t:now-4*H,c:37.2});
   A.edit(tp.id);assert.ok(/37,2 °C/.test(screen()));A.editStep('c',0.1);A.editStep('c',1);A.finish('save');
@@ -88,11 +81,12 @@ const H=36e5,MIN=6e4,DAY=864e5;
   A.edit(ms.id);sc=screen();assert.ok(/4,20 kg/.test(sc)&&/54 cm/.test(sc)&&/Togli lunghezza/.test(sc));
   A.editStep('w',100);A.editClear('l');A.finish('save');
   assert.strictEqual(ms.w,4300);assert.strictEqual(ms.l,undefined,'lunghezza tolta');
-  // --- nanna: solo ora e nota; un pianto va alla sua schermata
+  // --- le voci dei tipi dismessi non compaiono più nel diario, ma restano nell'archivio
   const sl=add({k:'sleep',t:now-7*H});
-  A.edit(sl.id);assert.ok(!/class="stepper"/.test(screen())&&/Quando/.test(screen())&&/id="edNote"/.test(screen()));A.home();
-  const cr=add({k:'cry',t:now-8*H,label:null,ctx:{},bins:{f:-1,a:-1,h:1},feat:null,audio:false});
-  A.edit(cr.id);assert.ok(app.T('flow')&&app.T('flow').type==='crydetail','il pianto apre la sua schermata');A.home();
+  const cr=add({k:'cry',t:now-8*H,label:null});
+  T('renderHome()');
+  assert.ok(!/Nanna/.test(diary())&&!/Pianto/.test(diary()),'nanne e pianti non si mostrano più');
+  assert.ok(S.events.some(e=>e.id===sl.id)&&S.events.some(e=>e.id===cr.id),'ma restano salvati');
   // --- elimina dalla modifica
   const n0=S.events.length;
   A.edit(tp.id);A.finish('del');

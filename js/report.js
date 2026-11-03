@@ -12,9 +12,8 @@
 var X=window.AlanExt,API=X.api;
 var H=API.H,DAY=864e5;
 var KEY='alan.report.days',PERIODS=[7,30,90],DEF=30;
-var NIGHT_START=22,NIGHT_END=7,MAX_MEASURES=5,MAX_NEXT=5;
-var DIARY_KINDS={feed:1,diaper:1,sleep:1,wake:1,other:1,cry:1,temp:1,med:1};
-var CAUSE_ORDER=['fame','sonno','cambio','aria','contatto','solo'];
+var MAX_MEASURES=5,MAX_NEXT=5;
+var DIARY_KINDS={feed:1,diaper:1,other:1,temp:1,med:1};
 
 /* ---------- date e formati ---------- */
 function at(base,dOff,hour){var d=new Date(base);return new Date(d.getFullYear(),d.getMonth(),d.getDate()+dOff,hour,0,0,0).getTime();}
@@ -46,14 +45,6 @@ function setPeriod(d){
   if(f&&f.type==='report')open(d,f.data&&f.data.now);else X.refresh();
 }
 
-/* ---------- sonno: intervalli [inizio,fine] dai tap Nanna/Sveglio; una nanna aperta arriva fino ad adesso ---------- */
-function sleepSpans(ev,now){
-  var out=[],cur=null;
-  ev.forEach(function(e){if(e.t>now)return;if(e.k==='sleep')cur=e.t;else if(e.k==='wake'&&cur!=null){if(e.t>cur)out.push([cur,e.t]);cur=null;}});
-  if(cur!=null&&now>cur)out.push([cur,now]);
-  return out;
-}
-function overlap(spans,a,b){var s=0;spans.forEach(function(p){var x=Math.max(p[0],a),y=Math.min(p[1],b);if(y>x)s+=y-x;});return s;}
 
 /* ---------- calcoli ---------- */
 function compute(days,now){
@@ -79,23 +70,10 @@ function compute(days,now){
   var gaps=[];for(var j=1;j<fed.length;j++){var g=fed[j].t-fed[j-1].t;if(g>0.5*H&&g<8*H)gaps.push(g);}
   var feeds={n:fed.length,biberon:bib.length,refused:refused,perDay:per(fed.length),ml:sum(bib),mlPerDay:bib.length?per(sum(bib)):null,mlPerFeed:mean(bib),gap:mean(gaps)};
 
-  /* sonno: notti 22–7 che finiscono nei giorni del periodo, pisolini (nanne iniziate tra le 7 e le 22), totale per giornata */
-  var spans=sleepSpans(all,now),nights=[],naps=[],totals=[];
-  dayList.forEach(function(d){var ns=at(now,d.i-1,NIGHT_START),ne=Math.min(at(now,d.i,NIGHT_END),now);var s=overlap(spans,ns,ne);if(s>0)nights.push(s);var tot=overlap(spans,d.s,d.e);if(tot>0)totals.push(tot);});
-  spans.forEach(function(p){if(p[0]<from||p[0]>=to)return;var hr=new Date(p[0]).getHours();if(hr>=NIGHT_END&&hr<NIGHT_START)naps.push(p[1]-p[0]);});
-  var sleep={nights:nights.length,nightMean:mean(nights),naps:naps.length,napsPerDay:per(naps.length),napMean:mean(naps),daysRec:totals.length,dayMean:mean(totals)};
-
-  /* cambi */
-  var dp=inW.filter(function(e){return e.k==='diaper';}),wet=0,poo=0,wetLv={poca:0,normale:0,tanta:0},pooLv={poca:0,normale:0,tanta:0};
-  dp.forEach(function(e){var a=API.lvlKey(e.pipi),b=API.lvlKey(e.cacca);if(a!=='no'){wet++;wetLv[a]++;}if(b!=='no'){poo++;pooLv[b]++;}});
-  var diapers={n:dp.length,perDay:per(dp.length),wet:wet,wetPerDay:per(wet),wetLv:wetLv,poo:poo,pooPerDay:per(poo),pooLv:pooLv};
-
-  /* pianti: cause in % sui pianti spiegati ("passato da solo" compreso) */
-  var cr=inW.filter(function(e){return e.k==='cry';}),counts={},labeled=0,durs=[];
-  cr.forEach(function(e){if(e.dur>0)durs.push(e.dur);if(e.label&&API.LABELS[e.label]){labeled++;counts[e.label]=(counts[e.label]||0)+1;}});
-  var causes=[];CAUSE_ORDER.forEach(function(id){if(counts[id])causes.push({id:id,label:API.LABELS[id],n:counts[id],pct:Math.round(counts[id]/labeled*100)});});
-  causes.sort(function(a,b){return b.n-a.n;});
-  var cries={n:cr.length,perDay:per(cr.length),labeled:labeled,unlabeled:cr.length-labeled,causes:causes,durMean:mean(durs)};
+  /* cacca */
+  var dp=inW.filter(function(e){return e.k==='diaper';}),poo=0,pooLv={poca:0,normale:0,tanta:0};
+  dp.forEach(function(e){var b=API.lvlKey(e.cacca);if(b!=='no'){poo++;pooLv[b]++;}});
+  var diapers={n:dp.length,perDay:per(dp.length),poo:poo,pooPerDay:per(poo),pooLv:pooLv};
 
   /* note dei genitori sulle voci del periodo (js/note.js): testo com'è, con chi l'ha scritta */
   var notes=[];inW.forEach(function(e){if(e.k==='appt'||typeof e.note!=='string'||!e.note.trim())return;var d=API.describe(e);notes.push({t:e.t,what:(d[0]+' '+String(d[1]||'').replace(/<[^>]+>/g,'')).replace(/\s+/g,' ').trim(),text:e.note.trim(),who:e.noteBy||e.who||''});});
@@ -122,7 +100,7 @@ function compute(days,now){
 
   return {days:days,now:now,from:from,to:to,partial:partial,covered:covered,hasData:covered>0,
     head:{name:API.settings().name||'Alan',birth:birthLabel(),age:ageAt(now),date:dmy(now)+' '+API.fmtTime(now)},
-    measures:ms,wGain:wGain,feeds:feeds,sleep:sleep,diapers:diapers,cries:cries,notes:notes,temps:temps,tempMax:tmax,meds:meds,appts:{done:done,next:next}};
+    measures:ms,wGain:wGain,feeds:feeds,diapers:diapers,notes:notes,temps:temps,tempMax:tmax,meds:meds,appts:{done:done,next:next}};
 }
 
 /* ---------- modello delle sezioni: una sola fonte per html e testo ----------
@@ -135,7 +113,7 @@ function periodLine(r){
   return s;
 }
 function sections(r){
-  var out=[],f=r.feeds,s=r.sleep,d=r.diapers,c=r.cries;
+  var out=[],f=r.feeds,d=r.diapers;
   /* misure */
   var mrows=r.measures.map(function(m){return [API.fmtDate(m.t),m.age,m.w!=null?API.METRICS.w.fmt(m.w)+' ('+ord(m.pw)+')':'—',m.l!=null?API.METRICS.l.fmt(m.l)+' ('+ord(m.pl)+')':'—'];});
   out.push({title:'Misure',id:'misure',note:mrows.length?'In parentesi il percentile OMS 2006 (maschi) all\'età della misura'+(r.wGain?'. Ultimo peso: '+(r.wGain.g>=0?'+':'−')+Math.abs(r.wGain.g)+' g in '+plural(r.wGain.days,'giorno','giorni'):'')+'.':null,
@@ -150,27 +128,11 @@ function sections(r){
     if(f.refused)frows.push(['Biberon rifiutati',String(f.refused)]);
   }
   out.push({title:'Pappe',id:'pappe',empty:'Nessuna pappa registrata nel periodo.',blocks:frows.length?[{rows:frows}]:[]});
-  /* sonno */
-  var srows=[];
-  if(s.nights)srows.push(['Notte (22–7), in media',fmtH(s.nightMean)+' su '+plural(s.nights,'notte','notti')]);
-  if(s.naps)srows.push(['Pisolini al giorno',dec1(s.napsPerDay)+', di '+fmtH(s.napMean)+' l\'uno']);
-  if(s.daysRec)srows.push(['Sonno nelle 24 ore, in media',fmtH(s.dayMean)+' su '+plural(s.daysRec,'giorno','giorni')]);
-  out.push({title:'Sonno',id:'sonno',note:srows.length?'Conta solo il sonno segnato con Nanna e Sveglio.':null,empty:'Nessuna nanna registrata nel periodo.',blocks:srows.length?[{rows:srows}]:[]});
-  /* cambi */
+  /* cacca */
   var drows=[];
   var lv=function(t){return API.LVL_ORDER.map(function(l){return t[l];}).join(' / ');};
-  if(d.n){drows.push(['Cambi al giorno',dec1(d.perDay)+' (in tutto '+d.n+')']);drows.push(['Con pipì, al giorno',dec1(d.wetPerDay)]);if(d.wet)drows.push(['Pipì poca / normale / tanta',lv(d.wetLv)]);drows.push(['Con cacca, al giorno',dec1(d.pooPerDay)]);if(d.poo)drows.push(['Cacca poca / normale / tanta',lv(d.pooLv)]);}
-  out.push({title:'Cambi',id:'cambi',empty:'Nessun cambio registrato nel periodo.',blocks:drows.length?[{rows:drows}]:[]});
-  /* pianti */
-  var crows=[],cause=[];
-  if(c.n){
-    crows.push(['Pianti al giorno',dec1(c.perDay)+' (in tutto '+c.n+')']);
-    if(c.durMean!=null)crows.push(['Durata media registrata',API.fmtSec(c.durMean)]);
-    if(c.unlabeled)crows.push(['Senza spiegazione',String(c.unlabeled)]);
-    c.causes.forEach(function(x){cause.push([x.label.charAt(0).toUpperCase()+x.label.slice(1),x.n+' ('+x.pct+'%)']);});
-  }
-  var cblocks=[];if(crows.length)cblocks.push({rows:crows});if(cause.length)cblocks.push({sub:'Cosa voleva, sui '+plural(c.labeled,'pianto spiegato','pianti spiegati'),rows:cause});
-  out.push({title:'Pianti',id:'pianti',empty:'Nessun pianto registrato nel periodo.',blocks:cblocks});
+  if(d.n){drows.push(['Cacca al giorno',dec1(d.pooPerDay)+' (in tutto '+d.poo+')']);if(d.poo)drows.push(['Poca / normale / tanta',lv(d.pooLv)]);}
+  out.push({title:'Cacca',id:'cacca',empty:'Nessuna cacca registrata nel periodo.',blocks:drows.length?[{rows:drows}]:[]});
   /* temperature */
   var trows=r.temps.map(function(x){return [API.fmtDate(x.t)+' '+API.fmtTime(x.t),API.fmtTemp(x.c)];});
   out.push({title:'Temperature',id:'temperature',note:trows.length>1?'La più alta: '+API.fmtTemp(r.tempMax)+'.':null,empty:'Nessuna temperatura registrata nel periodo.',blocks:trows.length?[{list:true,rows:trows}]:[]});
@@ -298,6 +260,6 @@ X.flow('report',{render:render,finish:function(flow,val){if(val==='print')print(
 X.slot('altro',function(){return card();});
 X.on('change',function(){try{redraw();}catch(e){}});
 try{window.addEventListener('afterprint',unmark);}catch(e){}
-X.report={KEY:KEY,PERIODS:PERIODS,compute:compute,text:text,sections:sections,page:page,render:render,card:card,open:open,redraw:redraw,period:period,setPeriod:setPeriod,print:print,share:share,copy:copy,ageAt:ageAt,dec1:dec1,sleepSpans:sleepSpans};
+X.report={KEY:KEY,PERIODS:PERIODS,compute:compute,text:text,sections:sections,page:page,render:render,card:card,open:open,redraw:redraw,period:period,setPeriod:setPeriod,print:print,share:share,copy:copy,ageAt:ageAt,dec1:dec1};
 X.refresh();
 })();
