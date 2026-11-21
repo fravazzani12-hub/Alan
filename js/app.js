@@ -574,7 +574,14 @@ A.importData=function(){
 
 /* ---------- salute: crescita OMS (peso, lunghezza), vitamina D e medicine, temperatura, visite e vaccini ---------- */
 var HEALTH_TYPES={measure:1,temp:1,med:1,appt:1};
-var MEDS=[['vitd','Vitamina D'],['probiotico','Probiotico'],['simeticone','Simeticone'],['paracetamolo','Paracetamolo'],['altro','Altro']];
+var MEDS=[['vitd','Vitamina D'],['ferro','Ferro'],['probiotico','Probiotico'],['simeticone','Simeticone'],['paracetamolo','Paracetamolo'],['altro','Altro']];
+/* Medicine di ogni giorno: [id, nome, nome dentro una frase, ora abituale | null]. Hanno il tap rapido in Salute, i
+   sette pallini e la riga in "Prossime tappe"; compaiono solo dopo la prima volta che le date (`everMed`). L'ora è
+   solo un promemoria di quello che avete deciso voi: l'app non dà dosi né consigli. */
+var DAILY=[['vitd','Vitamina D','vitamina D',null],['ferro','Ferro','ferro',10]];
+/* "dato" o "data": i nomi maschili stanno qui, per il resto vale il femminile (medicina, vitamina, gocce) */
+var MED_M={ferro:1,probiotico:1,simeticone:1,paracetamolo:1};
+function medDone(what){return MED_M[what]?'dato':'data';}
 var APPT_KINDS=[['bilancio','Bilancio di salute'],['vaccino','Vaccino'],['visita','Visita specialistica'],['esame','Esame'],['altro','Altro']];
 /* Tappe: calendario vaccinale nazionale e bilanci di salute (mesi di età). Sono suggerimenti: le date le fissano ASL e pediatra. */
 var MILESTONES=[[1,'bilancio','Bilancio di salute del 1° mese'],[3,'vaccino','Esavalente 1ª · pneumococco 1ª · rotavirus 1ª · meningococco B 1ª'],[3,'bilancio','Bilancio di salute (2–3 mesi)'],[4,'vaccino','Meningococco B 2ª · rotavirus 2ª'],[5,'vaccino','Esavalente 2ª · pneumococco 2ª'],[6,'vaccino','Meningococco B 3ª'],[6,'bilancio','Bilancio di salute (5–6 mesi)'],[9,'bilancio','Bilancio di salute (8–9 mesi)'],[11,'vaccino','Esavalente 3ª · pneumococco 3ª'],[12,'bilancio','Bilancio di salute (12 mesi)'],[13,'vaccino','MPRV · meningococco ACWY · meningococco B 4ª']];
@@ -679,14 +686,19 @@ function renderHealth(){
   var ms=measures().slice(-6).reverse();
   if(ms.length){h+='<div class="spacer"></div><div class="list">';ms.forEach(function(e){var parts=[];if(e.w!=null)parts.push(METRICS.w.fmt(e.w));if(e.l!=null)parts.push(METRICS.l.fmt(e.l));var dA=ageDaysAt(e.t);h+='<div class="row"><div class="time"><small>'+fmtDate(e.t)+'</small></div><div class="what">'+esc(parts.join(' · '))+'<span class="who">'+(dA!=null?Math.floor(dA/7)+' sett'+(e.w!=null?' · '+ordPct(pctOf('wfa',dA,e.w/1000))+' peso':''):'')+'</span></div><button class="del" aria-label="Elimina" onclick="A.del(\''+e.id+'\');renderHealth()">×</button></div>';});h+='</div>';}
   h+='</div>';
-  /* vitamina D e medicine */
-  var vd=todayMeds('vitd'),vdLast=vd.length?vd[vd.length-1]:null;
-  h+='<div class="card"><h3>Vitamina D e medicine</h3>';
-  h+=vdLast?'<div class="done"><span class="tick">✓</span><div><b>Vitamina D data</b><br><span class="hint">alle '+fmtTime(vdLast.t)+(vdLast.who?' da '+esc(vdLast.who):'')+'</span></div></div>':'<button class="btn vitd" onclick="A.quickMed(\'vitd\',this)">Vitamina D data adesso</button>';
-  h+='<div class="dots" aria-label="Ultimi 7 giorni">';
-  for(var i=6;i>=0;i--){var day=Date.now()-i*864e5,k=dayKey(day),got=S.events.some(function(e){return e.k==='med'&&e.what==='vitd'&&dayKey(e.t)===k;});h+='<span class="'+(got?'on':'')+'" title="'+fmtDate(day)+'">'+['D','L','M','M','G','V','S'][new Date(day).getDay()]+'</span>';}
-  h+='</div>';
-  var others=todayMeds().filter(function(e){return e.what!=='vitd';});
+  /* medicine di ogni giorno (vitamina D, ferro) e il resto */
+  h+='<div class="card"><h3>'+DAILY.map(function(d,i){return i?d[2]:d[1];}).concat(['medicine']).join(', ').replace(/, ([^,]*)$/,' e $1')+'</h3>';
+  DAILY.forEach(function(d,i){
+    var got=todayMeds(d[0]),last=got.length?got[got.length-1]:null;
+    if(i)h+='<div class="spacer"></div>';
+    h+=last?'<div class="done"><span class="tick">✓</span><div><b>'+esc(d[1])+' '+medDone(d[0])+' oggi</b><br><span class="hint">alle '+fmtTime(last.t)+(last.who?' da '+esc(last.who):'')+'</span></div></div>'
+           :'<button class="btn vitd" onclick="A.quickMed(\''+d[0]+'\',this)">'+esc(d[1])+' '+medDone(d[0])+' adesso</button>';
+    h+='<div class="dots" aria-label="'+esc(d[1])+', ultimi 7 giorni">';
+    for(var i2=6;i2>=0;i2--){var day=Date.now()-i2*864e5,k=dayKey(day),on=S.events.some(function(e){return e.k==='med'&&e.what===d[0]&&dayKey(e.t)===k;});h+='<span class="'+(on?'on':'')+'" title="'+fmtDate(day)+'">'+['D','L','M','M','G','V','S'][new Date(day).getDay()]+'</span>';}
+    h+='</div>';
+  });
+  var dailyIds=DAILY.map(function(d){return d[0];});
+  var others=todayMeds().filter(function(e){return dailyIds.indexOf(e.what)<0;});
   if(others.length)h+='<p class="hint">Oggi anche: '+others.map(function(e){return esc(medName(e))+' ('+fmtTime(e.t)+')';}).join(', ')+'.</p>';
   h+='<div class="spacer"></div><button class="btn ghost" onclick="A.flow(\'med\')">Altra medicina</button></div>';
   /* temperatura */
@@ -728,7 +740,7 @@ function milestonesDue(){
 }
 A.planMilestone=function(idx){var ms=MILESTONES[idx];if(!ms)return;var b=birthMs()||Date.now();flow={type:'appt',step:1,off:0,data:{kind:ms[1],title:ms[2],date:isoDay(b+ms[0]*30.4375*864e5),time:'10:00'},link:null};showScreen();renderFlow();};
 A.apptDone=function(id){var e=byId(id);if(!e)return;e.done=!e.done;touched(e);save();renderHealth();renderHome();toast(e.done?'Segnata come fatta':'Rimessa tra le prossime');};
-A.quickMed=function(what,btn){var e={id:uid(),k:'med',t:Date.now(),who:who,what:what,name:medName({what:what})};S.events.push(e);touched(e);save();toast(medName(e)+' segnata');renderHealth();renderHome();};
+A.quickMed=function(what,btn){var e={id:uid(),k:'med',t:Date.now(),who:who,what:what,name:medName({what:what})};S.events.push(e);touched(e);save();toast(medName(e)+' segnat'+(MED_M[what]?'o':'a'));renderHealth();renderHome();};
 
 /* file .ics: su iPhone si apre in Calendario; nell'app installata prova prima la condivisione */
 function icsFor(e){
@@ -837,15 +849,19 @@ function nextRow(o){
   var main=o.onclick?'<button class="nx-main" onclick="'+o.onclick+'">'+inner+'</button>':'<div class="nx-main">'+inner+'</div>';
   return '<div class="nx-row'+(o.cls?' '+o.cls:'')+'">'+main+(o.act?'<button class="nx-act" onclick="'+o.actOnclick+'">'+esc(o.act)+'</button>':'')+'</div>';
 }
-/* riga di casa: la vitamina D di oggi. Le visite le annunciano i promemoria (oggi e domani) e la tab Salute: qui non si
-   ripetono. Le previsioni e i promemoria arrivano dalle estensioni, nello stesso formato. */
+/* righe di casa: le medicine di ogni giorno (DAILY). Le visite le annunciano i promemoria (oggi e domani) e la tab
+   Salute: qui non si ripetono. Le previsioni e i promemoria arrivano dalle estensioni, nello stesso formato. */
 function coreNextRows(){
-  if(!everMed('vitd'))return '';
-  var vd=todayMeds('vitd');
-  return vd.length?nextRow({color:'var(--c-cambio)',text:'Vitamina D data oggi',when:fmtTime(vd[vd.length-1].t),cls:'done'})
-                  :nextRow({color:'var(--c-cambio)',text:'Vitamina D di oggi',when:'non ancora',act:'Segna',actOnclick:'A.quickMed(\'vitd\',this)'});
+  var out='';
+  DAILY.forEach(function(d){
+    if(!everMed(d[0]))return;
+    var got=todayMeds(d[0]);
+    out+=got.length?nextRow({color:'var(--c-cambio)',text:d[1]+' '+medDone(d[0])+' oggi',when:fmtTime(got[got.length-1].t),cls:'done'})
+                   :nextRow({color:'var(--c-cambio)',text:d[1]+' di oggi',when:d[3]!=null?'alle '+d[3]:'non ancora',act:'Segna',actOnclick:'A.quickMed(\''+d[0]+'\',this)'});
+  });
+  return out;
 }
-/* "Prossime tappe": una sola scheda con previsioni (predict), promemoria (reminders), vitamina D e visite */
+/* "Prossime tappe": una sola scheda con previsioni (predict), promemoria (reminders) e le medicine di ogni giorno */
 function renderNext(){
   var el=$('#next');if(!el)return;
   var rows=extHtml('next')+coreNextRows();
@@ -868,7 +884,7 @@ function renderExtHome(){
     try{el.innerHTML=b.fn(API)||'';}catch(e){el.innerHTML='';}}
 }
 var API={
-  MIN:MIN,H:H,OTHER:OTHER,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
+  MIN:MIN,H:H,OTHER:OTHER,DAILY:DAILY,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
   events:function(){return S.events;},settings:function(){return S.settings;},state:function(){return S;},who:function(){return who;},flow:function(){return flow;},
   touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
   fedFeed:fedFeed,typicalMl:typicalMl,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
