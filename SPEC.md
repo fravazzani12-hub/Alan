@@ -29,7 +29,7 @@ funzioni (motore delle cause, impronta acustica, ascolto automatico) è nella cr
 | other | what (ruttino/rigurgito/massaggio/ciuccio/coccole/passeggiata/bagnetto) | ruttino e rigurgito → aria, il resto → contatto |
 | measure | w (g), l (cm); uno o entrambi | `t` = mezzogiorno del giorno scelto (oggi/ieri/…/altra data); percentile OMS calcolato al volo dall'età |
 | temp | c (°C, un decimale) | ≥ 38 °C sotto i 90 giorni: mostra la bandiera rossa già presente in Altro, testo identico |
-| med | what (vitd/ferro/probiotico/simeticone/paracetamolo/altro), name | le **medicine di ogni giorno** (`DAILY`: vitamina D; ferro, di solito alle 10) hanno il tap rapido in Salute e la riga in "Prossime tappe", entrambe solo dopo il primo uso (`everMed`). `MED_M` tiene i nomi maschili, per "dato"/"data" |
+| med | what (vitd/ferro/probiotico/simeticone/paracetamolo/altro), name | le **medicine di ogni giorno** (`DAILY`: vitamina D; ferro, alle 10) hanno il tap rapido in Salute e la riga in "Prossime tappe"; quelle con un'ora fissa si vedono da subito, le altre dopo il primo uso (`everMed`). `MED_M` tiene i nomi maschili, per "dato"/"data" |
 | appt | kind (bilancio/vaccino/visita/esame/altro), title, place, note, done | `t` = data e ora dell'appuntamento (futuro); non compare nel diario; esportabile in .ics |
 | sleep / wake / cry | campi delle versioni fino alla v32 | tipi **dismessi**: non si creano più e non compaiono nel diario; le voci esistenti restano nell'archivio e nel cloud |
 
@@ -95,9 +95,12 @@ Il modello delle cause del pianto, l'impronta acustica e il k-NN sul suono sono 
 - **"Prossime tappe"** (`renderNext`): una sola scheda per tutto ciò che sta per succedere. Le righe hanno lo stesso
   formato (`nextRow`: pallino del colore della cosa, testo, quando a destra, un'azione facoltativa) e arrivano dallo slot
   `next` delle estensioni — previsione della pappa (`predict`, priorità −20) e promemoria (`reminders`, 0) — più le
-  **medicine di ogni giorno** (app.js, `DAILY` → `coreNextRows`): una riga per ciascuna, "Vitamina D data oggi · 09:10"
-  quando è fatta, "Ferro di oggi · alle 10 · Segna" quando manca. L'ora è il promemoria di quello che avete deciso voi,
-  non una prescrizione: nessuna dose, nessun consiglio, nessun allarme se passa. Senza righe la scheda non compare.
+  **medicine di ogni giorno** (app.js, `DAILY` → `coreNextRows(now)`): una riga per ciascuna, "Vitamina D data oggi ·
+  09:10" quando è fatta, "Ferro di oggi · alle 10 · Segna" quando manca; passata l'ora il "quando" diventa "dalle 10",
+  un fatto e non un allarme. Chi ha un'ora fissa compare **da subito**, anche prima della prima volta: aspettare
+  `everMed` voleva dire non avere il promemoria proprio il giorno in cui serve. Chi non ha un'ora (vitamina D) compare
+  dopo il primo uso, così chi non la dà non se la trova. L'ora è il promemoria di quello che avete deciso voi, non una
+  prescrizione: nessuna dose, nessun consiglio, nessun allarme se passa. Senza righe la scheda non compare.
 - **Ultime voci**: le ultime 12 voci raggruppate per giornata (Oggi, Ieri, poi la data). Mostra solo i tipi ancora in uso
   (`SHOWN`: feed, diaper, other, measure, temp, med, più quelli registrati dalle estensioni); le voci dei tipi dismessi
   restano nell'archivio ma non compaiono. Ogni riga è un pulsante: ora, pallino del colore del tipo, descrizione (con la
