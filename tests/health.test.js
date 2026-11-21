@@ -43,23 +43,53 @@ const MIN=6e4,H=36e5;
   assert.ok(/\+290 g in 7 giorni \(290 g a settimana\)/.test(T('growthHero')('w')),T('growthHero')('w'));
   assert.strictEqual(Object.keys(T('METRICS')).join(),'w,l','solo peso e lunghezza');assert.strictEqual(T('window').WHO_BOYS.hcfa,undefined,'niente tabella cranio');
   // --- temperatura: chip, stepper, avviso sotto i 3 mesi solo da 38
+  // la bandiera rossa dipende dall'età di oggi: per provare la regola (e non il calendario) nasce un mese fa
+  const birth0=S.settings.birth;
+  S.settings.birth=T('isoDay')(Date.now()-30*864e5);
   A.flow('temp');A.htemp(37.5);assert.ok(!/Febbre/.test(txt('#screenInner')));A.htemp(38.2);assert.ok(/Febbre: temperatura rettale/.test(txt('#screenInner')));
   A.finish(38.2);const tt=S.events.filter(e=>e.k==='temp');assert.strictEqual(tt.length,1);assert.strictEqual(tt[0].c,38.2);assert.strictEqual(app.els['#toast'].textContent,'Temperatura 38,2 °C');
   assert.deepStrictEqual(describe(tt[0],null),['Temperatura','<span class="detail">38,2 °C</span>']);
-  // --- medicine: vitamina D con un tap, "altro" con nome; riga in Home
-  assert.strictEqual(app.T('everMed')('vitd'),false);
-  T('renderNext()');assert.strictEqual(app.els['#next']._h,'','niente vitamina D finché non la usate');
+  // oltre i 3 mesi la bandiera rossa non compare più: è la regola, non un errore
+  S.settings.birth=T('isoDay')(Date.now()-100*864e5);
+  A.flow('temp');A.htemp(38.2);assert.ok(!/Febbre: temperatura rettale/.test(txt('#screenInner')),'sopra i 3 mesi niente bandiera');
+  A.home();S.settings.birth=birth0;
+  // --- medicine di ogni giorno: vitamina D e ferro con un tap, "altro" con nome; righe in Home
+  assert.deepStrictEqual(T('DAILY').map(d=>[d[0],d[1],d[3]]),[['vitd','Vitamina D',null],['ferro','Ferro',10]],'vitamina D e ferro, il ferro alle 10');
+  assert.strictEqual(app.T('everMed')('vitd'),false);assert.strictEqual(app.T('everMed')('ferro'),false);
+  T('renderNext()');assert.strictEqual(app.els['#next']._h,'','niente righe finché non le usate');
+  T('renderHealth()');let hc=String(app.els['#health']._h);
+  assert.ok(/<h3>Vitamina D, ferro e medicine<\/h3>/.test(hc),'una scheda sola: '+(hc.match(/<h3>[^<]*<\/h3>/g)||[]).join(' | '));
+  assert.ok(/A.quickMed\('vitd',this\)">Vitamina D data adesso/.test(hc)&&/A.quickMed\('ferro',this\)">Ferro dato adesso/.test(hc),'un tap per ciascuna');
+  assert.strictEqual((hc.match(/class="dots"/g)||[]).length,2,'sette pallini per ciascuna');
   A.flow('med');A.hmed('vitd');let meds=S.events.filter(e=>e.k==='med');assert.strictEqual(meds.length,1);assert.strictEqual(meds[0].name,'Vitamina D');
   T('renderNext()');assert.ok(/Prossime tappe/.test(app.els['#next']._h)&&/Vitamina D data oggi/.test(app.els['#next']._h),'riga della vitamina D data oggi');
+  assert.ok(!/Ferro/.test(app.els['#next']._h),'il ferro non compare finché non lo date la prima volta');
+  // ferro: con un tap, poi la riga dice "alle 10" finché non è dato
+  A.quickMed('ferro');
+  let fe=S.events.filter(e=>e.k==='med'&&e.what==='ferro');
+  assert.strictEqual(fe.length,1);assert.strictEqual(fe[0].name,'Ferro');
+  assert.strictEqual(app.els['#toast'].textContent,'Ferro segnato','il ferro è maschile');
+  T('renderNext()');assert.ok(/Ferro dato oggi/.test(app.els['#next']._h),'dato oggi: '+app.els['#next']._h);
+  T('renderHealth()');hc=String(app.els['#health']._h);
+  assert.ok(/<b>Ferro dato oggi<\/b>/.test(hc)&&/<b>Vitamina D data oggi<\/b>/.test(hc),'in Salute il fatto, con l\'ora');
+  // ieri: la riga torna da fare, con l'ora abituale
+  fe[0].t=Date.now()-864e5;
+  T('renderNext()');const nx=String(app.els['#next']._h);
+  assert.ok(/Ferro di oggi/.test(nx)&&/alle 10/.test(nx)&&/A.quickMed\('ferro',this\)/.test(nx),'da fare, alle 10, con Segna: '+nx);
+  assert.ok(!/dose|mg|gocce al giorno|dovete/i.test(nx),'nessun dosaggio e nessun consiglio');
+  fe[0].t=Date.now();
   A.flow('med');A.hmed('altro');assert.ok(/Quale\?/.test(txt('#screenInner')));app.T('flow').data.name='Gocce';A.finish('altro');
-  meds=S.events.filter(e=>e.k==='med');assert.strictEqual(meds[1].name,'Gocce');assert.strictEqual(meds[1].what,'altro');
-  A.flow('med');A.hmed('altro');A.finish('altro');assert.strictEqual(S.events.filter(e=>e.k==='med').length,2,'senza nome non salva');
+  meds=S.events.filter(e=>e.k==='med'&&e.what==='altro');assert.strictEqual(meds[0].name,'Gocce');
+  const nMed=S.events.filter(e=>e.k==='med').length;
+  A.flow('med');A.hmed('altro');A.finish('altro');assert.strictEqual(S.events.filter(e=>e.k==='med').length,nMed,'senza nome non salva');
   // --- visite: percorso, prossima, .ics, fatta; il vaccino dei 3 mesi copre la tappa
   A.flow('appt');A.hset('kind','vaccino');app.T('flow').step=1;T('renderFlow()');assert.ok(/Vaccino/.test(txt('#screenInner')));
-  app.T('flow').data.date='2026-11-20';app.T('flow').data.time='10:30';app.T('flow').data.place='ASL Nord';A.finish(1);
+  /* la visita è fra 30 giorni rispetto a oggi: una data fissa invecchierebbe e il test comincerebbe a mentire */
+  const apptDay=T('isoDay')(Date.now()+30*864e5);
+  app.T('flow').data.date=apptDay;app.T('flow').data.time='10:30';app.T('flow').data.place='ASL Nord';A.finish(1);
   const ap=S.events.filter(e=>e.k==='appt');assert.strictEqual(ap.length,1);assert.strictEqual(new Date(ap[0].t).getHours(),10);assert.strictEqual(ap[0].title,'Vaccino');assert.strictEqual(ap[0].done,false);
   assert.strictEqual(nextAppt().id,ap[0].id);
-  const ics=icsFor(ap[0]);assert.ok(/BEGIN:VCALENDAR/.test(ics)&&/DTSTART:20261120T/.test(ics)&&/SUMMARY:Alan · Vaccino/.test(ics)&&/LOCATION:ASL Nord/.test(ics)&&/TRIGGER:-P1D/.test(ics));
+  const ics=icsFor(ap[0]);assert.ok(/BEGIN:VCALENDAR/.test(ics)&&new RegExp('DTSTART:'+apptDay.replace(/-/g,'')+'T').test(ics)&&/SUMMARY:Alan · Vaccino/.test(ics)&&/LOCATION:ASL Nord/.test(ics)&&/TRIGGER:-P1D/.test(ics));
   const due=milestonesDue();assert.ok(due.length>=1&&due.length<=4);assert.ok(!due.some(s=>s.kind==='vaccino'&&s.months===3),'tappa dei 3 mesi coperta dal vaccino programmato');
   assert.ok(due.some(s=>s.kind==='bilancio'),'bilancio suggerito');
   T('renderNext()');assert.ok(!/Vaccino/.test(app.els['#next']._h),'in Home solo se entro 14 giorni');
