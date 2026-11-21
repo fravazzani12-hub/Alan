@@ -37,7 +37,7 @@ Online su https://fravazzani12-hub.github.io/Alan/ (GitHub Pages, branch `main`,
 Safari → Condividi → "Aggiungi alla schermata Home". Da quel momento aprila sempre da lì (i dati locali vivono in quel browser).
 
 ## Cosa fa (in breve)
-- **Home**: intestazione con nome, età e presenza dei genitori; due riquadri (ultima pappa, ultima cacca); la scheda **Prossime tappe** che mette insieme la previsione della pappa, i promemoria e le medicine di ogni giorno (vitamina D e ferro); il rumore bianco; i pulsanti **Pappa**, **Cacca** e **Altro**; le ultime voci.
+- **Home**: intestazione con nome, età e presenza dei genitori; due riquadri (ultima pappa, ultima cacca); la scheda **Prossime tappe** che mette insieme la previsione della pappa, i promemoria e le medicine di ogni giorno (il ferro delle 10 c'è da subito, la vitamina D dopo la prima volta che la date); il rumore bianco; i pulsanti **Pappa**, **Cacca** e **Altro**; le ultime voci.
 - **Pappa, una schermata**: quando (adesso / 15 / 30 / 60 min fa / altra ora) e quanto ha bevuto — le quantità che usate di solito con un tap, lo stepper ±5 ml per tutto il resto, e "Non ha bevuto niente". Due tap dal pulsante al salvataggio.
 - **Cacca, una schermata**: quando e quanta (poca, normale, tanta).
 - **Altro**: ruttino, rigurgito, massaggio pancia, ciuccio, coccole, passeggiata, bagnetto.

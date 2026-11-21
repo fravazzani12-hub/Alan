@@ -56,14 +56,22 @@ const MIN=6e4,H=36e5;
   // --- medicine di ogni giorno: vitamina D e ferro con un tap, "altro" con nome; righe in Home
   assert.deepStrictEqual(T('DAILY').map(d=>[d[0],d[1],d[3]]),[['vitd','Vitamina D',null],['ferro','Ferro',10]],'vitamina D e ferro, il ferro alle 10');
   assert.strictEqual(app.T('everMed')('vitd'),false);assert.strictEqual(app.T('everMed')('ferro'),false);
-  T('renderNext()');assert.strictEqual(app.els['#next']._h,'','niente righe finché non le usate');
+  /* il ferro ha un'ora fissa: il promemoria c'è dal primo giorno, anche prima di averlo mai dato.
+     La vitamina D non ha un'ora e compare dopo il primo uso, così chi non la dà non se la trova. */
+  T('renderNext()');let nx0=String(app.els['#next']._h);
+  assert.ok(/Ferro di oggi/.test(nx0)&&/A.quickMed\('ferro',this\)/.test(nx0),'il ferro c\'è da subito: '+nx0);
+  assert.ok(!/Vitamina D/.test(nx0),'la vitamina D aspetta il primo uso');
+  // prima delle 10 "alle 10", dopo "dalle 10": un fatto, non un allarme
+  const at9=new Date();at9.setHours(9,0,0,0);const at11=new Date();at11.setHours(11,0,0,0);
+  assert.ok(/alle 10/.test(T('coreNextRows')(at9.getTime()))&&!/dalle 10/.test(T('coreNextRows')(at9.getTime())));
+  assert.ok(/dalle 10/.test(T('coreNextRows')(at11.getTime())));
+  assert.ok(!/ritardo|dovete|allarme/i.test(T('coreNextRows')(at11.getTime())),'nessun allarme');
   T('renderHealth()');let hc=String(app.els['#health']._h);
   assert.ok(/<h3>Vitamina D, ferro e medicine<\/h3>/.test(hc),'una scheda sola: '+(hc.match(/<h3>[^<]*<\/h3>/g)||[]).join(' | '));
   assert.ok(/A.quickMed\('vitd',this\)">Vitamina D data adesso/.test(hc)&&/A.quickMed\('ferro',this\)">Ferro dato adesso/.test(hc),'un tap per ciascuna');
   assert.strictEqual((hc.match(/class="dots"/g)||[]).length,2,'sette pallini per ciascuna');
   A.flow('med');A.hmed('vitd');let meds=S.events.filter(e=>e.k==='med');assert.strictEqual(meds.length,1);assert.strictEqual(meds[0].name,'Vitamina D');
   T('renderNext()');assert.ok(/Prossime tappe/.test(app.els['#next']._h)&&/Vitamina D data oggi/.test(app.els['#next']._h),'riga della vitamina D data oggi');
-  assert.ok(!/Ferro/.test(app.els['#next']._h),'il ferro non compare finché non lo date la prima volta');
   // ferro: con un tap, poi la riga dice "alle 10" finché non è dato
   A.quickMed('ferro');
   let fe=S.events.filter(e=>e.k==='med'&&e.what==='ferro');

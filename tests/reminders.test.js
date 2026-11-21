@@ -14,9 +14,11 @@ const MIN=6e4,H=36e5,DAY=864e5;
   const d0=new Date();d0.setHours(11,0,0,0);const NOW=d0.getTime();
   const at=(h,m)=>{const d=new Date(NOW);d.setHours(h,m,0,0);return d.getTime();};
   S.settings.birth=API.isoDay(NOW-40*DAY); // 40 giorni: sotto i 90, pappe attese ogni 3 h
-  // --- stato vuoto: nessuna riga, blocco vuoto in Home
+  // --- stato vuoto: nessuna riga dai promemoria; in Home resta solo il ferro delle 10, che è di casa (app.js)
   assert.deepStrictEqual(RM.compute(NOW),[]);
-  T('renderHome()');assert.strictEqual(home(),'');
+  T('renderHome()');
+  assert.strictEqual((home().match(/class="nx-row/g)||[]).length,1,'una riga sola: '+home());
+  assert.ok(/Ferro di oggi/.test(home()),'ed è il ferro delle 10, che è di casa (app.js), non un promemoria');
   // --- (4) febbre: testo identico alla bandiera rossa in index.html, senza altro e senza "Ok"
   const html=fs.readFileSync(__dirname+'/../index.html','utf8');
   assert.ok(html.indexOf(RM.FEVER_TXT)>=0,'il testo della bandiera rossa è quello di index.html');

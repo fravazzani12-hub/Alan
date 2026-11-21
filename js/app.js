@@ -851,13 +851,16 @@ function nextRow(o){
 }
 /* righe di casa: le medicine di ogni giorno (DAILY). Le visite le annunciano i promemoria (oggi e domani) e la tab
    Salute: qui non si ripetono. Le previsioni e i promemoria arrivano dalle estensioni, nello stesso formato. */
-function coreNextRows(){
+function coreNextRows(now){
+  now=now||Date.now();
   var out='';
   DAILY.forEach(function(d){
-    if(!everMed(d[0]))return;
-    var got=todayMeds(d[0]);
+    /* Chi ha un'ora fissa è parte della giornata e si vede da subito: aspettare la prima volta voleva dire non avere il
+       promemoria proprio il giorno in cui serve. Le altre compaiono dopo il primo uso, così chi non le dà non le vede. */
+    if(d[3]==null&&!everMed(d[0]))return;
+    var got=todayMeds(d[0]),late=d[3]!=null&&new Date(now).getHours()>=d[3];
     out+=got.length?nextRow({color:'var(--c-cambio)',text:d[1]+' '+medDone(d[0])+' oggi',when:fmtTime(got[got.length-1].t),cls:'done'})
-                   :nextRow({color:'var(--c-cambio)',text:d[1]+' di oggi',when:d[3]!=null?'alle '+d[3]:'non ancora',act:'Segna',actOnclick:'A.quickMed(\''+d[0]+'\',this)'});
+                   :nextRow({color:'var(--c-cambio)',text:d[1]+' di oggi',when:d[3]!=null?(late?'dalle ':'alle ')+d[3]:'non ancora',act:'Segna',actOnclick:'A.quickMed(\''+d[0]+'\',this)'});
   });
   return out;
 }
@@ -884,7 +887,7 @@ function renderExtHome(){
     try{el.innerHTML=b.fn(API)||'';}catch(e){el.innerHTML='';}}
 }
 var API={
-  MIN:MIN,H:H,OTHER:OTHER,DAILY:DAILY,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
+  MIN:MIN,H:H,OTHER:OTHER,DAILY:DAILY,coreNextRows:coreNextRows,LVL:LVL,LVL_ORDER:LVL_ORDER,lvlKey:lvlKey,METRICS:METRICS,MILESTONES:MILESTONES,APPT_KINDS:APPT_KINDS,MEDS:MEDS,
   events:function(){return S.events;},settings:function(){return S.settings;},state:function(){return S;},who:function(){return who;},flow:function(){return flow;},
   touched:touched,removed:removed,save:save,uid:uid,byId:byId,sorted:sorted,context:context,norms:norms,ageDays:ageDays,ageDaysAt:ageDaysAt,ageStr:ageStr,birthMs:birthMs,
   fedFeed:fedFeed,typicalMl:typicalMl,diaryRow:diaryRow,measures:measures,pctOf:pctOf,xOfZ:xOfZ,appts:appts,nextAppt:nextAppt,todayMeds:todayMeds,medName:medName,apptKind:apptKind,milestonesDue:milestonesDue,
